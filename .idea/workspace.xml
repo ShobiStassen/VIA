@@ -94,7 +94,7 @@
   </component>
   <component name="RunManager">
     <configuration name="Viav010" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <module name="Via1" />
+      <module name="Via" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
