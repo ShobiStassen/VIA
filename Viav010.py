@@ -1,12 +1,96 @@
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, csgraph
+import scipy
 import igraph as ig
 import leidenalg
 import time
 import hnswlib
 
-##adding comment testing
+def compute_hitting_time(sparse_graph, number_eig=0, x_teleport=0.05, alph_lazy = 0.1, root=7 ):
+    #sparse_graph = np.array([[0, 3, 0, 0, 9, 0, 1], [3, 0, 6, 15, 9, 0, 0], [0, 6, 0, 8, 0, 0, 0], [0, 15, 8, 0, 7, 5, 0],
+                  #[9, 9, 0, 7, 0, 4, 0], [0, 0, 0, 5, 4, 0, 0], [1, 0, 0, 0, 0, 0, 0]])
+    N = sparse_graph.shape[0]
+    print(sparse_graph)
+    sparse_graph = scipy.sparse.csr_matrix(sparse_graph)
+    print('start compute hitting')
+    print('sparse', sparse_graph)
+    A=scipy.sparse.csr_matrix.todense(sparse_graph)
+    print('is graph symmetric', (A.transpose()==A).all())
+    beta_lazy =2*(1-alph_lazy)/(2-alph_lazy)
+
+    lap = csgraph.laplacian(sparse_graph, normed=False)
+    A = scipy.sparse.csr_matrix.todense(lap)
+    print('is graph symmetric', (A.transpose() == A).all())
+
+    deg = sparse_graph+lap
+    deg.data = 1 / np.sqrt(deg.data)  ##inv sqrt of degree matrix
+    deg[deg == np.inf] = 0
+    print('degree',deg)
+    norm_lap = lap.dot(deg)
+    norm_lap = deg.dot(norm_lap)
+    norm_lap =  csgraph.laplacian(sparse_graph,normed = True)
+    norm_lap = (norm_lap+norm_lap.transpose())*0.5
+
+    A=scipy.sparse.csr_matrix.todense(norm_lap)
+    print('is graph symmetric', (A.transpose()==A).all())
+
+    eig_val, eig_vec = scipy.sparse.linalg.eigsh(norm_lap) # eig_vec[:,i] is eigenvector for eigenvalue eig_val[i]
+    print('eig val', eig_val.shape, eig_val)
+    print('eig vectors shape', eig_vec.shape)
+
+    if number_eig ==0:number_eig = eig_vec.shape[1]
+    print('number of eig vec' ,number_eig)
+    sum_matrix = np.zeros((N,N))
+    Xu =np.zeros((N,N))
+    Xu[:,root]=1
+    Id_Xv = np.zeros((N,N),int)
+    np.fill_diagonal(Id_Xv,1)
+    Xv_Xu =Id_Xv-Xu
+    print('Xv-Xroot', Xv_Xu)
+
+    for i in range(0,number_eig):
+        eigen_i = eig_val[i]
+
+        factor =beta_lazy+2*eigen_i*(x_teleport-beta_lazy*x_teleport)
+        print('factor',factor)
+        vec_i = eig_vec[:,i]
+        vec_i = np.reshape(vec_i,(-1,1))
+        eigen_vec_mult = vec_i.dot(vec_i.T)
+        sum_matrix = sum_matrix+factor*eigen_vec_mult
+
+
+    deg = scipy.sparse.csr_matrix.todense(deg)
+
+    temp = sum_matrix.dot(deg)
+    print(temp.shape)
+    temp = deg.dot(temp)*beta_lazy
+    print(temp.shape)
+    temp = Xv_Xu.dot(temp)
+    print(temp.shape, temp)
+    final = np.diagonal(temp) ## number_eig x 1 vector of hitting times from root (u) to number_eig of other nodes
+    print('final shape', final.shape)
+
+    return final
+
+
+
+def get_sparse_from_igraph(graph, weight_attr=None):
+    edges = graph.get_edgelist()
+    if weight_attr is None:
+        weights = [1] * len(edges)
+    else:
+        weights = graph.es[weight_attr]
+    if not graph.is_directed():
+        edges.extend([(v, u) for u, v in edges])
+        weights.extend(weights)
+    shape = graph.vcount()
+    shape = (shape, shape)
+    if len(edges) > 0:
+        return csr_matrix((weights, zip(*edges)), shape=shape)
+    else:
+        return csr_matrix(shape)
+
 class PARC:
     def __init__(self, data, true_label=None, dist_std_local=2, jac_std_global='median', keep_all_local_dist='auto',
                  too_big_factor=0.4, small_pop=10, jac_weighted_edges=True, knn=30, n_iter_leiden=5):
@@ -124,6 +208,7 @@ class PARC:
         else:
             G_sim = ig.Graph(list(new_edgelist))
         G_sim.simplify(combine_edges='sum')
+        resolution_parameter = 1
         if jac_weighted_edges == True:
             partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition, weights='weight',
                                                  n_iterations=self.n_iter_leiden)
@@ -344,6 +429,64 @@ class PARC:
         print('list of cluster labels and populations', len(pop_list), pop_list)
 
         self.labels = PARC_labels_leiden  # list
+        vc_graph = ig.VertexClustering(G_sim, membership=PARC_labels_leiden)
+        vc_graph =  vc_graph.cluster_graph(combine_edges='sum')
+        sparse_vf = get_sparse_from_igraph(vc_graph, weight_attr='weight')
+
+        print('sparse cluster graph', sparse_vf)
+        print('average weight', np.mean(sparse_vf.data)) #vertex corresponds to label. so vertex k is cells labeled k
+        layout = vc_graph.layout_fruchterman_reingold()
+        #vc_graph.vs["label"] = vc_graph.vs["name"]
+        print('layout,', len(layout))
+        # from igraph import Plot
+        # pl=Plot();
+        # pl.add(vc_graph, layout=layout)
+        # pl._windows_hacks = True;
+        # pl.show()
+        majority_truth_labels = np.empty((n_elements, 1), dtype=object)
+        graph_node_label = []
+        for cluster_i in set(PARC_labels_leiden):
+            cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
+            true_labels = np.asarray(self.true_label)
+            majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
+            majority_truth_labels[cluster_i_loc] = 'w'+str(majority_truth)+'c'+str(cluster_i)
+            graph_node_label.append('w'+str(majority_truth)+'c'+str(cluster_i))
+        print('graph node label',graph_node_label)
+        majority_truth_labels = list(majority_truth_labels.flatten())
+        vc_graph.vs["label"] = graph_node_label
+        ig.plot(vc_graph,"/home/shobi/Trajectory/Code/vc_graph_example_alledges.svg", layout=layout)
+
+        # compute hitting times
+        hitting_times = compute_hitting_time(sparse_vf)
+        print('final hitting times:',hitting_times)
+
+        sources, targets = sparse_vf.nonzero()
+        mask = np.zeros(len(sources), dtype=bool)
+        print('mean and std', np.mean(sparse_vf.data), np.std(sparse_vf.data))
+        sparse_vf.data = (sparse_vf.data-np.mean(sparse_vf.data))/(np.std(sparse_vf.data))
+
+        print('after normalization',sparse_vf)
+        threshold = np.mean(sparse_vf.data)
+        mask |= (sparse_vf.data < (threshold ))  # smaller Jaccard weight means weaker edge
+        print('sum of mask', sum(mask) ,'at threshold of', threshold)
+        sparse_vf.data[mask] = 0
+        sparse_vf.eliminate_zeros()
+
+
+
+        sources, targets = sparse_vf.nonzero()
+        edgelist = list(zip(sources.tolist(), targets.tolist()))
+        print('new edgelist', edgelist)
+        edgelist_copy = edgelist.copy()
+        trimmed_g = ig.Graph(edgelist, edge_attrs={'weight': sparse_vf.data.tolist()})
+        trimmed_g = trimmed_g.simplify(combine_edges='sum')
+        layout = trimmed_g.layout_fruchterman_reingold()
+        trimmed_g.vs["label"] = graph_node_label
+        ig.plot(trimmed_g, "/home/shobi/Trajectory/Code/vc_graph_example_trimmed.svg", layout=layout,edge_width = [e['weight'] for e in trimmed_g.es], vertex_label = graph_node_label )
+
+        print(trimmed_g.vs.indices)
+
+        trimmed_g.write_svg("/home/shobi/Trajectory/Code/vc_graph_example_trimmed2.svg", layout=layout,edge_stroke_widths = [e['weight'] for e in trimmed_g.es], labels='label' )
         return
 
     def accuracy(self, onevsall=1):
@@ -403,8 +546,8 @@ class PARC:
         if tp != 0 or fp != 0: precision = tp / (tp + fp)  # ability to not misclassify negatives as positives
         if precision != 0 or recall != 0:
             f1_score = precision * recall * 2 / (precision + recall)
-        majority_truth_labels = np.empty((len(true_labels), 1), dtype=object)
 
+        majority_truth_labels = np.empty((len(true_labels), 1), dtype=object)
         for cluster_i in set(PARC_labels):
             cluster_i_loc = np.where(np.asarray(PARC_labels) == cluster_i)[0]
             true_labels = np.asarray(true_labels)
@@ -523,7 +666,7 @@ def main():
     sc.tl.pca(adata_counts, svd_solver='arpack')
     true_label = list(adata_counts.obs['week'])
 
-    p1 = PARC(adata_counts.obsm['X_pca'], true_label, jac_std_global='median', knn=10)
+    p1 = PARC(adata_counts.obsm['X_pca'], true_label, jac_std_global=3, knn=10)
     p1.run_PARC()
     labels = p1.labels
 
