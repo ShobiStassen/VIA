@@ -6,7 +6,7 @@ import igraph as ig
 import leidenalg
 import time
 import hnswlib
-
+#jan2020
 def compute_hitting_time(sparse_graph, number_eig=0, x_lazy=0.3, alph_teleport = 0.95, root=0 ):
     #1- alpha is the probabilty of teleporting
     # 1- x_lazy is the probability of staying in current state (be lazy)
