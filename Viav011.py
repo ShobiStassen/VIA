@@ -188,7 +188,7 @@ def get_sparse_from_igraph(graph, weight_attr=None):
 
 class PARC:
     def __init__(self, data, true_label=None, anndata=None, dist_std_local=2, jac_std_global='median', keep_all_local_dist='auto',
-                 too_big_factor=0.4, small_pop=10, jac_weighted_edges=True, knn=30, n_iter_leiden=5):
+                 too_big_factor=0.4, small_pop=10, jac_weighted_edges=True, knn=30, n_iter_leiden=5, pseudotime= False, root=0, path= '/home/shobi/Trajectory/', seed = 99):
         # higher dist_std_local means more edges are kept
         # highter jac_std_global means more edges are kept
         if keep_all_local_dist == 'auto':
@@ -208,6 +208,10 @@ class PARC:
         self.jac_weighted_edges = jac_weighted_edges
         self.knn = knn
         self.n_iter_leiden = n_iter_leiden
+        self.pseudotime = pseudotime
+        self.root = root
+        self.path = path
+        self.seed = seed
 
     def make_knn_struct(self, too_big=False, big_cluster=None):
         ef = 100
@@ -316,10 +320,10 @@ class PARC:
         resolution_parameter = 1
         if jac_weighted_edges == True:
             partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition, weights='weight',
-                                                 n_iterations=self.n_iter_leiden)
+                                                 n_iterations=self.n_iter_leiden, seed=self.seed)
         else:
             partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition,
-                                                 n_iterations=self.n_iter_leiden)
+                                                 n_iterations=self.n_iter_leiden, seed=self.seed)
         # print('Q= %.2f' % partition.quality())
         PARC_labels_leiden = np.asarray(partition.membership)
         PARC_labels_leiden = np.reshape(PARC_labels_leiden, (n_elements, 1))
@@ -378,6 +382,8 @@ class PARC:
         sources, targets = sparse_clustergraph.nonzero()
         edgelist = list(zip(sources, targets))
         weights = sparse_clustergraph.data
+        #print('edgelist of combined clustergraph', edgelist)
+        #print('edge weights of combined clustergraph', weights)
         new_weights = []
         i=0
         for s,t in edgelist:
@@ -454,13 +460,13 @@ class PARC:
             start_leiden = time.time()
             # print('call leiden on weighted graph for ', self.n_iter_leiden, 'iterations')
             partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition, weights='weight',
-                                                 n_iterations=self.n_iter_leiden)
+                                                 n_iterations=self.n_iter_leiden, seed=self.seed)
             print(time.time() - start_leiden)
         else:
             start_leiden = time.time()
             # print('call leiden on unweighted graph', self.n_iter_leiden, 'iterations')
             partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition,
-                                                 n_iterations=self.n_iter_leiden)
+                                                 n_iterations=self.n_iter_leiden,seed=self.seed)
             print(time.time() - start_leiden)
         time_end_PARC = time.time()
         # print('Q= %.1f' % (partition.quality()))
@@ -588,132 +594,156 @@ class PARC:
 
         majority_truth_labels = np.empty((n_elements, 1), dtype=object)
         graph_node_label = []
-        for cluster_i in range(len(set(PARC_labels_leiden))):
-            cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
-            true_labels = np.asarray(self.true_label)
-            majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
-            majority_truth_labels[cluster_i_loc] = 'w' + str(majority_truth) + 'c' + str(cluster_i)
-            graph_node_label.append('w' + str(majority_truth) + 'c' + str(cluster_i))
-        print('graph node label', graph_node_label)
-        majority_truth_labels = list(majority_truth_labels.flatten())
 
-        ## Make cluster-graph (1)
-        vc_graph = ig.VertexClustering(G_sim, membership=PARC_labels_leiden)
-        vc_graph =  vc_graph.cluster_graph(combine_edges='sum')
+        if self.pseudotime == True:
 
-        ## Reweight clustergraph (2)
+            ## Make cluster-graph (1)
+            vc_graph = ig.VertexClustering(G_sim, membership=PARC_labels_leiden)
+            #print('vc graph G_sim', vc_graph)
 
-        reweighted_sparse_vc,edgelist = self.recompute_weights(vc_graph, pop_list_raw)
-        #reweighted_vc_ig = ig.Graph(edgelist, edge_attrs={'weight': reweighted_sparse_vc.data.tolist()})
-        #reweighted_vc_ig = reweighted_vc_ig.simplify(combine_edges='sum')
+
+            vc_graph =  vc_graph.cluster_graph(combine_edges='sum')
+
+            print('vc graph G_sim', vc_graph)
+            ## Reweight clustergraph (2)
+
+            reweighted_sparse_vc,edgelist = self.recompute_weights(vc_graph, pop_list_raw)
+            #reweighted_vc_ig = ig.Graph(edgelist, edge_attrs={'weight': reweighted_sparse_vc.data.tolist()})
+            #reweighted_vc_ig = reweighted_vc_ig.simplify(combine_edges='sum')
 
 
 
-        # Local pruning on reweighted clustergraph (3)
-        edgeweights, edgelist = local_pruning_clustergraph(reweighted_sparse_vc, local_pruning_std=0)
-
-        locallytrimmed_g = ig.Graph(edgelist, edge_attrs={'weight': edgeweights.tolist()})
-        locallytrimmed_g = locallytrimmed_g.simplify(combine_edges='sum')
-        print('locallytrimmed_g')
-        locallytrimmed_sparse_vc = get_sparse_from_igraph(locallytrimmed_g, weight_attr='weight')
-        import random
-        random.seed = 123
-        layout = locallytrimmed_g.layout_fruchterman_reingold() ##final layout based on locally trimmed
-        locallytrimmed_g.vs["label"] = graph_node_label
-        locallytrimmed_sparse_vc_copy = locallytrimmed_sparse_vc.copy()
-
-        #globally trimmed link
-        sources, targets = locallytrimmed_sparse_vc.nonzero()
-        mask = np.zeros(len(sources), dtype=bool)
-        print('mean and std', np.mean(locallytrimmed_sparse_vc.data), np.std(locallytrimmed_sparse_vc.data))
-        locallytrimmed_sparse_vc.data = locallytrimmed_sparse_vc.data / (np.std(locallytrimmed_sparse_vc.data))
-
-        # print('after normalization',sparse_vf)
-        threshold_global = np.mean(locallytrimmed_sparse_vc.data) -0.15*np.std(locallytrimmed_sparse_vc.data)
-        mask |= (locallytrimmed_sparse_vc.data < (threshold_global))  # smaller Jaccard weight means weaker edge
-        print('sum of mask', sum(mask), 'at threshold of', threshold)
-        locallytrimmed_sparse_vc.data[mask] = 0
-        locallytrimmed_sparse_vc.eliminate_zeros()
-
-        sources, targets = locallytrimmed_sparse_vc.nonzero()
-        edgelist = list(zip(sources.tolist(), targets.tolist()))
-        globallytrimmed_g = ig.Graph(n=n_clus, edges=edgelist, edge_attrs={'weight': locallytrimmed_sparse_vc.data.tolist()})
-        globallytrimmed_g = globallytrimmed_g.simplify(combine_edges='sum')
-        #layout = globallytrimmed_g.layout_fruchterman_reingold()
-        globallytrimmed_g.vs["label"] = graph_node_label
-
-
-        # compute hitting times (4)
-        for lazy_i in [0.05
-            ,0.99]:#,0.5]:
-            root = 26
-            locallytrimmed_sparse_vc = locallytrimmed_sparse_vc_copy ##hitting times are computed based on the locally trimmed graph without any global pruning
-            hitting_times, roundtrip_times = compute_hitting_time(locallytrimmed_sparse_vc, root=root, x_lazy=lazy_i)
-            print('final hitting times:')
-            print(list(zip(range(len(hitting_times)), hitting_times)))
-            print('round trip times:')
-            print( list(zip(range(len(hitting_times)), roundtrip_times)))
-            hitting_times = np.asarray(hitting_times)
-
-            # plotting with threshold (thresholding the upper limit to make color palette more readable)
-            remove_outliers = hitting_times[hitting_times<np.mean(hitting_times)+np.std(hitting_times)]
-            threshold = np.mean(remove_outliers) + 0.5* np.std(remove_outliers)
-            print('threshold', threshold)
-            th_hitting_times = [x if x < threshold else threshold for x in hitting_times]
-
-            remove_outliers_low = hitting_times[hitting_times < (np.mean(hitting_times) - 0.3*np.std(hitting_times))]
-            threshold_low = np.mean(remove_outliers_low) - 0.3 * np.std(remove_outliers_low)
-            print('thresh low', threshold_low)
-            th_hitting_times = [x if x > threshold_low else threshold_low for x in th_hitting_times]
-            #scaled_hitting_times = (th_hitting_times - np.min(th_hitting_times))*100/(threshold)
-
-            scaled_hitting_times = (th_hitting_times - np.min(th_hitting_times))  / (threshold)
-            scaled_hitting_times = scaled_hitting_times * (100/np.max(scaled_hitting_times))
 
 
 
-            #threshold = np.mean(scaled_hitting_times)+0.25*np.std(scaled_hitting_times)
-            threshold = int(threshold)
-            scaled_hitting_times = scaled_hitting_times.astype(int)
-            print('scaled hitting times')
-            print(scaled_hitting_times)
-            pal = ig.drawing.colors.AdvancedGradientPalette(['yellow', 'green','blue'], n=101)
+            # Local pruning on reweighted clustergraph (3)
+            edgeweights, edgelist = local_pruning_clustergraph(reweighted_sparse_vc, local_pruning_std=0)
+            print('edgelist of reweighted sparse vc', edgelist, edgeweights)
 
-            all_colors = []
+            locallytrimmed_g = ig.Graph(edgelist, edge_attrs={'weight': edgeweights.tolist()})
+
+            locallytrimmed_g = locallytrimmed_g.simplify(combine_edges='sum')
+            min_deg = 1000
+            for cluster_i in range(len(set(PARC_labels_leiden))):
+                cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
+                true_labels = np.asarray(self.true_label)
+                majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
+                deg_list =locallytrimmed_g.degree()
+
+                if majority_truth == 'M1':
+                    if deg_list[cluster_i] < min_deg:
+                        self.root = cluster_i
+                        min_deg = deg_list[cluster_i]
+
+                    print('root is', cluster_i, majority_truth, )
+                majority_truth_labels[cluster_i_loc] = 'w' + str(majority_truth) + 'c' + str(cluster_i)
+                graph_node_label.append('w' + str(majority_truth) + 'c' + str(cluster_i))
+            print('graph node label', graph_node_label)
+            majority_truth_labels = list(majority_truth_labels.flatten())
+            print('locallytrimmed_g', locallytrimmed_g)
+            locallytrimmed_sparse_vc = get_sparse_from_igraph(locallytrimmed_g, weight_attr='weight')
+            layout = locallytrimmed_g.layout_fruchterman_reingold() ##final layout based on locally trimmed
+            locallytrimmed_g.vs["label"] = graph_node_label
+            locallytrimmed_sparse_vc_copy = locallytrimmed_sparse_vc.copy()
+
+            #globally trimmed link
+            sources, targets = locallytrimmed_sparse_vc.nonzero()
+            mask = np.zeros(len(sources), dtype=bool)
+            print('mean and std', np.mean(locallytrimmed_sparse_vc.data), np.std(locallytrimmed_sparse_vc.data))
+            locallytrimmed_sparse_vc.data = locallytrimmed_sparse_vc.data / (np.std(locallytrimmed_sparse_vc.data))
+
+            # print('after normalization',sparse_vf)
+            threshold_global = np.mean(locallytrimmed_sparse_vc.data) -0*np.std(locallytrimmed_sparse_vc.data)
+            mask |= (locallytrimmed_sparse_vc.data < (threshold_global))  # smaller Jaccard weight means weaker edge
+            print('sum of mask', sum(mask), 'at threshold of', threshold)
+            locallytrimmed_sparse_vc.data[mask] = 0
+            locallytrimmed_sparse_vc.eliminate_zeros()
+
+            sources, targets = locallytrimmed_sparse_vc.nonzero()
+            edgelist = list(zip(sources.tolist(), targets.tolist()))
+            globallytrimmed_g = ig.Graph(n=n_clus, edges=edgelist, edge_attrs={'weight': locallytrimmed_sparse_vc.data.tolist()})
+            globallytrimmed_g = globallytrimmed_g.simplify(combine_edges='sum')
+            #layout = globallytrimmed_g.layout_fruchterman_reingold()
+            globallytrimmed_g.vs["label"] = graph_node_label
+
+
+            # compute hitting times (4)
+            for lazy_i in [0.99]:##0.05    ,0.99]:#,0.5]:
+                root = self.root
+                locallytrimmed_sparse_vc = locallytrimmed_sparse_vc_copy ##hitting times are computed based on the locally trimmed graph without any global pruning
+                hitting_times, roundtrip_times = compute_hitting_time(locallytrimmed_sparse_vc, root=root, x_lazy=lazy_i)
+
+
+                print('round trip times:')
+                print( list(zip(range(len(hitting_times)), roundtrip_times)))
+                hitting_times = np.asarray(hitting_times)*1000
+
+                print('final hitting times:')
+                print(list(zip(range(len(hitting_times)), hitting_times)))
+                # plotting with threshold (thresholding the upper limit to make color palette more readable)
+                remove_outliers = hitting_times[hitting_times<np.mean(hitting_times)+np.std(hitting_times)]
+                threshold = np.mean(remove_outliers) + 1* np.std(remove_outliers)
+                print('threshold', threshold)
+                th_hitting_times = [x if x < threshold else threshold for x in hitting_times]
+
+                remove_outliers_low = hitting_times[hitting_times < (np.mean(hitting_times) - 0.3*np.std(hitting_times))]
+                threshold_low = np.mean(remove_outliers_low) - 0.3 * np.std(remove_outliers_low)
+                print('thresh low', threshold_low)
+                th_hitting_times = [x if x > threshold_low else threshold_low for x in th_hitting_times]
+                #scaled_hitting_times = (th_hitting_times - np.min(th_hitting_times))*100/(threshold)
+
+                scaled_hitting_times = (th_hitting_times - np.min(th_hitting_times))
+                scaled_hitting_times = scaled_hitting_times * (1000/np.max(scaled_hitting_times))
+
+                self.scaled_hitting_times = scaled_hitting_times
+
+                #threshold = np.mean(scaled_hitting_times)+0.25*np.std(scaled_hitting_times)
+                threshold = int(threshold)
+                scaled_hitting_times = scaled_hitting_times.astype(int)
+                print('scaled hitting times')
+                print(scaled_hitting_times)
+                pal = ig.drawing.colors.AdvancedGradientPalette(['yellow', 'green','blue'], n=1001)
+
+                all_colors = []
 
 
 
-            print('100 scaled hitting' ,scaled_hitting_times)
-            for i in scaled_hitting_times:
-                all_colors.append(pal.get(int(i))[0:3])
-            print('extract all colors', zip(scaled_hitting_times,all_colors))
+                print('100 scaled hitting' ,scaled_hitting_times)
+                for i in scaled_hitting_times:
+                    all_colors.append(pal.get(int(i))[0:3])
+                print('extract all colors', zip(scaled_hitting_times,all_colors))
 
 
-            locallytrimmed_g.vs['hitting_times'] =scaled_hitting_times
+                locallytrimmed_g.vs['hitting_times'] =scaled_hitting_times
 
-            locallytrimmed_g.vs['color']=[pal.get(i)[0:3] for i in scaled_hitting_times]
+                locallytrimmed_g.vs['color']=[pal.get(i)[0:3] for i in scaled_hitting_times]
+                import matplotlib.colors as colors
+                import matplotlib.cm as cm
+                self.group_color = [colors.to_hex(v) for v in locallytrimmed_g.vs['color']] #based on ygb scale
+                viridis_cmap = cm.get_cmap('viridis_r')
 
-            #print([v for v in locallytrimmed_g.vs['color']])
-            #ig.plot(locallytrimmed_g, "/home/shobi/Trajectory/Datasets/Toy/Toy_bifurcating/vc_graph_example_locallytrimmed_colornode_"+str(root)+"lazy"+str(lazy_i)+'jac'+str(self.jac_std_global)+".svg", layout=layout, edge_width=[e['weight']*1 for e in locallytrimmed_g.es], vertex_label=graph_node_label)
-            ig.plot(locallytrimmed_g,
-                    "/home/shobi/Trajectory/Datasets/Paul15/vc_graph_example_locallytrimmed_colornode_" + str(
-                        root) + "lazy" + str(lazy_i) + 'jac' + str(self.jac_std_global) + ".svg", layout=layout,
-                    edge_width=[e['weight'] * 1 for e in locallytrimmed_g.es], vertex_label=graph_node_label)
-            #hitting_times = compute_hitting_time(sparse_vf, root=1)
-            #print('final hitting times:', list(zip(range(len(hitting_times)), hitting_times)))
+                self.group_color_cmap =[colors.to_hex(v) for v in viridis_cmap(scaled_hitting_times/1000)] #based on ygb scale
+                print('group color', self.group_color)
+                #ig.plot(locallytrimmed_g, "/home/shobi/Trajectory/Datasets/Toy/Toy_bifurcating/vc_graph_example_locallytrimmed_colornode_"+str(root)+"lazy"+str(lazy_i)+'jac'+str(self.jac_std_global)+".svg", layout=layout, edge_width=[e['weight']*1 for e in locallytrimmed_g.es], vertex_label=graph_node_label)
+                svgpath_local =self.path+"vc_graph_locallytrimmed_Root" + str(root) + "lazy" + str(lazy_i) + 'JacG' + str(self.jac_std_global) + 'toobig'+str(int(self.too_big_factor*100))+ ".svg"
+                print('svglocal', svgpath_local)
+                ig.plot(locallytrimmed_g,svgpath_local, layout=layout,
+                        edge_width=[e['weight'] * 1 for e in locallytrimmed_g.es], vertex_label=graph_node_label)
+                #hitting_times = compute_hitting_time(sparse_vf, root=1)
+                #print('final hitting times:', list(zip(range(len(hitting_times)), hitting_times)))
 
 
-            globallytrimmed_g.vs['color'] = [pal.get(i)[0:3] for i in scaled_hitting_times]
-            ig.plot(globallytrimmed_g,
-                    "/home/shobi/Trajectory/Datasets/Paul15/vc_graph_example_globallytrimmed_colornode_" + str(
-                        root) + "lazy" + str(lazy_i) + ".svg", layout=layout,
-                    edge_width=[e['weight'] * .1 for e in globallytrimmed_g.es], vertex_label=graph_node_label)
+                globallytrimmed_g.vs['color'] = [pal.get(i)[0:3] for i in scaled_hitting_times]
+                ig.plot(globallytrimmed_g,
+                        self.path+"/vc_graph_globallytrimmed_Root" + str(
+                            root) + "Lazy" + str(lazy_i) + 'JacG' + str(self.jac_std_global) + 'toobig'+str(int(100*self.too_big_factor))+".svg", layout=layout,
+                        edge_width=[e['weight'] * .1 for e in globallytrimmed_g.es], vertex_label=graph_node_label)
 
-            #ig.plot(globallytrimmed_g, "/home/shobi/Trajectory/Datasets/Toy/Toy_bifurcating/vc_graph_example_globallytrimmed_colornode_"+str(root)+"lazy"+str(lazy_i)+".svg", layout=layout,edge_width = [e['weight']*.1 for e in globallytrimmed_g.es], vertex_label = graph_node_label )
+                #ig.plot(globallytrimmed_g, "/home/shobi/Trajectory/Datasets/Toy/Toy_bifurcating/vc_graph_example_globallytrimmed_colornode_"+str(root)+"lazy"+str(lazy_i)+".svg", layout=layout,edge_width = [e['weight']*.1 for e in globallytrimmed_g.es], vertex_label = graph_node_label )
 
-        #print(trimmed_g.vs.indices)
+            #print(trimmed_g.vs.indices)
 
-        #trimmed_g.write_svg("/home/shobi/Trajectory/Code/vc_graph_example_trimmed2.svg", layout=layout,edge_stroke_widths = [e['weight'] for e in trimmed_g.es], labels='label' )
+            #trimmed_g.write_svg("/home/shobi/Trajectory/Code/vc_graph_example_trimmed2.svg", layout=layout,edge_stroke_widths = [e['weight'] for e in trimmed_g.es], labels='label' )
         return
 
     def accuracy(self, onevsall=1):
@@ -850,7 +880,7 @@ def main():
     from MulticoreTSNE import MulticoreTSNE as TSNE
     import matplotlib.pyplot as plt
 
-    dataset = "Paul15"#""Toy1" # GermlineLi #Toy1
+    dataset = "Toy1"#"Paul15"#""Toy1" # GermlineLi #Toy1
 
     ## Dataset Germline Li https://zenodo.org/record/1443566#.XZlhEkEzZ5y
     if dataset == "GermlineLi":
@@ -906,8 +936,8 @@ def main():
         #sc.pl.draw_graph(adata_counts, color=['paul15_clusters', 'Cma1'], legend_loc='on data')
 
     if dataset =="Toy1":
-        df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy/Toy_bifurcating/toy_bifurcating_n3000.csv",'rt', delimiter=",")
-        df_ids = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy/Toy_bifurcating/toy_bifurcating_n3000_ids.csv", 'rt',
+        df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy1/Toy_bifurcating/toy_bifurcating_n3000.csv",'rt', delimiter=",")
+        df_ids = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy1/Toy_bifurcating/toy_bifurcating_n3000_ids.csv", 'rt',
                              delimiter=",")
         df_ids['cell_id_num'] = [int(s[1: :]) for s in df_ids['cell_id']]
 
@@ -922,6 +952,7 @@ def main():
 
         adata_counts = sc.AnnData(df_counts, obs=df_ids)
         sc.tl.pca(adata_counts, svd_solver='arpack',n_comps=20)
+        '''
         sc.pp.neighbors(adata_counts, n_neighbors=4, n_pcs=20)
         sc.tl.draw_graph(adata_counts)
         sc.pl.draw_graph(adata_counts, color='group_id', legend_loc='on data')
@@ -937,18 +968,22 @@ def main():
         sc.pl.paga(adata_counts, color=['louvain', 'group_id', 'dpt_pseudotime'])
         #X = df_counts.values
         print(df_counts)
-
+        '''
         from sklearn.decomposition import PCA
         pca = PCA(n_components=10)
         pc = pca.fit_transform(df_counts)
-        p1 = PARC(pc, true_label, jac_std_global=2, knn=10, too_big_factor=.1) #*.4
+        p0 = PARC(pc, true_label, jac_std_global=2, knn=10, too_big_factor=0.4, pseudotime=True,path = "/home/shobi/Trajectory/Datasets/"+dataset+"/", root = 3) #*.4
+        p0.run_PARC()
+        p1 = PARC(pc, true_label, jac_std_global=1, knn=10, too_big_factor=0.05, path = "/home/shobi/Trajectory/Datasets/"+dataset+"/",pseudotime=True, root =61) #*.4
         p1.run_PARC()
         labels = p1.labels
-    p1 = PARC(adata_counts.obsm['X_pca'], true_label, jac_std_global=1, knn=5, too_big_factor=0.05, anndata= adata_counts, small_pop=2)
-    p1.run_PARC()
-    labels = p1.labels
-
-    embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'])
+    #p1 = PARC(adata_counts.obsm['X_pca'], true_label, jac_std_global=1, knn=5, too_big_factor=0.05, anndata= adata_counts, small_pop=2)
+    #p1.run_PARC()
+    #labels = p1.labels
+    if len(labels)>2000:
+        idx = np.random.randint(len(labels), size=2000)
+        embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'][idx,:])
+    else:embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'])
 
     #embedding = TSNE().fit_transform(pc)
     num_group = len(set(true_label))
@@ -957,15 +992,19 @@ def main():
     f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
 
     for color,group in zip(line,set(true_label)):
-        where = np.where(np.array(true_label)==group)[0]
+        where = np.where(np.array(true_label)[idx]==group)[0]
         ax1.scatter(embedding[where,0],embedding[where,1],label=group, c=plt.cm.jet(color))
     ax1.legend()
     ax1.set_title('true labels')
     num_parc_group = len(set(labels))
     line_parc = np.linspace(0,1,num_parc_group)
     for color, group in zip(line_parc, set(labels)):
-        where = np.where(np.array(labels) == group)[0]
-        ax2.scatter(embedding[where, 0], embedding[where, 1], label=group, c=plt.cm.jet(color))
+        where = np.where(np.array(labels)[idx] == group)[0]
+        print('color', int(p1.scaled_hitting_times[group]))
+        ax2.scatter(embedding[where, 0], embedding[where, 1], label=group, c=p1.group_color_cmap[group])
+    #for color, group in zip(line_parc, set(labels)):
+    #    where = np.where(np.array(labels) == group)[0]
+    #    ax2.scatter(embedding[where, 0], embedding[where, 1], label=group, c=plt.cm.jet(color))
     ax2.legend()
     f1_mean = p1.f1_mean*100
     ax2.set_title("parc labels F1 "+ str(int(f1_mean))+ "%" )
