@@ -6,7 +6,7 @@ import igraph as ig
 import leidenalg
 import time
 import hnswlib
-#jan2020
+#jan2020 Righclick->GIT->Repository-> PUSH
 def compute_hitting_time(sparse_graph, number_eig=0, x_lazy=0.3, alph_teleport = 0.95, root=0 ):
     #1- alpha is the probabilty of teleporting
     # 1- x_lazy is the probability of staying in current state (be lazy)
@@ -32,6 +32,7 @@ def compute_hitting_time(sparse_graph, number_eig=0, x_lazy=0.3, alph_teleport =
     #print('laplacian', A)
 
     deg = sparse_graph+lap # Recall that L=D-A (modified for weighted where D_ii is sum of edge weights and A_ij is the weight of particular edge)
+    # see example and definition in the SciPy ref https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csgraph.laplacian.html
     deg.data = 1 / np.sqrt(deg.data)  ##inv sqrt of degree matrix
     deg[deg == np.inf] = 0
     print('degree',deg)
@@ -42,7 +43,7 @@ def compute_hitting_time(sparse_graph, number_eig=0, x_lazy=0.3, alph_teleport =
 
     #norm_lap = lap.dot(deg)
     #norm_lap = deg.dot(norm_lap)
-    norm_lap =  csgraph.laplacian(sparse_graph,normed = True)
+    norm_lap =  csgraph.laplacian(sparse_graph,normed = True) #returns symmetric normalized D^-.5 xL x D^-.5
     A = scipy.sparse.csr_matrix.todense(norm_lap)
     #print("normalized laplacian",A)
     #norm_lap = (norm_lap+norm_lap.transpose())*0.5
@@ -114,6 +115,210 @@ def compute_hitting_time(sparse_graph, number_eig=0, x_lazy=0.3, alph_teleport =
     roundtrip_times = roundtrip_commute_matrix[root,:]
 
     return final_hitting_times, roundtrip_times
+
+def get_absorbing_clusters(cluster_graph):
+    absorbing_clusters = 0
+    return
+def get_biased_weights():
+    return
+def get_Q_transient_transition(sources, targets, bias_weights, absorbing_clusters):
+    return
+def get_R_absorbing_transition(sources, targets, bias_weights, absorbing_clusters):
+    return
+
+def make_absorbing_markov(cluster_graph, pt):
+    #cluster_graph is the vertex_cluster_graph made of sub_clusters in the finer iteration of PARC
+    #pt is the pseudotime of each cluster in the graph
+    absorbing_clusters = get_absorbing_clusters(cluster_graph)
+    n_s = len(absorbing_clusters)
+    adjacency_matrix = get_sparse_from_igraph(cluster_graph)
+    sources, targets, weights  = zip(adjacency_matrix)
+    sources, targets, bias_weights = get_biased_weights(sources, targets, weights, pt)
+    Q = get_Q_transient_transition(sources, targets, bias_weights, absorbing_clusters)
+    R = get_R_absorbing_transition(sources, targets, bias_weights, absorbing_clusters)
+    n_t = Q.shape[0]
+    I_t = np.identity(n_t)
+    N = np.inv(I_t - Q)
+    P_transition_absorbing = np.concatenate() #put together Q, R, Is and 0s
+    return Q, R, N, P_transition_absorbing
+
+def expected_num_steps(start_i, N):
+    n_t = N.shape[0]
+    N_steps = np.dot(N,np.ones(n_t))
+    n_steps_i = N_steps[start_i]
+    return n_steps_i
+
+def absorption_probability(N, R, absorption_state_j):
+    M = np.dot(N,R)
+    vec_prob_end_in_j = M[:,absorption_state_j]
+    return M, vec_prob_end_in_j
+
+
+def most_likely_path(P_transition_absorbing_markov, start_i, end_i):
+    graph_absorbing_markov =0 #ig()
+    shortest_path =graph_absorbing_markov.shortest_path(start_i,end_i)
+    print('the shortest path beginning at ', start_i, 'and ending in ', end_i, 'is:')
+    return shortest_path
+
+def draw_trajectory_dimred(X_dimred, cluster_labels, super_cluster_labels, super_edgelist, pt):
+    from scipy.interpolate import interp1d
+    import matplotlib.pyplot as plt
+    pt = [int(i) for i in pt]
+    pt_str = [str(i) for i in pt]
+    print('pt_str',pt_str)
+    x = X_dimred[:,0]
+    y = X_dimred[:, 1]
+    df= pd.DataFrame({'x':x, 'y':y, 'cluster':cluster_labels, 'super_cluster': super_cluster_labels}, columns = ['x','y','cluster','super_cluster'])
+    df_mean = df.groupby('cluster').mean()
+    df_super_mean = df.groupby('super_cluster').mean()
+    for e_i, (start, end) in enumerate(super_edgelist):
+
+        if pt[start] >pt[end]:
+            temp = end
+            end = start
+            start = temp
+        print('edges', e_i, start, end, pt[start], pt[end])
+        print('df head', df.head())
+        x_i_start = df[df['super_cluster']==start].groupby('cluster').mean()['x'].values
+        y_i_start = df[df['super_cluster'] == start].groupby('cluster').mean()['y'].values
+        x_i_end = df[df['super_cluster'] == end].groupby('cluster').mean()['x'].values
+        y_i_end = df[df['super_cluster'] == end].groupby('cluster').mean()['y'].values
+
+        super_start_x =df[df['super_cluster']==start].mean()['x']
+        super_end_x =df[df['super_cluster']==end].mean()['x']
+        super_start_y = df[df['super_cluster'] == start].mean()['y']
+        super_end_y= df[df['super_cluster'] == end].mean()['y']
+
+        ext_maxx = False
+        minx = min(super_start_x, super_end_x)
+        maxx = max(super_start_x, super_end_x)
+        if minx == super_start_x:  # edge is going left to right and we want to extend the maxx to the right, else extend minx to the left
+            idx_keep = np.where(x_i_end<=maxx)[0]
+            x_i_end = x_i_end[idx_keep]
+            y_i_end = y_i_end[idx_keep]
+            idx_keep = np.where(x_i_start>=minx)[0]
+            x_i_start = x_i_start[idx_keep]
+            y_i_start = y_i_start[idx_keep]
+            x_val = np.concatenate([x_i_start, x_i_end])
+            y_val = np.concatenate([y_i_start, y_i_end])
+        else:
+            print('start', start, 'at', super_start_x, super_start_y)
+            print('end', end, 'at', super_end_x, super_end_y)
+            idx_keep = np.where(x_i_start <= maxx)[0] # edge is going right to left
+            x_i_start = x_i_start[idx_keep]
+            y_i_start = y_i_start[idx_keep]
+            idx_keep = np.where(x_i_end >=minx)[0]
+            x_i_end = x_i_end[idx_keep]
+            y_i_end = y_i_end[idx_keep]
+            x_val = np.concatenate([x_i_start, x_i_end])
+            y_val = np.concatenate([y_i_start, y_i_end])
+        if (pt[start] == pt[end]):
+            x_val = np.concatenate([x_i_start, x_i_end])
+            y_val = np.concatenate([y_i_start, y_i_end])
+            idx_keep = np.where((x_val <= maxx) & (x_val >= minx))[0]
+            x_val = x_val[idx_keep]
+            y_val = y_val[idx_keep]
+
+        super_mid_x = (super_start_x+super_end_x)/2
+        super_mid_y = (super_start_y+super_end_y)/2
+        from scipy.spatial import distance
+
+        #x_val = np.concatenate([x_i_start, x_i_end])
+
+        if abs(minx - maxx) <= 1:
+            print('very straight line')
+            straight_level = 10
+            noise = 0.01
+            x_super = np.array(
+                [super_start_x, super_end_x, super_start_x, super_end_x, super_start_x + noise, super_end_x + noise,
+                 super_start_x - noise, super_end_x - noise, super_mid_x])
+            y_super = np.array(
+                [super_start_y, super_end_y, super_start_y, super_end_y, super_start_y + noise, super_end_y + noise,
+                 super_start_y - noise, super_end_y - noise, super_mid_y])
+        else:
+            straight_level = 5
+            noise = 0.1#0.05
+            x_super = np.array(
+                [super_start_x, super_end_x, super_start_x, super_end_x, super_start_x + noise, super_end_x + noise,
+                 super_start_x - noise, super_end_x - noise])
+            y_super = np.array(
+            [super_start_y, super_end_y, super_start_y, super_end_y, super_start_y + noise, super_end_y + noise,
+             super_start_y - noise, super_end_y - noise])
+
+        #x_super = np.array([super_start_x, super_end_x])
+        #y_super = np.array([super_start_y,super_end_y])
+
+
+        for i in range(straight_level): #DO THE SAME FOR A MIDPOINT TOO TODO
+            y_super = np.concatenate([y_super,y_super])
+            x_super = np.concatenate([x_super, x_super])
+        #noise=np.random.normal(0,0.05,np.size(x_super))
+        #x_super = np.concatenate([np.concatenate([x_super,x_super+noise]),x_super])
+        #y_super = np.concatenate([np.concatenate([y_super,y_super+noise]),y_super])
+
+        y_super_max = max(y_super)
+        y_super_min = min(y_super)
+
+        print('xval', x_val)
+        print('yval', y_val)
+        list_selected_clus = list(zip(x_val, y_val))
+        #idx_keep = np.where((x_val<= maxx) & (x_val>=minx))[0]
+        if (len(list_selected_clus)>=1) & (straight_level==5):
+
+            dist = distance.cdist([(super_mid_x, super_mid_y)], list_selected_clus, 'euclidean')
+            print('dist', dist)
+            if len(list_selected_clus)>=2: k=2
+            else: k=1
+            midpoint_loc = dist[0].argsort()[:k]#np.where(dist[0]==np.min(dist[0]))[0][0]
+            print('midpoint loc', midpoint_loc)
+            midpoint_xy = []
+            for i in range(k):
+                midpoint_xy.append(list_selected_clus[midpoint_loc[i]])
+
+            #midpoint_xy = list_selected_clus[midpoint_loc]
+            noise=0.05
+            print(midpoint_xy, 'is the midpoint between clus', pt[start],'and ', pt[end])
+            if k==1:
+                mid_x = np.array([midpoint_xy[0][0], midpoint_xy[0][0] + noise, midpoint_xy[0][0] - noise])#,midpoint_xy[1][0], midpoint_xy[1][0] + noise, midpoint_xy[1][0] - noise])
+                mid_y = np.array([midpoint_xy[0][1], midpoint_xy[0][1] + noise, midpoint_xy[0][1] - noise])#,midpoint_xy[1][1], midpoint_xy[1][1] + noise, midpoint_xy[1][1] - noise])
+            if k==2:
+                mid_x = np.array([midpoint_xy[0][0], midpoint_xy[0][0] + noise, midpoint_xy[0][0] - noise,midpoint_xy[1][0], midpoint_xy[1][0] + noise, midpoint_xy[1][0] - noise])
+                mid_y = np.array([midpoint_xy[0][1], midpoint_xy[0][1] + noise, midpoint_xy[0][1] - noise ,midpoint_xy[1][1], midpoint_xy[1][1] + noise, midpoint_xy[1][1] - noise])
+            for i in range(3):
+                mid_x = np.concatenate([mid_x, mid_x])
+                mid_y = np.concatenate([mid_y, mid_y])
+
+            x_super = np.concatenate([x_super, mid_x])
+            y_super = np.concatenate([y_super, mid_y])
+        x_val = np.concatenate([x_val,x_super])
+        y_val = np.concatenate([y_val, y_super])
+        z = np.polyfit(x_val, y_val, 2)
+
+        xp = np.linspace(minx,maxx, 500)
+        p = np.poly1d(z)
+        smooth = p(xp)
+        if ext_maxx == False:
+            idx_keep = np.where((xp<=(maxx)) &(xp>=(minx)))[0]# minx+3
+        else:
+            idx_keep = np.where((xp <= (maxx)) & (xp >= (minx)))[0] #maxx-3
+        plt.plot(xp[idx_keep],smooth[idx_keep], linewidth = 3, c='black')
+
+    #df_mean['cluster'] = df_mean.index()
+    x_cluster = df_mean['x']
+    y_cluster = df_mean['y']
+    print('x-cluster and y-cluster')
+    print(x_cluster, y_cluster)
+    x_new = np.linspace(x_cluster.min(),x_cluster.max(),500)
+    #f= interp1d(x_cluster, y_cluster, kind='quadratic')
+    #y_smooth = f(x_new)
+    #plt.plot(x_new, y_smooth)
+    plt.scatter(X_dimred[:,0], X_dimred[:,1], alpha=0.5)
+    plt.scatter(x_cluster,y_cluster,c = 'red')
+    plt.scatter(df_super_mean['x'], df_super_mean['y'], c='black')
+    for i, type in enumerate(pt_str):
+        plt.text(df_super_mean['x'][i], df_super_mean['y'][i], type)
+    plt.show()
+    return
 
 def local_pruning_clustergraph(adjacency_matrix, local_pruning_std = 0.5, global_pruning_std =2):
     #larger pruning_std factor means less pruning
@@ -648,6 +853,11 @@ class PARC:
 
             #globally trimmed link
             sources, targets = locallytrimmed_sparse_vc.nonzero()
+            edgelist = list(zip(sources.tolist(), targets.tolist()))
+            edgelist = set(tuple(sorted(l)) for l in edgelist) # keep only one of (0,1) and (1,0)
+            self.edgelist = edgelist
+            print('coarse edgelist', edgelist)
+
             mask = np.zeros(len(sources), dtype=bool)
             print('mean and std', np.mean(locallytrimmed_sparse_vc.data), np.std(locallytrimmed_sparse_vc.data))
             locallytrimmed_sparse_vc.data = locallytrimmed_sparse_vc.data / (np.std(locallytrimmed_sparse_vc.data))
@@ -974,17 +1184,27 @@ def main():
         pc = pca.fit_transform(df_counts)
         p0 = PARC(pc, true_label, jac_std_global=2, knn=10, too_big_factor=0.4, pseudotime=True,path = "/home/shobi/Trajectory/Datasets/"+dataset+"/", root = 3) #*.4
         p0.run_PARC()
+        super_labels = p0.labels
+
+        super_edges = p0.edgelist
+        super_pt = p0.scaled_hitting_times #pseudotime pt
         p1 = PARC(pc, true_label, jac_std_global=1, knn=10, too_big_factor=0.05, path = "/home/shobi/Trajectory/Datasets/"+dataset+"/",pseudotime=True, root =61) #*.4
         p1.run_PARC()
         labels = p1.labels
     #p1 = PARC(adata_counts.obsm['X_pca'], true_label, jac_std_global=1, knn=5, too_big_factor=0.05, anndata= adata_counts, small_pop=2)
     #p1.run_PARC()
     #labels = p1.labels
-    if len(labels)>2000:
+    print('start tsne')
+    n_downsample = 3100
+    if len(labels)>n_downsample:
         idx = np.random.randint(len(labels), size=2000)
         embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'][idx,:])
-    else:embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'])
+    else:
+        embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'])
+        idx = np.random.randint(len(labels), size=len(labels))
 
+    print('end tsne')
+    draw_trajectory_dimred(embedding, labels, super_labels, super_edges, super_pt)
     #embedding = TSNE().fit_transform(pc)
     num_group = len(set(true_label))
     line=np.linspace(0,1,num_group)
@@ -992,14 +1212,17 @@ def main():
     f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
 
     for color,group in zip(line,set(true_label)):
-        where = np.where(np.array(true_label)[idx]==group)[0]
+        if len(labels) > n_downsample:
+            where = np.where(np.array(true_label)[idx]==group)[0]
+        else: where = np.where(np.array(true_label) == group)[0]
         ax1.scatter(embedding[where,0],embedding[where,1],label=group, c=plt.cm.jet(color))
     ax1.legend()
     ax1.set_title('true labels')
     num_parc_group = len(set(labels))
     line_parc = np.linspace(0,1,num_parc_group)
     for color, group in zip(line_parc, set(labels)):
-        where = np.where(np.array(labels)[idx] == group)[0]
+        if len(labels)>n_downsample: where = np.where(np.array(labels)[idx] == group)[0]
+        else: where = np.where(np.array(labels) == group)[0]
         print('color', int(p1.scaled_hitting_times[group]))
         ax2.scatter(embedding[where, 0], embedding[where, 1], label=group, c=p1.group_color_cmap[group])
     #for color, group in zip(line_parc, set(labels)):
