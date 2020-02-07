@@ -7,114 +7,7 @@ import leidenalg
 import time
 import hnswlib
 #jan2020 Righclick->GIT->Repository-> PUSH
-def compute_hitting_time(sparse_graph, number_eig=0, x_lazy=0.3, alph_teleport = 0.95, root=0 ):
-    #1- alpha is the probabilty of teleporting
-    # 1- x_lazy is the probability of staying in current state (be lazy)
-    #sparse_graph = np.array([[0, 3, 0, 0, 9, 0, 1], [3, 0, 6, 15, 9, 0, 0], [0, 6, 0, 8, 0, 0, 0], [0, 15, 8, 0, 7, 5, 0],
-                  #[9, 9, 0, 7, 0, 4, 0], [0, 0, 0, 5, 4, 0, 0], [1, 0, 0, 0, 0, 0, 0]])
-    #sparse_graph = np.array([[0,1,1,0,0,0],[1,0,0,0,0,0],[1,0,0,0,1,0],[0,0,0,0,1,1],[0,0,1,1,0,1],[0,0,0,1,1,0]]) #example on page 90
-    #sparse_graph = np.array([[0,1,1,1,1],[1,0,1,0,0],[1,1,0,1,1],[1,0,1,0,1],[1,0,1,1,0]]) #example on page 45
-    N = sparse_graph.shape[0]
-    #print(sparse_graph)
-    sparse_graph = scipy.sparse.csr_matrix(sparse_graph)
-    print('start compute hitting')
-    #print('sparse', sparse_graph)
-    A=scipy.sparse.csr_matrix.todense(sparse_graph)
 
-    print('is graph symmetric', (A.transpose()==A).all())
-    #print(A)
-    #print('laplacian', csgraph.laplacian(A))
-    beta_teleport =2*(1-alph_teleport)/(2-alph_teleport)
-
-    lap = csgraph.laplacian(sparse_graph, normed=False)
-    A = scipy.sparse.csr_matrix.todense(lap)
-    print('is laplacian symmetric', (A.transpose() == A).all())
-    #print('laplacian', A)
-
-    deg = sparse_graph+lap # Recall that L=D-A (modified for weighted where D_ii is sum of edge weights and A_ij is the weight of particular edge)
-    # see example and definition in the SciPy ref https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csgraph.laplacian.html
-    deg.data = 1 / np.sqrt(deg.data)  ##inv sqrt of degree matrix
-    deg[deg == np.inf] = 0
-    print('degree',deg)
-    #for i in range(np.shape(deg)[0]):
-    #    print('i in degree', i)
-    #    if (deg[i,i] ==0): deg[i,i]= 0.00001
-    #print('degree adjusted', deg)
-
-    #norm_lap = lap.dot(deg)
-    #norm_lap = deg.dot(norm_lap)
-    norm_lap =  csgraph.laplacian(sparse_graph,normed = True) #returns symmetric normalized D^-.5 xL x D^-.5
-    A = scipy.sparse.csr_matrix.todense(norm_lap)
-    #print("normalized laplacian",A)
-    #norm_lap = (norm_lap+norm_lap.transpose())*0.5
-    Id = np.zeros((N, N),float)
-    np.fill_diagonal(Id, 1)
-    #print('ID identity','beta is', beta_teleport)
-    #print(Id)
-    beta_normlap_test = 2*x_lazy*(1-beta_teleport)*A +beta_teleport*Id #normalized laplacion for lazy, teleporting walk
-    #print('beta lap test', beta_normlap_test)
-    #print('direct inverse of beta lap test')
-    #print(np.linalg.inv(beta_normlap_test))
-    A=scipy.sparse.csr_matrix.todense(norm_lap)
-    #print('is graph symmetric', (A.transpose()==A).all())
-    #print("normalized laplacian", A)
-
-    eig_val, eig_vec = np.linalg.eigh(A)  # eig_vec[:,i] is eigenvector for eigenvalue eig_val[i]
-    #eig_val, eig_vec = scipy.sparse.linalg.eigsh(norm_lap, k=sparse_graph.shape[0]-1) # eig_vec[:,i] is eigenvector for eigenvalue eig_val[i]
-    print('eig val', eig_val.shape, eig_val)
-    print('eig vectors shape', eig_vec.shape)
-
-    if number_eig ==0:number_eig = eig_vec.shape[1]
-    print('number of eig vec' ,number_eig)
-    sum_matrix = np.zeros((N,N),float)
-    beta_norm_lap = np.zeros((N,N),float)
-    Xu =np.zeros((N,N))
-    Xu[:,root]=1
-    Id_Xv = np.zeros((N,N),int)
-    np.fill_diagonal(Id_Xv,1)
-    Xv_Xu =Id_Xv-Xu
-    #print('Xv-Xroot', Xv_Xu)
-
-    for i in range(0,number_eig):
-        vec_i = eig_vec[:, i]
-        factor =beta_teleport+2*eig_val[i]*x_lazy*(1-beta_teleport)
-        #print('factor',factor)
-
-        vec_i = np.reshape(vec_i,(-1,1))
-        eigen_vec_mult = vec_i.dot(vec_i.T)
-        sum_matrix = sum_matrix+(eigen_vec_mult/factor)
-        beta_norm_lap = beta_norm_lap+(eigen_vec_mult*factor)
-    # print("Greens matrix", sum_matrix)
-    # print("beta laplacian", beta_norm_lap)
-    # print("product",beta_norm_lap.dot(sum_matrix))
-    # print('inverse of greens matrix should be b-lap')
-    # print(np.linalg.inv(sum_matrix))
-    deg = scipy.sparse.csr_matrix.todense(deg)
-
-    temp = sum_matrix.dot(deg)
-    #print(temp.shape)
-    temp = deg.dot(temp)*beta_teleport
-
-    hitting_matrix = np.zeros((N,N),float)
-    diag_row = np.diagonal(temp)
-    for i in range(N):
-        hitting_matrix[i,:] = diag_row - temp[i,:]
-
-    print('hitting matrix')
-    print(hitting_matrix)
-    print('roundtrip matrix')
-    print(hitting_matrix+hitting_matrix.T)
-    print('node 0 commute times')
-    roundtrip_commute_matrix = hitting_matrix+hitting_matrix.T
-    print(roundtrip_commute_matrix[0,:])
-
-    temp = Xv_Xu.dot(temp)
-    #print(temp.shape, temp)
-    final_hitting_times = np.diagonal(temp) ## number_eig x 1 vector of hitting times from root (u) to number_eig of other nodes
-    #print('final shape', final.shape)
-    roundtrip_times = roundtrip_commute_matrix[root,:]
-
-    return final_hitting_times, roundtrip_times
 
 def get_absorbing_clusters(cluster_graph):
     absorbing_clusters = 0
@@ -160,20 +53,33 @@ def most_likely_path(P_transition_absorbing_markov, start_i, end_i):
     print('the shortest path beginning at ', start_i, 'and ending in ', end_i, 'is:')
     return shortest_path
 
-def draw_trajectory_dimred(X_dimred, cluster_labels, super_cluster_labels, super_edgelist, pt):
+def draw_trajectory_dimred(X_dimred, cluster_labels, super_cluster_labels, super_edgelist, pt_sub,group_colour, x_lazy,alpha_teleport, projected_sc_pt):
     from scipy.interpolate import interp1d
     import matplotlib.pyplot as plt
-    pt = [int(i) for i in pt]
-    pt_str = [str(i) for i in pt]
-    print('pt_str',pt_str)
+
     x = X_dimred[:,0]
     y = X_dimred[:, 1]
-    df= pd.DataFrame({'x':x, 'y':y, 'cluster':cluster_labels, 'super_cluster': super_cluster_labels}, columns = ['x','y','cluster','super_cluster'])
+
+    sc_pseudotime_sub = np.asarray(cluster_labels) #placeholder
+    for label_i in set(cluster_labels):
+        loc_i = np.where(np.asarray(cluster_labels)==label_i)[0]
+        print('ptsub_labeli',pt_sub[label_i],'loc_i', loc_i)
+        sc_pseudotime_sub[loc_i]=pt_sub[label_i]
+    print('sc_pseudo', sc_pseudotime_sub[0:200])
+    df = pd.DataFrame({'x': x, 'y': y, 'cluster': cluster_labels, 'super_cluster': super_cluster_labels, 'pseudotime_sub':sc_pseudotime_sub},
+                          columns=['x', 'y', 'cluster', 'super_cluster','pseudotime_sub'])
     df_mean = df.groupby('cluster').mean()
+    print('df_mean', df_mean.head())
     df_super_mean = df.groupby('super_cluster').mean()
+    print('super mean', df_super_mean.head())
+    pt = df_super_mean['pseudotime_sub'].values
+    pt_int = [int(i) for i in pt]
+    pt_str = [str(i) for i in pt_int]
+    print('super_edgelist',super_edgelist)
+
     for e_i, (start, end) in enumerate(super_edgelist):
 
-        if pt[start] >pt[end]:
+        if pt[start] >=pt[end]:
             temp = end
             end = start
             start = temp
@@ -183,6 +89,8 @@ def draw_trajectory_dimred(X_dimred, cluster_labels, super_cluster_labels, super
         y_i_start = df[df['super_cluster'] == start].groupby('cluster').mean()['y'].values
         x_i_end = df[df['super_cluster'] == end].groupby('cluster').mean()['x'].values
         y_i_end = df[df['super_cluster'] == end].groupby('cluster').mean()['y'].values
+        direction_arrow = 1
+        if np.mean(np.asarray(x_i_end)) < np.mean(np.asarray(x_i_start)): direction_arrow = -1
 
         super_start_x =df[df['super_cluster']==start].mean()['x']
         super_end_x =df[df['super_cluster']==end].mean()['x']
@@ -282,6 +190,23 @@ def draw_trajectory_dimred(X_dimred, cluster_labels, super_cluster_labels, super
         else:
             idx_keep = np.where((xp <= (maxx)) & (xp >= (minx)))[0] #maxx-3
         plt.plot(xp[idx_keep],smooth[idx_keep], linewidth = 3, c='black')
+        med_loc = np.where(xp==np.median(xp[idx_keep]))[0]
+        mean_temp = np.mean(xp[idx_keep])
+        closest_val = xp[idx_keep][0]
+        closest_loc = idx_keep[0]
+        # print('mean_temp is', mean_temp)
+        # print('closest val is', closest_val)
+        # print('closest loc is', closest_loc)
+        for i, xp_val in enumerate(xp[idx_keep]):
+            #print('dist1',abs(xp_val - mean_temp))
+            #print('dist2', abs(closest_val - mean_temp))
+            if abs(xp_val - mean_temp) < abs(closest_val-mean_temp):
+                #print('closest val is now', xp_val, 'at', idx_keep[i])
+                closest_val = xp_val
+                closest_loc = idx_keep[i]
+
+        if direction_arrow ==1: plt.arrow(xp[closest_loc], smooth[closest_loc],xp[closest_loc+1]-xp[closest_loc], smooth[closest_loc+1]-smooth[closest_loc], shape='full', lw=0, length_includes_head = True, head_width = 0.5, color = 'black')#, head_starts_at_zero = direction_arrow )
+        else: plt.arrow(xp[closest_loc], smooth[closest_loc],xp[closest_loc-1]-xp[closest_loc], smooth[closest_loc-1]-smooth[closest_loc], shape='full', lw=0, length_includes_head = True, head_width = 0.5, color = 'black')
 
     #df_mean['cluster'] = df_mean.index()
     x_cluster = df_mean['x']
@@ -289,14 +214,18 @@ def draw_trajectory_dimred(X_dimred, cluster_labels, super_cluster_labels, super
     print('x-cluster and y-cluster')
     print(x_cluster, y_cluster)
     x_new = np.linspace(x_cluster.min(),x_cluster.max(),500)
-    #f= interp1d(x_cluster, y_cluster, kind='quadratic')
-    #y_smooth = f(x_new)
-    #plt.plot(x_new, y_smooth)
-    plt.scatter(X_dimred[:,0], X_dimred[:,1], alpha=0.5)
+    num_parc_group = len(set(cluster_labels))
+    line_parc = np.linspace(0, 1, num_parc_group)
+    for color, group in zip(line_parc, set(cluster_labels)):
+        where = np.where(np.array(cluster_labels) == group)[0]
+        plt.scatter(X_dimred[where, 0], X_dimred[where, 1], label=group, c=group_colour[group], alpha=0.5)
+    plt.legend()
+    # plt.scatter(X_dimred[:,0], X_dimred[:,1], alpha=0.5)
     plt.scatter(x_cluster,y_cluster,c = 'red')
     plt.scatter(df_super_mean['x'], df_super_mean['y'], c='black')
     for i, type in enumerate(pt_str):
         plt.text(df_super_mean['x'][i], df_super_mean['y'][i], type)
+    plt.title('lazy:'+str(x_lazy)+' teleport'+str(alpha_teleport))
     plt.show()
     return
 
@@ -373,7 +302,7 @@ def get_sparse_from_igraph(graph, weight_attr=None):
 
 class PARC:
     def __init__(self, data, true_label=None, anndata=None, dist_std_local=2, jac_std_global='median', keep_all_local_dist='auto',
-                 too_big_factor=0.4, small_pop=10, jac_weighted_edges=True, knn=30, n_iter_leiden=5, pseudotime= False, root=0, path= '/home/shobi/Trajectory/', seed = 99):
+                 too_big_factor=0.4, small_pop=10, jac_weighted_edges=True, knn=30, n_iter_leiden=5, pseudotime= False, root=0, path= '/home/shobi/Trajectory/', seed = 99, super_cluster_labels = False, super_node_degree_list = False, x_lazy=0.95, alpha_teleport = 0.99):
         # higher dist_std_local means more edges are kept
         # highter jac_std_global means more edges are kept
         if keep_all_local_dist == 'auto':
@@ -397,6 +326,92 @@ class PARC:
         self.root = root
         self.path = path
         self.seed = seed
+        self.super_cluster_labels = super_cluster_labels
+        self.super_node_degree_list = super_node_degree_list
+        self.x_lazy = x_lazy #1-x = probability of staying in same node
+        self.alpha_teleport = alpha_teleport #1-alpha is probability of jumping
+
+    def compute_hitting_time(self, sparse_graph, root, x_lazy, alpha_teleport, number_eig=0):
+        # 1- alpha is the probabilty of teleporting
+        # 1- x_lazy is the probability of staying in current state (be lazy)
+        beta_teleport = 2 * (1 - alpha_teleport) / (2 - alpha_teleport)
+        N = sparse_graph.shape[0]
+        sparse_graph = scipy.sparse.csr_matrix(sparse_graph)
+        print('start compute hitting')
+        A = scipy.sparse.csr_matrix.todense(sparse_graph)  # A is the adjacency matrix
+        print('is graph symmetric', (A.transpose() == A).all())
+        lap = csgraph.laplacian(sparse_graph, normed=False)  # compute regular laplacian (normed = False) to infer the degree matrix where D = L+A
+        # see example and definition in the SciPy ref https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csgraph.laplacian.html
+        A = scipy.sparse.csr_matrix.todense(lap)
+        print('is laplacian symmetric', (A.transpose() == A).all())
+        deg = sparse_graph + lap  # Recall that L=D-A (modified for weighted where D_ii is sum of edge weights and A_ij is the weight of particular edge)
+        deg.data = 1 / np.sqrt(deg.data)  ##inv sqrt of degree matrix
+        deg[deg == np.inf] = 0
+        norm_lap = csgraph.laplacian(sparse_graph, normed=True)  # returns symmetric normalized D^-.5 xL x D^-.5
+        Id = np.zeros((N, N), float)
+        np.fill_diagonal(Id, 1)
+        norm_lap = scipy.sparse.csr_matrix.todense(norm_lap)
+
+        eig_val, eig_vec = np.linalg.eigh(norm_lap)  # eig_vec[:,i] is eigenvector for eigenvalue eig_val[i]
+        print('eig val', eig_val.shape, eig_val)
+        if number_eig == 0: number_eig = eig_vec.shape[1]
+        print('number of eig vec', number_eig)
+        Greens_matrix = np.zeros((N, N), float)
+        beta_norm_lap = np.zeros((N, N), float)
+        Xu = np.zeros((N, N))
+        Xu[:, root] = 1
+        Id_Xv = np.zeros((N, N), int)
+        np.fill_diagonal(Id_Xv, 1)
+        Xv_Xu = Id_Xv - Xu
+        start_ = 0
+        if alpha_teleport == 1:
+            start_ = 1  # if there are no jumps (alph_teleport ==1), then the first term in beta-normalized Green's function will have 0 in denominator (first eigenvalue==0)
+
+        for i in range(start_, number_eig):  # 0 instead of 1th eg
+            print(i, 'th eigenvalue is', eig_val[i])
+            vec_i = eig_vec[:, i]
+            factor = beta_teleport + 2 * eig_val[i] * x_lazy * (1 - beta_teleport)
+            print('factor', 1 / factor)
+
+            vec_i = np.reshape(vec_i, (-1, 1))
+            eigen_vec_mult = vec_i.dot(vec_i.T)
+            Greens_matrix = Greens_matrix + (
+                        eigen_vec_mult / factor)  # Greens function is the inverse of the beta-normalized laplacian
+            beta_norm_lap = beta_norm_lap + (eigen_vec_mult * factor)  # beta-normalized laplacian
+
+        deg = scipy.sparse.csr_matrix.todense(deg)
+        temp = Greens_matrix.dot(deg)
+        temp = deg.dot(temp) * beta_teleport
+        hitting_matrix = np.zeros((N, N), float)
+        diag_row = np.diagonal(temp)
+        for i in range(N):
+            hitting_matrix[i, :] = diag_row - temp[i, :]
+
+        roundtrip_commute_matrix = hitting_matrix + hitting_matrix.T
+        temp = Xv_Xu.dot(temp)
+        final_hitting_times = np.diagonal(
+            temp)  ## number_eig x 1 vector of hitting times from root (u) to number_eig of other nodes
+        roundtrip_times = roundtrip_commute_matrix[root, :]
+        return final_hitting_times, roundtrip_times
+    def project_hittingtimes_sc(self):
+        knn=30
+        neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=knn)
+        labels = np.asarray(self)
+        sc_pt = labels
+        mean_weight = 0
+        i=0
+        for row in neighbor_array:
+            print('row in neighbor array of cells', row)
+            neighboring_clus = labels[row]
+            print('neighbor clusters labels', neighboring_clus)
+            for clus_i in set(list(neighboring_clus)):
+                mean_weight = mean_weight + np.sum(neighbor_array==clus_i)/knn
+                print('mean weight',mean_weight)
+            sc_pt[i]=mean_weight
+            i=i+1
+        self.single_cell_pt = sc_pt
+        return
+
 
     def make_knn_struct(self, too_big=False, big_cluster=None):
         ef = 100
@@ -535,15 +550,15 @@ class PARC:
                     best_group = max(available_neighbours_list, key=available_neighbours_list.count)
                     PARC_labels_leiden[single_cell] = best_group
 
-
-        while small_pop_exist == True:
+        do_while_time = time.time()
+        while (small_pop_exist == True) & (time.time()-do_while_time <5):
             small_pop_list = []
             small_pop_exist = False
             for cluster in set(list(PARC_labels_leiden.flatten())):
                 population = len(np.where(PARC_labels_leiden == cluster)[0])
                 if population < 10:
                     small_pop_exist = True
-                    print(cluster, ' has small population of', population, )
+                    #print(cluster, ' has small population of', population, )
                     small_pop_list.append(np.where(PARC_labels_leiden == cluster)[0])
             for small_cluster in small_pop_list:
                 for single_cell in small_cluster:
@@ -555,6 +570,7 @@ class PARC:
 
         dummy, PARC_labels_leiden = np.unique(list(PARC_labels_leiden.flatten()), return_inverse=True)
         self.labels = PARC_labels_leiden
+
         print('finished labels')
         #self.anndata.obs['parc_label'] = self.labels
 
@@ -577,7 +593,7 @@ class PARC:
             w = weights[i]
             nw = w/(pop_s+pop_t)#*
             new_weights.append(nw)
-            print('old and new', w, nw)
+            #print('old and new', w, nw)
             i = i+1
             scale_factor = max(new_weights)-min(new_weights)
             wmin = min(new_weights)
@@ -809,20 +825,45 @@ class PARC:
 
             locallytrimmed_g = locallytrimmed_g.simplify(combine_edges='sum')
             min_deg = 1000
+            super_min_deg = 1000
+            found_super_and_sub_root = False
+            deg_list = locallytrimmed_g.degree()
+            self.node_degree_list = deg_list
             for cluster_i in range(len(set(PARC_labels_leiden))):
                 cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
                 true_labels = np.asarray(self.true_label)
                 majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
-                deg_list =locallytrimmed_g.degree()
-
-                if majority_truth == 'M1':
-                    if deg_list[cluster_i] < min_deg:
-                        self.root = cluster_i
-                        min_deg = deg_list[cluster_i]
-
-                    print('root is', cluster_i, majority_truth, )
+                print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
+                if self.super_cluster_labels != False:
+                    super_majority_cluster = self.func_mode(list(np.asarray(self.super_cluster_labels)[cluster_i_loc]))
+                    super_majority_cluster_loc = np.where(np.asarray(self.super_cluster_labels) == super_majority_cluster)[0]
+                    super_majority_truth = self.func_mode(list(true_labels[super_majority_cluster_loc]))
+                    super_node_degree = self.super_node_degree_list[super_majority_cluster]
+                    if (majority_truth == 'M1') & (super_majority_truth =='M1'):
+                        if super_node_degree < super_min_deg:
+                        #if deg_list[cluster_i] < min_deg:
+                            found_super_and_sub_root = True
+                            self.root = cluster_i
+                            min_deg = deg_list[cluster_i]
+                            super_min_deg = super_node_degree
+                            print('new root is', self.root, ' with degree', min_deg, 'and super node degree', super_min_deg)
                 majority_truth_labels[cluster_i_loc] = 'w' + str(majority_truth) + 'c' + str(cluster_i)
                 graph_node_label.append('w' + str(majority_truth) + 'c' + str(cluster_i))
+            if (self.super_cluster_labels == False) | (found_super_and_sub_root == False):
+                print('self.super_cluster_labels', self.super_cluster_labels,' foundsuper_cluster_sub and super root', found_super_and_sub_root)
+                for cluster_i in range(len(set(PARC_labels_leiden))):
+                    cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
+                    true_labels = np.asarray(self.true_label)
+                    majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
+                    print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
+                    if (majority_truth == 'M1'):
+                        print('did not find a super and sub cluster with majority M1')
+                        if deg_list[cluster_i] < min_deg:
+                            self.root = cluster_i
+                            min_deg = deg_list[cluster_i]
+                            print('new root is', self.root, ' with degree', min_deg)
+
+
             print('graph node label', graph_node_label)
             majority_truth_labels = list(majority_truth_labels.flatten())
             print('locallytrimmed_g', locallytrimmed_g)
@@ -858,82 +899,77 @@ class PARC:
 
 
             # compute hitting times (4)
-            for lazy_i in [0.99]:##0.05    ,0.99]:#,0.5]:
-                root = self.root
-                locallytrimmed_sparse_vc = locallytrimmed_sparse_vc_copy ##hitting times are computed based on the locally trimmed graph without any global pruning
-                hitting_times, roundtrip_times = compute_hitting_time(locallytrimmed_sparse_vc, root=root, x_lazy=lazy_i)
+
+            root = self.root
+            x_lazy = self.x_lazy
+            alpha_teleport = self.alpha_teleport
+            locallytrimmed_sparse_vc = locallytrimmed_sparse_vc_copy ##hitting times are computed based on the locally trimmed graph without any global pruning
+            hitting_times, roundtrip_times = self.compute_hitting_time(locallytrimmed_sparse_vc, root=root, x_lazy=x_lazy, alpha_teleport=alpha_teleport)
+
+            self.hitting_times = hitting_times*1000
+            print('round trip times:')
+            print( list(zip(range(len(hitting_times)), roundtrip_times)))
+            hitting_times = np.asarray(hitting_times)*1000
+
+            print('final hitting times:')
+            print(list(zip(range(len(hitting_times)), hitting_times)))
+            # plotting with threshold (thresholding the upper limit to make color palette more readable)
+            remove_outliers = hitting_times[hitting_times<np.mean(hitting_times)+np.std(hitting_times)]
+            threshold = np.mean(remove_outliers) + 1* np.std(remove_outliers)
+            print('threshold', threshold)
+            th_hitting_times = [x if x < threshold else threshold for x in hitting_times]
+
+            remove_outliers_low = hitting_times[hitting_times < (np.mean(hitting_times) - 0.3*np.std(hitting_times))]
+            threshold_low = np.mean(remove_outliers_low) - 0.3 * np.std(remove_outliers_low)
+            print('thresh low', threshold_low)
+            th_hitting_times = [x if x > threshold_low else threshold_low for x in th_hitting_times]
+            #scaled_hitting_times = (th_hitting_times - np.min(th_hitting_times))*100/(threshold)
+
+            scaled_hitting_times = (th_hitting_times - np.min(th_hitting_times))
+            scaled_hitting_times = scaled_hitting_times * (1000/np.max(scaled_hitting_times))
+
+            self.scaled_hitting_times = scaled_hitting_times
 
 
-                print('round trip times:')
-                print( list(zip(range(len(hitting_times)), roundtrip_times)))
-                hitting_times = np.asarray(hitting_times)*1000
+            #threshold = np.mean(scaled_hitting_times)+0.25*np.std(scaled_hitting_times)
+            threshold = int(threshold)
+            scaled_hitting_times = scaled_hitting_times.astype(int)
+            #print('scaled hitting times')
+            print(scaled_hitting_times)
+            pal = ig.drawing.colors.AdvancedGradientPalette(['yellow', 'green','blue'], n=1001)
 
-                print('final hitting times:')
-                print(list(zip(range(len(hitting_times)), hitting_times)))
-                # plotting with threshold (thresholding the upper limit to make color palette more readable)
-                remove_outliers = hitting_times[hitting_times<np.mean(hitting_times)+np.std(hitting_times)]
-                threshold = np.mean(remove_outliers) + 1* np.std(remove_outliers)
-                print('threshold', threshold)
-                th_hitting_times = [x if x < threshold else threshold for x in hitting_times]
-
-                remove_outliers_low = hitting_times[hitting_times < (np.mean(hitting_times) - 0.3*np.std(hitting_times))]
-                threshold_low = np.mean(remove_outliers_low) - 0.3 * np.std(remove_outliers_low)
-                print('thresh low', threshold_low)
-                th_hitting_times = [x if x > threshold_low else threshold_low for x in th_hitting_times]
-                #scaled_hitting_times = (th_hitting_times - np.min(th_hitting_times))*100/(threshold)
-
-                scaled_hitting_times = (th_hitting_times - np.min(th_hitting_times))
-                scaled_hitting_times = scaled_hitting_times * (1000/np.max(scaled_hitting_times))
-
-                self.scaled_hitting_times = scaled_hitting_times
-
-                #threshold = np.mean(scaled_hitting_times)+0.25*np.std(scaled_hitting_times)
-                threshold = int(threshold)
-                scaled_hitting_times = scaled_hitting_times.astype(int)
-                print('scaled hitting times')
-                print(scaled_hitting_times)
-                pal = ig.drawing.colors.AdvancedGradientPalette(['yellow', 'green','blue'], n=1001)
-
-                all_colors = []
+            all_colors = []
+            #print('100 scaled hitting' ,scaled_hitting_times)
+            for i in scaled_hitting_times:
+                all_colors.append(pal.get(int(i))[0:3])
+            #print('extract all colors', zip(scaled_hitting_times,all_colors))
 
 
+            locallytrimmed_g.vs['hitting_times'] =scaled_hitting_times
 
-                print('100 scaled hitting' ,scaled_hitting_times)
-                for i in scaled_hitting_times:
-                    all_colors.append(pal.get(int(i))[0:3])
-                print('extract all colors', zip(scaled_hitting_times,all_colors))
+            locallytrimmed_g.vs['color']=[pal.get(i)[0:3] for i in scaled_hitting_times]
+            import matplotlib.colors as colors
+            import matplotlib.cm as cm
+            self.group_color = [colors.to_hex(v) for v in locallytrimmed_g.vs['color']] #based on ygb scale
+            viridis_cmap = cm.get_cmap('viridis_r')
 
-
-                locallytrimmed_g.vs['hitting_times'] =scaled_hitting_times
-
-                locallytrimmed_g.vs['color']=[pal.get(i)[0:3] for i in scaled_hitting_times]
-                import matplotlib.colors as colors
-                import matplotlib.cm as cm
-                self.group_color = [colors.to_hex(v) for v in locallytrimmed_g.vs['color']] #based on ygb scale
-                viridis_cmap = cm.get_cmap('viridis_r')
-
-                self.group_color_cmap =[colors.to_hex(v) for v in viridis_cmap(scaled_hitting_times/1000)] #based on ygb scale
-                print('group color', self.group_color)
-                #ig.plot(locallytrimmed_g, "/home/shobi/Trajectory/Datasets/Toy/Toy_bifurcating/vc_graph_example_locallytrimmed_colornode_"+str(root)+"lazy"+str(lazy_i)+'jac'+str(self.jac_std_global)+".svg", layout=layout, edge_width=[e['weight']*1 for e in locallytrimmed_g.es], vertex_label=graph_node_label)
-                svgpath_local =self.path+"vc_graph_locallytrimmed_Root" + str(root) + "lazy" + str(lazy_i) + 'JacG' + str(self.jac_std_global) + 'toobig'+str(int(self.too_big_factor*100))+ ".svg"
-                print('svglocal', svgpath_local)
-                ig.plot(locallytrimmed_g,svgpath_local, layout=layout,
-                        edge_width=[e['weight'] * 1 for e in locallytrimmed_g.es], vertex_label=graph_node_label)
-                #hitting_times = compute_hitting_time(sparse_vf, root=1)
-                #print('final hitting times:', list(zip(range(len(hitting_times)), hitting_times)))
+            self.group_color_cmap =[colors.to_hex(v) for v in viridis_cmap(scaled_hitting_times/1000)] #based on ygb scale
+            print('group color', self.group_color)
+            #ig.plot(locallytrimmed_g, "/home/shobi/Trajectory/Datasets/Toy/Toy_bifurcating/vc_graph_example_locallytrimmed_colornode_"+str(root)+"lazy"+str(lazy_i)+'jac'+str(self.jac_std_global)+".svg", layout=layout, edge_width=[e['weight']*1 for e in locallytrimmed_g.es], vertex_label=graph_node_label)
+            svgpath_local =self.path+"vc_graph_locallytrimmed_Root" + str(root) + "lazy" + str(x_lazy) + 'JacG' + str(self.jac_std_global) + 'toobig'+str(int(self.too_big_factor*100))+ ".svg"
+            print('svglocal', svgpath_local)
+            ig.plot(locallytrimmed_g,svgpath_local, layout=layout,
+                    edge_width=[e['weight'] * 1 for e in locallytrimmed_g.es], vertex_label=graph_node_label)
+            #hitting_times = compute_hitting_time(sparse_vf, root=1)
+            #print('final hitting times:', list(zip(range(len(hitting_times)), hitting_times)))
 
 
-                globallytrimmed_g.vs['color'] = [pal.get(i)[0:3] for i in scaled_hitting_times]
-                ig.plot(globallytrimmed_g,
-                        self.path+"/vc_graph_globallytrimmed_Root" + str(
-                            root) + "Lazy" + str(lazy_i) + 'JacG' + str(self.jac_std_global) + 'toobig'+str(int(100*self.too_big_factor))+".svg", layout=layout,
-                        edge_width=[e['weight'] * .1 for e in globallytrimmed_g.es], vertex_label=graph_node_label)
+            globallytrimmed_g.vs['color'] = [pal.get(i)[0:3] for i in scaled_hitting_times]
+            ig.plot(globallytrimmed_g,
+                    self.path+"/vc_graph_globallytrimmed_Root" + str(
+                        root) + "Lazy" + str(x_lazy) + 'JacG' + str(self.jac_std_global) + 'toobig'+str(int(100*self.too_big_factor))+".svg", layout=layout,
+                    edge_width=[e['weight'] * .1 for e in globallytrimmed_g.es], vertex_label=graph_node_label, main ='lazy:'+str(x_lazy)+' alpha:'+str(alpha_teleport))
 
-                #ig.plot(globallytrimmed_g, "/home/shobi/Trajectory/Datasets/Toy/Toy_bifurcating/vc_graph_example_globallytrimmed_colornode_"+str(root)+"lazy"+str(lazy_i)+".svg", layout=layout,edge_width = [e['weight']*.1 for e in globallytrimmed_g.es], vertex_label = graph_node_label )
-
-            #print(trimmed_g.vs.indices)
-
-            #trimmed_g.write_svg("/home/shobi/Trajectory/Code/vc_graph_example_trimmed2.svg", layout=layout,edge_stroke_widths = [e['weight'] for e in trimmed_g.es], labels='label' )
         return
 
     def accuracy(self, onevsall=1):
@@ -1009,6 +1045,10 @@ class PARC:
 
     def run_PARC(self):
         print('input data has shape', self.data.shape[0], '(samples) x', self.data.shape[1], '(features)')
+        pop_list = []
+        for item in set(list(self.true_label)):
+            pop_list.append([item, list(self.true_label).count(item)])
+        print("population composition", pop_list)
         if self.true_label is None:
             self.true_label = [1] * self.data.shape[0]
         list_roc = []
@@ -1070,7 +1110,7 @@ def main():
     from MulticoreTSNE import MulticoreTSNE as TSNE
     import matplotlib.pyplot as plt
 
-    dataset = "Toy1"#"Paul15"#""Toy1" # GermlineLi #Toy1
+    dataset = "Toy3"#"Paul15"#""Toy1" # GermlineLi #Toy1
 
     ## Dataset Germline Li https://zenodo.org/record/1443566#.XZlhEkEzZ5y
     if dataset == "GermlineLi":
@@ -1125,14 +1165,25 @@ def main():
         #sc.tl.draw_graph(adata_counts)
         #sc.pl.draw_graph(adata_counts, color=['paul15_clusters', 'Cma1'], legend_loc='on data')
 
-    if dataset =="Toy1":
-        df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy1/Toy_bifurcating/toy_bifurcating_n3000.csv",'rt', delimiter=",")
-        df_ids = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy1/Toy_bifurcating/toy_bifurcating_n3000_ids.csv", 'rt',
+    if dataset =="Toy3":
+        if dataset == "Toy1":
+            df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy1/Toy_bifurcating/toy_bifurcating_n3000.csv",'rt', delimiter=",")
+            df_ids = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy1/Toy_bifurcating/toy_bifurcating_n3000_ids.csv", 'rt',  delimiter=",")
+        if dataset == "Toy2":
+            df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy2/toy_multifurcating_n6000.csv", 'rt',
+                                delimiter=",")
+            df_ids = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy2/toy_multifurcating_n6000_ids.csv", 'rt',
                              delimiter=",")
+        if dataset == "Toy3":
+            df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy3/toy_multifurcating_M6_n6000d1000.csv", 'rt',
+                                    delimiter=",")
+            df_ids = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy3/toy_multifurcating_M6_n6000d1000_ids.csv", 'rt',
+                                 delimiter=",")
         df_ids['cell_id_num'] = [int(s[1: :]) for s in df_ids['cell_id']]
 
         print("shape",df_counts.shape, df_ids.shape)
         df_counts = df_counts.drop('Unnamed: 0', 1)
+
         print(df_ids)
         df_ids = df_ids.sort_values(by=['cell_id_num'] )
         df_ids=df_ids.reset_index(drop=True)
@@ -1141,50 +1192,52 @@ def main():
         true_label = df_ids['group_id']
 
         adata_counts = sc.AnnData(df_counts, obs=df_ids)
-        sc.tl.pca(adata_counts, svd_solver='arpack',n_comps=20)
-        '''
-        sc.pp.neighbors(adata_counts, n_neighbors=4, n_pcs=20)
+        #sc.pp.recipe_zheng17(adata_counts, n_top_genes=20) not helpful for toy data
+        sc.tl.pca(adata_counts, svd_solver='arpack',n_comps=50)
+
+        sc.pp.neighbors(adata_counts, n_neighbors=30, n_pcs=20)#4
         sc.tl.draw_graph(adata_counts)
-        sc.pl.draw_graph(adata_counts, color='group_id', legend_loc='on data')
+        sc.pl.draw_graph(adata_counts, color='group_id', legend_loc='on data') #force-directed layout
+        start_dfmap = time.time()
         sc.tl.diffmap(adata_counts)
-        sc.pp.neighbors(adata_counts, n_neighbors=4, use_rep='X_diffmap')
+        print('time taken to get diffmap given knn', time.time() - start_dfmap)
+        sc.pp.neighbors(adata_counts, n_neighbors=30, use_rep='X_diffmap')#4
         sc.tl.draw_graph(adata_counts)
         sc.pl.draw_graph(adata_counts, color='group_id', legend_loc='on data')
         sc.tl.louvain(adata_counts, resolution=1.0)
         sc.tl.paga(adata_counts, groups='louvain')
         #sc.pl.paga(adata_counts, color=['louvain','group_id'])
-        adata_counts.uns['iroot'] = np.flatnonzero(adata_counts.obs['louvain'] == '5')[0]
+        adata_counts.uns['iroot'] = np.flatnonzero(adata_counts.obs['louvain'] == '2')[0]
         sc.tl.dpt(adata_counts)
         sc.pl.paga(adata_counts, color=['louvain', 'group_id', 'dpt_pseudotime'])
         #X = df_counts.values
         print(df_counts)
-        '''
+
         from sklearn.decomposition import PCA
-        pca = PCA(n_components=10)
+        pca = PCA(n_components=20)
         pc = pca.fit_transform(df_counts)
-        p0 = PARC(pc, true_label, jac_std_global=2, knn=10, too_big_factor=0.4, pseudotime=True,path = "/home/shobi/Trajectory/Datasets/"+dataset+"/", root = 3) #*.4
+        p0 = PARC(pc, true_label, jac_std_global=2, knn=4, too_big_factor=0.4, pseudotime=True,path = "/home/shobi/Trajectory/Datasets/"+dataset+"/", root = 3) #*.4
         p0.run_PARC()
         super_labels = p0.labels
 
         super_edges = p0.edgelist
         super_pt = p0.scaled_hitting_times #pseudotime pt
-        p1 = PARC(pc, true_label, jac_std_global=1, knn=10, too_big_factor=0.05, path = "/home/shobi/Trajectory/Datasets/"+dataset+"/",pseudotime=True, root =61) #*.4
+        p1 = PARC(pc, true_label, jac_std_global=1, knn=4, too_big_factor=0.05, path = "/home/shobi/Trajectory/Datasets/"+dataset+"/",pseudotime=True, root =61, super_cluster_labels=super_labels, super_node_degree_list=p0.node_degree_list) #*.4
         p1.run_PARC()
         labels = p1.labels
     #p1 = PARC(adata_counts.obsm['X_pca'], true_label, jac_std_global=1, knn=5, too_big_factor=0.05, anndata= adata_counts, small_pop=2)
     #p1.run_PARC()
     #labels = p1.labels
     print('start tsne')
-    n_downsample = 3100
+    n_downsample = 10000
     if len(labels)>n_downsample:
         idx = np.random.randint(len(labels), size=2000)
         embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'][idx,:])
     else:
         embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'])
         idx = np.random.randint(len(labels), size=len(labels))
-
     print('end tsne')
-    draw_trajectory_dimred(embedding, labels, super_labels, super_edges, super_pt)
+    draw_trajectory_dimred(embedding, labels, super_labels, super_edges, p1.hitting_times,p1.group_color_cmap, p1.x_lazy, p1.alpha_teleport)
     #embedding = TSNE().fit_transform(pc)
     num_group = len(set(true_label))
     line=np.linspace(0,1,num_group)
