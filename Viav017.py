@@ -14,6 +14,7 @@ from scipy import sparse
 import umap
 import scanpy as sc
 from MulticoreTSNE import MulticoreTSNE as TSNE
+from scipy.sparse.csgraph import connected_components
 # version before translating chinese on Feb13
 # jan2020 Righclick->GIT->Repository-> PUSH
 
@@ -446,25 +447,23 @@ class PARC:
         return
 
 
-    def get_terminal_clusters(self, A ):
-        pt = self.markov_hitting_times
-        labels = self.labels
+    def get_terminal_clusters(self, A , markov_pt):
+
         out_deg = A.sum(axis=1)
         print('out deg',  out_deg)
         if A.shape[0]<=15:
             loc_deg = np.where(out_deg<=np.percentile(out_deg,35))[0]
             print('low deg super', loc_deg)
-            loc_pt =  np.where(pt>=np.percentile(pt,60))[0]
+            loc_pt =  np.where(markov_pt>=np.percentile(markov_pt,60))[0]
             print('high pt super', loc_pt)
         else:
             loc_deg = np.where(out_deg <= np.percentile(out_deg, 15))[0]
             print('low deg', loc_deg)
-            loc_pt = np.where(pt >= np.percentile(pt, 60))[0]
+            loc_pt = np.where(markov_pt >= np.percentile(markov_pt, 60))[0]
             print('high pt', loc_pt)
         terminal_clusters = list(set(loc_deg)&set(loc_pt))
         print('terminal_clusters', terminal_clusters)
-        self.terminal_clusters = terminal_clusters
-        return
+        return terminal_clusters
 
     def make_absorbing_markov(self,A, pt):
         # cluster_graph is the vertex_cluster_graph made of sub_clusters in the finer iteration of PARC
@@ -497,6 +496,9 @@ class PARC:
     def compute_hitting_time(self, sparse_graph, root, x_lazy, alpha_teleport, number_eig=0):
         # 1- alpha is the probabilty of teleporting
         # 1- x_lazy is the probability of staying in current state (be lazy)
+
+
+
         beta_teleport = 2 * (1 - alpha_teleport) / (2 - alpha_teleport)
         N = sparse_graph.shape[0]
         print('adjacency in compute hitting', sparse_graph)
@@ -673,15 +675,15 @@ class PARC:
             hitting_array[i] = first_term.dot(second_term)
         hitting_array = hitting_array.flatten()
         return hitting_array / 1000, []
-    def simulate_markov_sub(self, A, num_sim, hitting_array,q):
+    def simulate_markov_sub(self, A, num_sim, hitting_array,q,root):
         n_states = A.shape[0]
         P = A / A.sum(axis=1).reshape((n_states, 1))
         #hitting_array = np.ones((P.shape[0], 1)) * 1000
         hitting_array_temp = np.zeros((P.shape[0], 1)).astype('float64')
         n_steps = int(2 * n_states)
         hitting_array_final = np.zeros((1, n_states))
-        currentState = self.root
-        root = self.root
+        currentState = root
+
         print('root is', root)
         state = np.zeros((1, n_states))
         state[0, currentState] = 1
@@ -699,7 +701,7 @@ class PARC:
                 dist = A[currentState,nextState]
 
                 dist = ( 1 / ((1 + math.exp((dist- 1)))))
-                if math.isnan(dist): print('nan found')
+
                 dist_list.append(dist)
                 # print('next state', nextState)
                 # Keep track of state changes
@@ -740,8 +742,8 @@ class PARC:
 
         q.append(hitting_array)#put(hitting_array)
         #return hitting_array
-    def simulate_markov(self, A):
-
+    def simulate_markov(self, A,root):
+        print("Adj", A)
         n_states = A.shape[0]
         P = A / A.sum(axis=1).reshape((n_states, 1))
         #print('row normed P',P.shape, P, P.sum(axis=1))
@@ -754,7 +756,7 @@ class PARC:
         #P = alpha_teleport * P + ((1 - alpha_teleport) * (1 / n_states) * (np.ones((n_states, n_states))))
         #print('check prob of each row sum to one', P.sum(axis=1))
 
-        currentState = self.root
+        currentState = root
         state = np.zeros((1, n_states))
         state[0, currentState] = 1
         state_root = state.copy()
@@ -781,7 +783,7 @@ class PARC:
         q = manager.list()
         for i in range(n_jobs):
             hitting_array = np.ones((P.shape[0], 1)) * 1000
-            process = multiprocessing.Process(target=self.simulate_markov_sub, args=(P, num_sim_pp, hitting_array, q))
+            process = multiprocessing.Process(target=self.simulate_markov_sub, args=(P, num_sim_pp, hitting_array, q,root))
             jobs.append(process)
 
         for j in jobs:
@@ -811,9 +813,9 @@ class PARC:
                 print('the number of times state ',i, 'has been reached is', no_times_state_reached )
                 #if no_times_state_reached < upper_quart:perc = np.percentile(rowtemp[rowtemp != n_steps + 1], 20)
                 perc = np.percentile(rowtemp[rowtemp != n_steps + 1], 10)+0.001
-                print('state ', i,' has perc' ,perc)
-                print(rowtemp[rowtemp != n_steps +1])
-                print('smaller than perc', rowtemp[rowtemp <= perc])
+                #print('state ', i,' has perc' ,perc)
+
+                #print('smaller than perc', rowtemp[rowtemp <= perc])
 
 
 
@@ -943,12 +945,10 @@ class PARC:
     def project_hittingtimes_sc(self, pt):
         knn_sc = 30
         neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=knn_sc)
-        print('shape of neighbor', neighbor_array.shape)
+        print('shape of neighbor in project onto sc', neighbor_array.shape)
         labels = np.asarray(self.labels)
         sc_pt = np.zeros((len(self.labels),))
 
-        print('hitting times used to project onto sc', pt)
-        print('set labels', set(labels))
         i = 0
         for row in neighbor_array:
             mean_weight = 0
@@ -963,7 +963,7 @@ class PARC:
                 # print('mean weight',mean_weight)
             sc_pt[i] = mean_weight
             i = i + 1
-        print('single cell sc_pt', sc_pt[200:250])
+
         return sc_pt
 
     def make_knn_struct(self, too_big=False, big_cluster=None):
@@ -1178,6 +1178,68 @@ class PARC:
         edgelist = list(zip(sources, targets))
         return sparse_clustergraph, edgelist
 
+    def find_root(self, graph_dense, PARC_labels_leiden, root_str, true_labels, super_cluster_labels_sub, super_node_degree_list):
+        majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
+        graph_node_label = []
+        min_deg = 1000
+        super_min_deg = 1000
+        found_super_and_sub_root = False
+        found_any_root = False
+        true_labels = np.asarray(true_labels)
+
+        deg_list = graph_dense.sum(axis=1). reshape((1,-1)).tolist()[0]
+
+        print('deg list', deg_list)# locallytrimmed_g.degree()
+
+        for ci, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
+            print('cluster i' ,cluster_i)
+            cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
+
+            majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
+            print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
+            if self.super_cluster_labels != False:
+                super_majority_cluster = self.func_mode(list(np.asarray(super_cluster_labels_sub)[cluster_i_loc]))
+                super_majority_cluster_loc = np.where(np.asarray(super_cluster_labels_sub) == super_majority_cluster)[0]
+                super_majority_truth = self.func_mode(list(true_labels[super_majority_cluster_loc]))
+                print('spr node degree list sub',super_node_degree_list, super_majority_cluster)
+
+                super_node_degree = super_node_degree_list[super_majority_cluster]
+
+                if (root_str in majority_truth) & (root_str in super_majority_truth):
+                    if super_node_degree < super_min_deg:
+                        # if deg_list[cluster_i] < min_deg:
+                        found_super_and_sub_root = True
+                        self.root = cluster_i
+                        found_any_root=True
+                        min_deg = deg_list[ci]
+                        super_min_deg = super_node_degree
+                        print('new root is', self.root, ' with degree', min_deg, 'and super node degree',
+                              super_min_deg)
+            majority_truth_labels[cluster_i_loc] = str(majority_truth) + 'c' + str(cluster_i)
+
+            graph_node_label.append(str(majority_truth) + 'c' + str(cluster_i))
+        if (self.super_cluster_labels == False) | (found_super_and_sub_root == False):
+            print('self.super_cluster_labels', super_cluster_labels_sub, ' foundsuper_cluster_sub and super root',
+                  found_super_and_sub_root)
+            for ic, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
+                cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
+                print('cluster', cluster_i, 'set true lables', set(true_labels))
+                true_labels = np.asarray(true_labels)
+
+                majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
+                print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
+                if (root_str in majority_truth):
+                    print('did not find a super and sub cluster with majority ', root_str)
+                    if deg_list[ic] < min_deg:
+                        self.root = cluster_i
+                        found_any_root = True
+                        min_deg = deg_list[ic]
+                        print('new root is', self.root, ' with degree', min_deg)
+        print('len graph node label', graph_node_label)
+        if found_any_root == False:
+            print('setting arbitrary root', cluster_i)
+            self.root = cluster_i
+        return graph_node_label, majority_truth_labels, deg_list, self.root
     def run_subPARC(self):
         root_str = self.root_str
         X_data = self.data
@@ -1393,8 +1455,7 @@ class PARC:
 
         ##determine majority truth
 
-        majority_truth_labels = np.empty((n_elements, 1), dtype=object)
-        graph_node_label = []
+
 
         if self.pseudotime == True:
 
@@ -1409,9 +1470,7 @@ class PARC:
             vc_graph_old = vc_graph_old.cluster_graph(combine_edges='sum')
             print('vc graph G_sim', vc_graph)
             print('vc graph G_sim old', vc_graph_old)
-            #if too_big_factor <0.2:
-                #vc_graph=vc_graph_old
-            ## Reweight clustergraph (2)
+
 
             reweighted_sparse_vc, edgelist = self.recompute_weights(vc_graph, pop_list_raw)
 
@@ -1419,7 +1478,7 @@ class PARC:
             edgeweights, edgelist = local_pruning_clustergraph(reweighted_sparse_vc, local_pruning_std=0.00)  # 0.5
             self.edgeweights_maxout, edgelist_maxout = local_pruning_clustergraph(reweighted_sparse_vc, local_pruning_std=0.0,
                                                                max_outgoing=4)
-            self.edgelist_maxout = set(tuple(sorted(l)) for l in edgelist_maxout)
+            self.edgelist_maxout = set(tuple(sorted(l)) for l in edgelist_maxout) #only used for visualization, not for the hitting time computations
             print('len new edge list', edgelist)
 
             locallytrimmed_g = ig.Graph(edgelist, edge_attrs={'weight': edgeweights.tolist()})
@@ -1427,60 +1486,14 @@ class PARC:
             locallytrimmed_g = locallytrimmed_g.simplify(combine_edges='sum')
             print('locally trimmed and simplified', locallytrimmed_g)
 
-            min_deg = 1000
-            super_min_deg = 1000
-            found_super_and_sub_root = False
-            deg_list = locallytrimmed_g.degree()
-            self.node_degree_list = deg_list
-            for cluster_i in range(len(set(PARC_labels_leiden))):
-                cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
-                true_labels = np.asarray(self.true_label)
-                majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
-                print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
-                if self.super_cluster_labels != False:
-                    super_majority_cluster = self.func_mode(list(np.asarray(self.super_cluster_labels)[cluster_i_loc]))
-                    super_majority_cluster_loc = \
-                    np.where(np.asarray(self.super_cluster_labels) == super_majority_cluster)[0]
-                    super_majority_truth = self.func_mode(list(true_labels[super_majority_cluster_loc]))
-                    super_node_degree = self.super_node_degree_list[super_majority_cluster]
-
-                    if (majority_truth == root_str) & (super_majority_truth == root_str):
-                        if super_node_degree < super_min_deg:
-                            # if deg_list[cluster_i] < min_deg:
-                            found_super_and_sub_root = True
-                            self.root = cluster_i
-                            min_deg = deg_list[cluster_i]
-                            super_min_deg = super_node_degree
-                            print('new root is', self.root, ' with degree', min_deg, 'and super node degree',
-                                  super_min_deg)
-                majority_truth_labels[cluster_i_loc] = 'w' + str(majority_truth) + 'c' + str(cluster_i)
-                graph_node_label.append(str(majority_truth) + 'c' + str(cluster_i))
-            if (self.super_cluster_labels == False) | (found_super_and_sub_root == False):
-                print('self.super_cluster_labels', self.super_cluster_labels, ' foundsuper_cluster_sub and super root',
-                      found_super_and_sub_root)
-                for cluster_i in range(len(set(PARC_labels_leiden))):
-                    cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
-                    true_labels = np.asarray(self.true_label)
-                    majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
-                    print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
-                    if (majority_truth == root_str):
-                        print('did not find a super and sub cluster with majority ', root_str)
-                        if deg_list[cluster_i] < min_deg:
-                            self.root = cluster_i
-                            min_deg = deg_list[cluster_i]
-                            print('new root is', self.root, ' with degree', min_deg)
-
-            print('graph node label', graph_node_label)
-            majority_truth_labels = list(majority_truth_labels.flatten())
-            print('locallytrimmed_g', locallytrimmed_g)
             locallytrimmed_sparse_vc = get_sparse_from_igraph(locallytrimmed_g, weight_attr='weight')
             layout = locallytrimmed_g.layout_fruchterman_reingold()  ##final layout based on locally trimmed
 
-            locallytrimmed_g.vs["label"] = graph_node_label
-            locallytrimmed_sparse_vc_copy = locallytrimmed_sparse_vc.copy()
-            dense_locallytrimmed = scipy.sparse.csr_matrix.todense(locallytrimmed_sparse_vc_copy)
-            degree_array = np.sum(dense_locallytrimmed, axis=1)
-            print('degree array', degree_array)
+
+            #locallytrimmed_sparse_vc_copy = locallytrimmed_sparse_vc.copy()
+            #dense_locallytrimmed = scipy.sparse.csr_matrix.todense(locallytrimmed_sparse_vc_copy)
+            #degree_array = np.sum(dense_locallytrimmed, axis=1)
+
             # globally trimmed link
             sources, targets = locallytrimmed_sparse_vc.nonzero()
             edgelist_simple = list(zip(sources.tolist(), targets.tolist()))
@@ -1488,86 +1501,116 @@ class PARC:
             self.edgelist_unique = edgelist_unique
             self.edgelist = edgelist
 
-            # mask = np.zeros(len(sources), dtype=bool)
-
-            # locallytrimmed_sparse_vc.data = locallytrimmed_sparse_vc.data / (np.std(locallytrimmed_sparse_vc.data))
-
-            # threshold_global = np.mean(locallytrimmed_sparse_vc.data) -0*np.std(locallytrimmed_sparse_vc.data)
-            # mask |= (locallytrimmed_sparse_vc.data < (threshold_global))  # smaller Jaccard weight means weaker edge
-            # print('sum of mask', sum(mask), 'at threshold of', threshold)
-            # locallytrimmed_sparse_vc.data[mask] = 0
-            # locallytrimmed_sparse_vc.eliminate_zeros()
-
-            # sources, targets = locallytrimmed_sparse_vc.nonzero()
-            # edgelist = list(zip(sources.tolist(), targets.tolist()))
-            # globallytrimmed_g = ig.Graph(n=n_clus, edges=edgelist, edge_attrs={'weight': locallytrimmed_sparse_vc.data.tolist()})
-            # globallytrimmed_g = globallytrimmed_g.simplify(combine_edges='sum')
-            # layout = globallytrimmed_g.layout_fruchterman_reingold()
-            # globallytrimmed_g.vs["label"] = graph_node_label
-
-            # compute hitting times (4)
-
             root = self.root
             x_lazy = self.x_lazy
             alpha_teleport = self.alpha_teleport
-            locallytrimmed_sparse_vc = locallytrimmed_sparse_vc_copy  ##hitting times are computed based on the locally trimmed graph without any global pruning
+            #locallytrimmed_sparse_vc = locallytrimmed_sparse_vc_copy  ##hitting times are computed based on the locally trimmed graph without any global pruning
 
-            hitting_times, roundtrip_times = self.compute_hitting_time(locallytrimmed_sparse_vc, root=root,
+            # number of components
+            graph_dict = {}
+            n_components, labels = connected_components(csgraph=locallytrimmed_sparse_vc, directed=False, return_labels=True)
+            df_graph = pd.DataFrame(locallytrimmed_sparse_vc.todense())
+            df_graph['cc'] = labels
+            df_graph['pt'] = float('NaN')
+            df_graph['markov_pt']=float('NaN')
+            df_graph['majority_truth'] = 'maj truth'
+            df_graph['graph_node_label'] = 'node label'
+            set_parc_labels =list(set(PARC_labels_leiden))
+            set_parc_labels.sort()
+            print('parc labels', set_parc_labels)
+            terminal_clus = []
+            node_deg_list=[]
+            for comp_i in range(n_components):
+                loc_compi = np.where(labels == comp_i)[0]
+                print('loc_compi',loc_compi)
+
+                a_i = df_graph.iloc[loc_compi][loc_compi].values
+                a_i = csr_matrix(a_i, (a_i.shape[0],a_i.shape[0]))
+                cluster_labels_subi = [x for x in loc_compi]
+                sc_labels_subi =[PARC_labels_leiden[i] for i in range(len(PARC_labels_leiden)) if (PARC_labels_leiden[i] in cluster_labels_subi) ]
+                sc_truelabels_subi = [self.true_label[i] for i in range(len(PARC_labels_leiden)) if(PARC_labels_leiden[i] in cluster_labels_subi)]
+                if self.super_cluster_labels !=False:
+                    super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if(PARC_labels_leiden[i] in cluster_labels_subi)]
+                    print('super node degree', self.super_node_degree_list)
+
+                    graph_node_label, majority_truth_labels, node_deg_list_i, root_i= self.find_root(a_i, sc_labels_subi, root_str,    sc_truelabels_subi,
+                                                                                     super_labels_subi,
+                                                                                     self.super_node_degree_list)
+                else:
+                    graph_node_label, majority_truth_labels,node_deg_list_i, root_i = self.find_root(a_i, sc_labels_subi, root_str,   sc_truelabels_subi,[],[])
+                for item in node_deg_list_i:
+                    node_deg_list.append(item)
+
+                print('a_i shape, true labels shape', a_i.shape, len(sc_truelabels_subi), len(sc_labels_subi))
+
+                new_root_index_found = False
+                for ii,llabel in enumerate(cluster_labels_subi):
+                    if root_i ==llabel:
+                        new_root_index = ii
+                        new_root_index_found = True
+                        print('new root index', new_root_index)
+                if new_root_index_found == False:
+                    print('cannot find the new root index')
+                    new_root_index = 0
+                hitting_times, roundtrip_times = self.compute_hitting_time(a_i, root=new_root_index,
                                                                        x_lazy=x_lazy, alpha_teleport=alpha_teleport)
-
-            self.hitting_times = hitting_times * 1000
-            biased_edgeweights = get_biased_weights(edgelist, edgeweights, self.hitting_times)
-
-            row = np.asarray([r[0] for r in edgelist])
-            print('row', row)
-            col = np.asarray([r[1] for r in edgelist])
-
-            #biased_sparse = csr_matrix((biased_edgeweights, (row, col)))
-            adjacency_matrix = np.zeros((n_clus, n_clus))
-
-            for i, (start, end) in enumerate(edgelist):
-                adjacency_matrix[start, end] = biased_edgeweights[i]
+                scaling_fac = 10/max(hitting_times)
+                hitting_times = hitting_times*scaling_fac
+                s_ai, t_ai = a_i.nonzero()
+                edgelist_ai = list(zip(s_ai, t_ai))
+                edgeweights_ai = a_i.data
+                print('edgelist ai', edgelist_ai)
+                print('edgeweight ai', edgeweights_ai)
+                biased_edgeweights_ai = get_biased_weights(edgelist_ai, edgeweights_ai, hitting_times)
 
 
-            deg_val = adjacency_matrix.sum(axis=1)
-            print('deg val', type(deg_val), deg_val)
-            #d = np.diag(deg_val)
-            inv_deg_val = []
-            for d_i in deg_val:
-                if d_i ==0:inv_deg_val. append(0)
-                else: inv_deg_val.append(1/d_i)
-            d_sqrt_inv = np.diag(np.sqrt(np.asarray(deg_val)))
+                # biased_sparse = csr_matrix((biased_edgeweights, (row, col)))
+                adjacency_matrix_ai = np.zeros((a_i.shape[0], a_i.shape[0]))
 
-            print('deg val', type(deg_val), deg_val)
+                for i, (start, end) in enumerate(edgelist_ai):
+                    adjacency_matrix_ai[start, end] = biased_edgeweights_ai[i]
 
-            symm = np.dot(adjacency_matrix, d_sqrt_inv)
-            symm = np.dot(d_sqrt_inv, symm)
-            N = symm.shape[0]
-            Id = np.zeros((N, N), float)
-            np.fill_diagonal(Id, 1)
-            norm_lap = Id - symm
+                markov_hitting_times = self.simulate_markov(adjacency_matrix_ai, new_root_index)  # +adjacency_matrix.T))
+                scaling_fac = 10 / max(markov_hitting_times)
+                markov_hitting_times = markov_hitting_times * scaling_fac
+                adjacency_matrix_csr = sparse.csr_matrix(adjacency_matrix_ai)
+                (sources, targets) = adjacency_matrix_csr.nonzero()
+                edgelist = list(zip(sources, targets))
+                weights = adjacency_matrix_csr.data
+                bias_weights_2 = get_biased_weights(edgelist, weights, markov_hitting_times, round_no=2)
+                adjacency_matrix2_ai = np.zeros((adjacency_matrix_ai.shape[0], adjacency_matrix_ai.shape[0]))
 
-            self.stationary_hitting_times, roundtrip_times_2 = self.compute_hitting_time_onbias(norm_lap, d_sqrt_inv, root=root,
-                                                                                  x_lazy=x_lazy,
-                                                                                  alpha_teleport=alpha_teleport)
+                for i, (start, end) in enumerate(edgelist):
+                    adjacency_matrix2_ai[start, end] = bias_weights_2[i]
 
-            self.markov_hitting_times = self.simulate_markov((adjacency_matrix))#+adjacency_matrix.T))
+                terminal_clus_ai = self.get_terminal_clusters(adjacency_matrix2_ai, markov_hitting_times)
+                for i in terminal_clus_ai:
+                    terminal_clus.append(cluster_labels_subi[i])
 
-            adjacency_matrix_csr = sparse.csr_matrix(adjacency_matrix)
-            (sources, targets) = adjacency_matrix_csr.nonzero()
-            edgelist = list(zip(sources,targets))
-            weights = adjacency_matrix_csr.data
-            bias_weights_2 = get_biased_weights(edgelist, weights, self.markov_hitting_times, round_no=2)
-            adjacency_matrix2 = np.zeros((n_clus, n_clus))
 
-            for i, (start, end) in enumerate(edgelist):
-                adjacency_matrix2[start, end] = bias_weights_2[i]
+                print('hitting times',hitting_times)
+                for ei, ii in enumerate(loc_compi):
+                    print('ii',ii)
+                    df_graph['pt'][ii]=hitting_times[ei]
+                    df_graph['graph_node_label'][ii] = graph_node_label[ei]
+                    df_graph['majority_truth'][ii] = graph_node_label[ei]
+                    df_graph['markov_pt'][ii] = markov_hitting_times[ei]
+                print('df_graph', df_graph)
 
-            self.get_terminal_clusters(adjacency_matrix2)
+            #print('graph node label', graph_node_label)
+            #majority_truth_labels = list(majority_truth_labels.flatten())
+            #print('locallytrimmed_g', locallytrimmed_g)
 
+
+            locallytrimmed_g.vs["label"] = df_graph['graph_node_label'].values
+            #hitting_times, roundtrip_times = self.compute_hitting_time(locallytrimmed_sparse_vc, root=root, x_lazy=x_lazy, alpha_teleport=alpha_teleport)
+            hitting_times = df_graph['pt'].values
+
+            self.hitting_times = hitting_times #* 1000
+            self.markov_hitting_times = df_graph['markov_pt'].values
+            self.terminal_clusters = terminal_clus
+            self.node_degree_list = node_deg_list
             hitting_times = self.markov_hitting_times
-
-
 
             # plotting with threshold (thresholding the upper limit to make color palette more readable)
             #print('percentile', np.percentile(hitting_times, 95))
@@ -1588,11 +1631,11 @@ class PARC:
 
             self.scaled_hitting_times = scaled_hitting_times
             self.single_cell_pt = self.project_hittingtimes_sc(hitting_times)
-            self.single_cell_pt_stationary_bias = self.project_hittingtimes_sc(self.stationary_hitting_times.flatten())
+            #self.single_cell_pt_stationary_bias = self.project_hittingtimes_sc(self.stationary_hitting_times.flatten())
             self.single_cell_pt_markov = self.project_hittingtimes_sc(self.markov_hitting_times)
-            self.dijkstra_hitting_times = self.path_length_onbias(edgelist, biased_edgeweights)
+            #self.dijkstra_hitting_times = self.path_length_onbias(edgelist, biased_edgeweights)
             #print('dijkstra hitting times', [(i,j) for i,j in enumerate(self.dijkstra_hitting_times)])
-            self.single_cell_pt_dijkstra_bias = self.project_hittingtimes_sc(self.dijkstra_hitting_times)
+            #self.single_cell_pt_dijkstra_bias = self.project_hittingtimes_sc(self.dijkstra_hitting_times)
 
             # threshold = np.mean(scaled_hitting_times)+0.25*np.std(scaled_hitting_times)
             threshold = int(threshold)
@@ -1621,7 +1664,7 @@ class PARC:
             # ig.plot(locallytrimmed_g, "/home/shobi/Trajectory/Datasets/Toy/Toy_bifurcating/vc_graph_example_locallytrimmed_colornode_"+str(root)+"lazy"+str(lazy_i)+'jac'+str(self.jac_std_global)+".svg", layout=layout, edge_width=[e['weight']*1 for e in locallytrimmed_g.es], vertex_label=graph_node_label)
             svgpath_local = self.path + "vc_graph_locallytrimmed_Root" + str(root) + "lazy" + str(
                 x_lazy) + 'JacG' + str(self.jac_std_global) + 'toobig' + str(
-                int(self.too_big_factor * 100)) + "M" + str(len(set(true_labels))) + ".svg"
+                int(self.too_big_factor * 100)) + "M" + str(len(set(self.true_label))) + ".svg"
             # print('svglocal', svgpath_local)
 
             #ig.plot(locallytrimmed_g, svgpath_local, layout=layout ,edge_width=[e['weight'] * 1 for e in locallytrimmed_g.es], vertex_label=graph_node_label)
@@ -1630,7 +1673,7 @@ class PARC:
 
             # globallytrimmed_g.vs['color'] = [pal.get(i)[0:3] for i in scaled_hitting_times]
             # ig.plot(globallytrimmed_g,                    self.path+"/vc_graph_globallytrimmed_Root" + str(   root) + "Lazy" + str(x_lazy) + 'JacG' + str(self.jac_std_global) + 'toobig'+str(int(100*self.too_big_factor))+".svg", layout=layout,edge_width=[e['weight'] * .1 for e in globallytrimmed_g.es], vertex_label=graph_node_label, main ='lazy:'+str(x_lazy)+' alpha:'+str(alpha_teleport))
-        self.graph_node_label = graph_node_label
+        self.graph_node_label = df_graph['graph_node_label'].values
         self.edgeweight = [e['weight'] * 1 for e in locallytrimmed_g.es]
         print('self edge weight', len(self.edgeweight), self.edgeweight)
         print('self edge list', len(self.edgelist_unique),self.edgelist_unique)
@@ -1819,7 +1862,7 @@ class PARC:
             ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap='viridis_r',edgecolors=c_edge,
                          alpha=1, zorder=3, linewidth = l_width)
             for ii in range(node_pos.shape[0]):
-                ax.text(node_pos[ii, 0], node_pos[ii, 1], str(self.labels[i]), zorder=4)
+                ax.text(node_pos[ii, 0], node_pos[ii, 1], str(self.labels[i]), color='black', zorder=4)
             title_pt = title_list[i]
             ax_i.set_title(title_pt)
 
@@ -1959,7 +2002,7 @@ class PARC:
 def main():
 
 
-    dataset = "Toy1"  # ""Toy1" # GermlineLi #Toy1
+    dataset = "Toy4"  # ""Toy1" # GermlineLi #Toy1
 
     ## Dataset Germline Li https://zenodo.org/record/1443566#.XZlhEkEzZ5y
     if dataset == "GermlineLine":
@@ -2016,7 +2059,7 @@ def main():
         # sc.pl.draw_graph(adata_counts, color=['paul15_clusters', 'Cma1'], legend_loc='on data')
 
     if dataset.startswith('Toy'):
-        root_str = "M1" #"T1_M1"
+        root_str = 'M1'#"T1_M1", "T2_M1"] #"T1_M1"
         if dataset == "Toy1":
             df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy1/toy_bifurcating_M4_n2000d1000.csv",
                                     'rt', delimiter=",")
@@ -2052,8 +2095,8 @@ def main():
         true_label = df_ids['group_id']
         adata_counts = sc.AnnData(df_counts, obs=df_ids)
         # sc.pp.recipe_zheng17(adata_counts, n_top_genes=20) not helpful for toy data
-    ncomps =100
-    knn =30
+    ncomps =20
+    knn =10
 
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
     '''
@@ -2078,7 +2121,7 @@ def main():
     #X = df_counts.values
     
     import palantir
-    counts = palantir.io.from_csv("/home/shobi/Trajectory/Datasets/Toy1/toy_bifurcating_M4_n2000d1000.csv")
+    counts = palantir.io.from_csv("/home/shobi/Trajectory/Datasets/Toy4/toy_disconnected_M9_n1000d1000.csv")
     #counts = palantir.io.from_csv("/home/shobi/Trajectory/Datasets/Toy3/toy_multifurcating_M8_n1000d1000.csv")
     str_true_label = true_label.tolist()
     str_true_label = [(i[1:]) for i in str_true_label]
@@ -2093,13 +2136,13 @@ def main():
     tsne = palantir.utils.run_tsne(ms_data)
 
     palantir.plot.plot_cell_clusters(tsne, str_true_label)
-    start_cell = 'C10'#C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
+    start_cell = 'C108'#C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
     pr_res = palantir.core.run_palantir(ms_data, start_cell, num_waypoints=500,knn=knn)
     palantir.plot.plot_palantir_results(pr_res, tsne)
     plt.show()
     #clusters = palantir.utils.determine_cell_clusters(pca_projections)
-
     '''
+
     from sklearn.decomposition import PCA
     pca = PCA(n_components=ncomps)
     pc = pca.fit_transform(df_counts)
