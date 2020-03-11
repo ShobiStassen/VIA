@@ -36,7 +36,7 @@ def get_biased_weights(edgelist, weights, pt, round_no=1):
     print(len(edgelist), len(weights))
     bias_weight = []
     if round_no==1:    b = 1  # 0.5
-    else: b=1.5
+    else: b=2
     K = 1
     c = 0
     C = 1
@@ -106,7 +106,7 @@ def most_likely_path(P_transition_absorbing_markov, start_i, end_i):
 
 
 def draw_trajectory_dimred(X_dimred, cluster_labels, super_cluster_labels, super_edgelist, x_lazy, alpha_teleport,
-                           projected_sc_pt, true_label, knn,  ncomp, title_str="hitting times"):
+                           projected_sc_pt, true_label, knn,  ncomp,terminal_clusters, super_terminal_clusters,title_str="hitting times", ):
     from scipy.interpolate import interp1d
 
     x = X_dimred[:, 0]
@@ -120,11 +120,19 @@ def draw_trajectory_dimred(X_dimred, cluster_labels, super_cluster_labels, super
     df = pd.DataFrame({'x': x, 'y': y, 'cluster': cluster_labels, 'super_cluster': super_cluster_labels,
                        'projected_sc_pt': projected_sc_pt},
                       columns=['x', 'y', 'cluster', 'super_cluster', 'projected_sc_pt'])
-    df_mean = df.groupby('cluster').mean()
-    # print('df_mean', df_mean.head())
+    df_mean = df.groupby('cluster', as_index=False).mean()
+    sub_cluster_isin_supercluster = df_mean[['cluster','super_cluster']]
+    print('sub_cluster_isin_supercluster', sub_cluster_isin_supercluster)
+    sub_cluster_isin_supercluster=    sub_cluster_isin_supercluster.sort_values(by='cluster')
+    sub_cluster_isin_supercluster['int_supercluster'] = sub_cluster_isin_supercluster['super_cluster'].astype(int)
+    print('sub_cluster_isin_supercluster', sub_cluster_isin_supercluster)
+    final_super_terminal = super_terminal_clusters
+    #for ti in terminal_clusters:
+    #    final_super_terminal.append(sub_cluster_isin_supercluster.loc[sub_cluster_isin_supercluster['cluster']==ti,'int_supercluster'].values[0])
+    #final_super_terminal = list(set(final_super_terminal))
+    print('final_super_terminal', final_super_terminal)
     df_super_mean = df.groupby('super_cluster').mean()
-    # print('super mean', df_super_mean.head())
-    # pt = df_super_mean['pseudotime_sub'].values
+
     pt = df_super_mean['projected_sc_pt'].values
     pt_int = [int(i) for i in pt]
     pt_str = [str(i) for i in pt_int]
@@ -302,6 +310,17 @@ def draw_trajectory_dimred(X_dimred, cluster_labels, super_cluster_labels, super
     #    ax2.scatter(X_dimred[where, 0], X_dimred[where, 1], label=group, c=group_colour[group], alpha=0.5)
     # plt.legend()
     # plt.scatter(X_dimred[:,0], X_dimred[:,1], alpha=0.5)
+    c_edge = []
+    width_edge = []
+    for i in range(num_parc_group):
+        if i in final_super_terminal:
+            width_edge.append(2.5)
+            c_edge.append('yellow')
+        else:
+            width_edge.append(0)
+            c_edge.append('black')
+
+
     ax2.scatter(x_cluster, y_cluster, c='red')
 
     for i, type in enumerate(pt_str):
@@ -312,7 +331,7 @@ def draw_trajectory_dimred(X_dimred, cluster_labels, super_cluster_labels, super
     ax2.set_title('lazy:' + str(x_lazy) + ' teleport' + str(alpha_teleport) + 'super_knn:' + str(knn))
     # ax2.set_title('super_knn:' + str(knn) )
     ax2.scatter(X_dimred[:, 0], X_dimred[:, 1], c=projected_sc_pt, cmap='viridis_r', alpha=0.5)
-    ax2.scatter(df_super_mean['x'], df_super_mean['y'], c='black', s=40)
+    ax2.scatter(df_super_mean['x'], df_super_mean['y'], c='black', s=60, edgecolors = c_edge, linewidth = width_edge)
     plt.title(title_str)
     plt.show()
     return
@@ -454,12 +473,12 @@ class PARC:
         if A.shape[0]<=15:
             loc_deg = np.where(out_deg<=np.percentile(out_deg,35))[0]
             print('low deg super', loc_deg)
-            loc_pt =  np.where(markov_pt>=np.percentile(markov_pt,60))[0]
+            loc_pt =  np.where(markov_pt>=np.percentile(markov_pt,50))[0]
             print('high pt super', loc_pt)
         else:
             loc_deg = np.where(out_deg <= np.percentile(out_deg, 15))[0]
             print('low deg', loc_deg)
-            loc_pt = np.where(markov_pt >= np.percentile(markov_pt, 60))[0]
+            loc_pt = np.where(markov_pt >= np.percentile(markov_pt,60))[0]
             print('high pt', loc_pt)
         terminal_clusters = list(set(loc_deg)&set(loc_pt))
         print('terminal_clusters', terminal_clusters)
@@ -548,7 +567,7 @@ class PARC:
             beta_norm_lap = beta_norm_lap + (eigen_vec_mult * factor)  # beta-normalized laplacian
 
         deg = scipy.sparse.csr_matrix.todense(deg)
-        print('deg matrix in compute hitting', deg)
+        #        print('deg matrix in compute hitting', deg)
         temp = Greens_matrix.dot(deg)
         temp = deg.dot(temp) * beta_teleport
         hitting_matrix = np.zeros((N, N), float)
@@ -743,7 +762,7 @@ class PARC:
         q.append(hitting_array)#put(hitting_array)
         #return hitting_array
     def simulate_markov(self, A,root):
-        print("Adj", A)
+
         n_states = A.shape[0]
         P = A / A.sum(axis=1).reshape((n_states, 1))
         #print('row normed P',P.shape, P, P.sum(axis=1))
@@ -763,7 +782,7 @@ class PARC:
         stateHist = state
         dfStateHist = pd.DataFrame(state)
         distr_hist = np.zeros([1, n_states])
-        num_sim = 1200#1300
+        num_sim = 1000#1300
 
         ncpu = multiprocessing.cpu_count()
         if (ncpu == 1) | (ncpu == 2):
@@ -810,7 +829,7 @@ class PARC:
             rowtemp = hitting_array[i, :]
             no_times_state_reached = np.sum(rowtemp != (n_steps + 1))
             if no_times_state_reached!= 0:
-                print('the number of times state ',i, 'has been reached is', no_times_state_reached )
+                #print('the number of times state ',i, 'has been reached is', no_times_state_reached )
                 #if no_times_state_reached < upper_quart:perc = np.percentile(rowtemp[rowtemp != n_steps + 1], 20)
                 perc = np.percentile(rowtemp[rowtemp != n_steps + 1], 10)+0.001
                 #print('state ', i,' has perc' ,perc)
@@ -1166,7 +1185,7 @@ class PARC:
 
             #wmax = max(new_weights)
         #print('weights before scaling', new_weights)
-        new_weights = [(i+.05) / scale_factor for i in new_weights]
+        new_weights = [(wi+.05) / scale_factor for wi in new_weights]
         #print('weights after scaling', new_weights)
         sparse_clustergraph = csr_matrix((np.array(new_weights), (sources, targets)),
                                          shape=(n, n))
@@ -1196,7 +1215,7 @@ class PARC:
             cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
 
             majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
-            print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
+            #print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
             if self.super_cluster_labels != False:
                 super_majority_cluster = self.func_mode(list(np.asarray(super_cluster_labels_sub)[cluster_i_loc]))
                 super_majority_cluster_loc = np.where(np.asarray(super_cluster_labels_sub) == super_majority_cluster)[0]
@@ -1609,6 +1628,7 @@ class PARC:
             self.hitting_times = hitting_times #* 1000
             self.markov_hitting_times = df_graph['markov_pt'].values
             self.terminal_clusters = terminal_clus
+            print('terminal clusters', terminal_clus)
             self.node_degree_list = node_deg_list
             hitting_times = self.markov_hitting_times
 
@@ -1852,7 +1872,7 @@ class PARC:
             for ei,pti in enumerate(pt):
                 if ei in self.terminal_clusters:
                     c_edge.append('red')
-                    l_width.append(0.7)
+                    l_width.append(1.5)
                 else:
                     c_edge.append('gray')
                     l_width.append(0.0)
@@ -1862,7 +1882,7 @@ class PARC:
             ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap='viridis_r',edgecolors=c_edge,
                          alpha=1, zorder=3, linewidth = l_width)
             for ii in range(node_pos.shape[0]):
-                ax.text(node_pos[ii, 0], node_pos[ii, 1], str(self.labels[i]), color='black', zorder=4)
+                ax.text(node_pos[ii, 0], node_pos[ii, 1], str(self.labels[i]), color='black', zorder=3)
             title_pt = title_list[i]
             ax_i.set_title(title_pt)
 
@@ -2096,7 +2116,7 @@ def main():
         adata_counts = sc.AnnData(df_counts, obs=df_ids)
         # sc.pp.recipe_zheng17(adata_counts, n_top_genes=20) not helpful for toy data
     ncomps =20
-    knn =10
+    knn =50
 
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
     '''
@@ -2176,14 +2196,14 @@ def main():
         idx = np.random.randint(len(labels), size=len(labels))
     print('end tsne')
     draw_trajectory_dimred(embedding, labels, super_labels, super_edges, p1.x_lazy, p1.alpha_teleport,
-                           p1.single_cell_pt, true_label, knn=p0.knn, title_str='Hitting times: Original Random walk', ncomp=ncomps)
+                           p1.single_cell_pt, true_label, knn=p0.knn, terminal_clusters=p1.terminal_clusters, super_terminal_clusters=p0.terminal_clusters, title_str='Hitting times: Original Random walk', ncomp=ncomps)
 
     draw_trajectory_dimred(embedding, labels, super_labels, super_edges,
-                           p1.x_lazy, p1.alpha_teleport, p1.single_cell_pt_markov, true_label, knn=p0.knn,
+                           p1.x_lazy, p1.alpha_teleport, p1.single_cell_pt_markov, true_label, knn=p0.knn,terminal_clusters=p1.terminal_clusters,super_terminal_clusters=p0.terminal_clusters,
                            title_str='Hitting times: Markov Simulation on biased edges',ncomp=ncomps)
 
     draw_trajectory_dimred(embedding, labels, super_labels, super_edges,
-                           p1.x_lazy, p1.alpha_teleport, p1.single_cell_pt_dijkstra_bias, true_label, knn=p0.knn,
+                           p1.x_lazy, p1.alpha_teleport, p1.single_cell_pt_dijkstra_bias, true_label, knn=p0.knn,terminal_clusters=p1.terminal_clusters,super_terminal_clusters=p0.terminal_clusters,
                            title_str='Hitting times: Dijkstra on biased edges',ncomp=ncomps)
     # embedding = TSNE().fit_transform(pc)
     num_group = len(set(true_label))
