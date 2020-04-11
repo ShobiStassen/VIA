@@ -7,10 +7,12 @@ import leidenalg
 import time
 import hnswlib
 import matplotlib.pyplot as plt
+import matplotlib
 import math
 import multiprocessing
-from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import minimum_spanning_tree
 from scipy import sparse
+from sklearn.metrics.pairwise import euclidean_distances
 import umap
 import scanpy as sc
 from MulticoreTSNE import MulticoreTSNE as TSNE
@@ -22,7 +24,33 @@ import pygam as pg
 def plot_sc_pb(ax, embedding, prob, ti):
     threshold = np.mean(prob) + 2 * np.std(prob)
     prob = [x if x < threshold else threshold for x in prob]
-    ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=10, cmap='viridis', alpha=0.5)
+
+    cmap = matplotlib.cm.get_cmap('viridis')
+    norm = matplotlib.colors.Normalize(vmin=0, vmax=threshold)
+    prob = np.asarray(prob)
+    c = cmap(norm(prob))
+    c=c.reshape(-1,4)
+    loc_c = np.where(prob <=0.3)[0]
+    c[loc_c,3]=0.1
+    loc_c = np.where((prob > 0.3)&(prob<=0.5))[0]
+    c[loc_c,3]=0.2
+    loc_c = np.where((prob > 0.5) & (prob <= 0.7))[0]
+    c[loc_c, 3] = 0.5
+    ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=10, cmap='viridis',
+               edgecolors='none')  # , alpha=0.5)
+    '''
+    for i in range(embedding.shape[0]):
+        rgba = cmap(norm(prob[i]))
+        rgba = list(rgba)
+        if prob[i]<0.1: rgba[3]=0.05
+        else: list(rgba)[3] = 0.5
+        rgba = tuple(rgba)
+        
+        #ax.scatter(embedding[i, 0], embedding[i, 1], c=np.asarray(rgba).reshape(1,-1), s=10, cmap='viridis',edgecolors='none')#, alpha=0.5)
+        #ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=10, cmap='viridis', alpha=0.5)
+    '''
+    #alpha_list = [0.7 if x >(np.mean(prob)-np.std(prob)) else 0.1 for x in prob]
+    #ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=10, cmap='viridis', alpha=0.5)
     ax.set_title('Target: ' + str(ti))
 def simulate_multinomial(vmultinomial):
     r = np.random.uniform(0.0, 1.0)
@@ -141,12 +169,12 @@ def draw_sc_evolution_trajectory_pt(p1, embedding, knn_hnsw):
         x = [embedding[xi, 0] for xi in loc_i] #location of sc nearest to average location of terminal clus in the EMBEDDED space
         y = [embedding[yi, 1] for yi in loc_i]
         labels, distances = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]), k=1)
-        x_sc = embedding[labels[0], 0]
+        x_sc = embedding[labels[0], 0] #terminal sc location
         y_sc = embedding[labels[0], 1]
         ax.scatter(x_sc, y_sc, color='pink', zorder=3, label=str(ti), s=18)
         ax.text(x_sc + 0.5, y_sc + 0.5, 'TS' + str(ti), color='black')
         weights = p1.single_cell_bp[:, i]  # /np.sum(p1.single_cell_bp[:,i])
-        weights[weights < 0.01] = 0
+        weights[weights < 0.05] = 0
         weights[np.where(np.asarray(p1.labels) == root_i)[0]] = 0.9
         weights[np.where(np.asarray(p1.labels) == ti)[0]] = 1
         weights[labels[0]] = 1
@@ -173,12 +201,12 @@ def draw_sc_evolution_trajectory_pt(p1, embedding, knn_hnsw):
         Xin = np.asarray([p1.single_cell_pt_markov,embedding[:,0]]).T
         Xin = Xin[loc_inter,:]
         print('Xin shape', Xin.shape)
-        n_reps = 30
+        n_reps = 100
         rep =np.repeat(np.array([[ max(val_pt),x_sc]]),n_reps,axis=0)
-        rep = rep+np.random.normal(0,.01,rep.shape)
+        rep = rep+np.random.normal(0,.1,rep.shape)
         Xin = np.concatenate((Xin,rep),axis=0)
         print('Xin shape', Xin.shape, xx_root)
-        rep = np.repeat(np.array([[ 0,xx_root]]),n_reps,axis=0) +  np.random.normal(0,.01,rep.shape)
+        rep = np.repeat(np.array([[ 0,xx_root]]),n_reps,axis=0) +  np.random.normal(0,.1,rep.shape)
         Xin = np.concatenate((Xin, rep), axis=0)
         print('Xin shape', Xin.shape)
         weights = weights.reshape((embedding.shape[0], 1))[loc_inter, 0]
@@ -199,9 +227,33 @@ def draw_sc_evolution_trajectory_pt(p1, embedding, knn_hnsw):
         rep = np.repeat(np.array([yy_root]), n_reps, axis=0)
         yin = np.concatenate((yin, rep), axis=0)
         print('yin shape', yin.shape)
+        Xin_yin = np.concatenate((Xin,yin), axis=1)
+        Xin_yin = np.concatenate((Xin_yin, weights), axis=1)
+        print('shape Xin_yin', Xin_yin.shape)
+        temp_max = max(Xin_yin[:,1])
+        temp_min = min(Xin_yin[:, 1])
+        print('temp_ranges', temp_min, temp_max)
+        n_bins = 20
+        bin_width = (temp_max-temp_min)/n_bins
+        final_input = np.zeros((1,4))
+        print('final input', final_input)
+        for i in range(n_bins):
+            bin_start = temp_min + bin_width*i
+            bin_end= bin_start+bin_width
+            temp= Xin_yin[(Xin_yin[:,1]< bin_end)&(Xin_yin[:,1]>= bin_start)]
+            print('bin', i, 'has temp shape before trimming', temp.shape)
+            if temp.shape[1]>10:
+                temp = temp[(temp[:,2]<=(np.mean(temp[:,2])+0.5*np.std(temp[:,2])))&(temp[:,2]>=(np.mean(temp[:,2])-0.5*np.std(temp[:,2])))]
+                print('cutoff bin values', np.mean(temp[:, 2]) + np.std(temp[:, 2]))
+            print('temp shape after trimming', temp.shape)
 
+            final_input = np.concatenate((final_input, temp), axis=0)
 
-        scGamx = pg.LinearGAM(n_splines=5, spline_order=3, lam=10).fit(Xin, yin, weights=weights)#25
+        final_input = final_input[1:,:]
+        final_input = final_input[(final_input[:,1]<=maxx) & (final_input[:,1]>=minx) ]
+        print('final input', final_input.shape)
+        print('final input', final_input)
+        scGamx = pg.LinearGAM(n_splines=5, spline_order=3, lam=10).fit(final_input[:,0:2], final_input[:,2], weights=final_input[:,3])#25#fit(Xin, yin, weights=weights)#25
         #scGamx.gridsearch(Xin,  embedding[loc_z,1], weights=weights)
        # scGamy = pg.LinearGAM(n_splines=10, spline_order=3, lam=10).fit(p1.single_cell_pt_markov, embedding[:, 1],
                                                              #weights=weights.reshape(embedding.shape[0], -1))
@@ -219,8 +271,8 @@ def draw_sc_evolution_trajectory_pt(p1, embedding, knn_hnsw):
         #print('xx shape', XX.shape, XX)
         #print('predsx shape', predsx.shape)
         #predsy = scGamy.predict(predsx)
-        Xin = pd.DataFrame(Xin).sort_values(1).values
-        print('xin', Xin)# +  np.random.normal(0,.01,Xin.shape)
+        Xin = pd.DataFrame(final_input[:,0:2]).sort_values(1).values #Xin
+        #print('xin', Xin)# +  np.random.normal(0,.01,Xin.shape)
         yg = scGamx.predict(X=Xin)
         print('yg', yg.shape)
         #ax.plot(Xin[:,1], yg, linewidth=2, c='dimgray')
@@ -231,7 +283,334 @@ def draw_sc_evolution_trajectory_pt(p1, embedding, knn_hnsw):
         preds = scGam.predict(XX)
         ax.plot(XX, preds, linewidth=2, c='dimgray')
     return
+def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw,G):
+    y_root = []
+    x_root = []
+    for ii, r_i in enumerate(p1.root):
+        loc_i = np.where(np.asarray(p1.labels) == p1.root[ii])[0]
+        x = [embedding[xi, 0] for xi in loc_i]
+        y = [embedding[yi, 1] for yi in loc_i]
 
+        labels_root, distances_root = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]), k=1)
+        x_root.append(embedding[labels_root, 0][0])
+        y_root.append(embedding[labels_root, 1][0])
+        print('xyroots', x_root, y_root)
+
+
+    # single-cell branch probability evolution probability
+    for i, ti in enumerate(p1.terminal_clusters):
+        print('i, ti, p1.root, p1.connected', i, ti, p1.root, p1.connected_comp_labels)
+        root_i = p1.root[p1.connected_comp_labels[ti]]
+        xx_root = x_root[p1.connected_comp_labels[ti]]
+        yy_root = y_root[p1.connected_comp_labels[ti]]
+        fig, ax = plt.subplots()
+        plot_sc_pb(ax, embedding, p1.single_cell_bp[:, i], ti)
+
+        loc_i = np.where(np.asarray(p1.labels) == ti)[0]
+        val_pt = [p1.single_cell_pt_markov[i] for i in loc_i]
+        th_pt = np.percentile(val_pt, 50)  # 50
+        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
+        x = [embedding[xi, 0] for xi in loc_i] #location of sc nearest to average location of terminal clus in the EMBEDDED space
+        y = [embedding[yi, 1] for yi in loc_i]
+        labels, distances = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]), k=1)
+        x_sc = embedding[labels[0], 0] #terminal sc location
+        y_sc = embedding[labels[0], 1]
+        start_time = time.time()
+        print('labels root and labels[0]',labels_root[0],labels[0])
+        path = G.get_shortest_paths(labels_root[0][0], to=labels[0][0], weights='weight') #G is the knn of all sc points
+        #formatted_float = "{:.2f}".format(a_float)
+        print(f"get_shortest_paths time: {time.time()-start_time}")
+        print('path', path)
+        n_orange = len(path[0])
+        orange_m = np.zeros((n_orange,3))
+        for enum_point, point in enumerate(path[0]):
+            #ax.scatter(embedding[point,0], embedding[point,1], color='orange', zorder=3, label=str(ti), s=22)
+            ax.text(embedding[point,0], embedding[point,1],'D '+str(enum_point), color = 'blue', fontsize=8)
+            orange_m[enum_point,0] = embedding[point,0]
+            orange_m[enum_point, 1]=embedding[point, 1]
+            orange_m[enum_point, 2] = p1.single_cell_pt_markov[point]#*p1.single_cell_pt_markov[point]
+        from sklearn.neighbors import NearestNeighbors
+        k_orange = 3
+        nbrs = NearestNeighbors(n_neighbors=k_orange,  algorithm='ball_tree').fit(orange_m[:,0:])
+        distances, indices = nbrs.kneighbors(orange_m[:,0:])
+        row_list = []
+        col_list = []
+        dist_list = []
+
+        for i_or in range(n_orange):
+            for j_or in range(1,k_orange):
+                row_list.append(i_or)
+                col_list.append(indices[i_or,j_or])
+                dist_list.append(distances[i_or,j_or])
+        print('target number '+ str(ti))
+        print('lists', len(row_list), len(col_list), len(dist_list))
+        print('lists', (row_list), (col_list), (dist_list))
+
+        orange_adjacency_knn = csr_matrix((np.array(dist_list), (np.array(row_list), np.array(col_list))),
+                                       shape=(n_orange, n_orange))
+        print('orange adj knn shape', orange_adjacency_knn.shape)
+        #orange_adjacency_knn = (orange_adjacency_knn+orange_adjacency_knn.T)*.5
+        orange_mst = orange_adjacency_knn#minimum_spanning_tree(orange_adjacency_knn)
+
+        n_mst, comp_labels_mst = connected_components(csgraph=orange_mst, directed=False, return_labels=True)
+
+        for enum_point, point in enumerate(path[0]):
+            orange_m[enum_point, 2] = p1.single_cell_pt_markov[point] * p1.single_cell_pt_markov[point]*2
+            print('single cell pt markov',p1.single_cell_pt_markov[point])
+
+        while n_mst >1:
+            comp_root = comp_labels_mst[0]
+            print('comp-root', comp_root)
+            min_ed = 9999999
+            loc_comp_i = np.where(comp_labels_mst==comp_root)[0]
+            loc_comp_noti = np.where(comp_labels_mst != comp_root)[0]
+            print('compi', loc_comp_i)
+            print('comp_noti', loc_comp_noti)
+            orange_pt_val = [orange_m[cc,2] for cc in loc_comp_i]
+            loc_comp_i_revised = [loc_comp_i[cc] for cc in range(len(orange_pt_val)) if orange_pt_val[cc]>=np.percentile(orange_pt_val,70)]
+            print('Target:', ti)
+            print('compi revised', loc_comp_i_revised)
+            for nn_i in loc_comp_i_revised:
+
+                ed = euclidean_distances(orange_m[nn_i,:].reshape(1,-1),orange_m[loc_comp_noti])
+
+                if np.min(ed)< min_ed:
+                    ed_where_min = np.where(ed[0] == np.min(ed))[0][0]
+                    print('ed where min', ed_where_min,np.where(ed[0] == np.min(ed)))
+                    min_ed = np.min(ed)
+                    ed_loc_end = loc_comp_noti[ed_where_min]
+                    ed_loc_start = nn_i
+            print('min ed', min_ed)
+            print('the closest pair of points', ed_loc_start, ed_loc_end)
+            orange_mst[ed_loc_start, ed_loc_end] = min_ed
+            n_mst, comp_labels_mst=connected_components(csgraph=orange_mst, directed=False, return_labels=True)
+
+
+
+
+        if n_mst==1:
+            print('orange mst shape', orange_mst.shape,orange_mst.shape[0])
+            #orange_mst = minimum_spanning_tree(orange_mst)
+
+            (orange_sources, orange_targets) = orange_mst.nonzero()
+            orange_edgelist = list(zip(orange_sources.tolist(), orange_targets.tolist()))
+            print('sources and targets', len(orange_sources), len(orange_targets))
+            print('sources and targets', orange_sources, orange_targets)
+            temp_list = []
+            for i_or in range(len(orange_sources)):
+                orange_x = [orange_m[:, 0][orange_sources[i_or]], orange_m[:, 0][orange_targets[i_or]]]
+                orange_y = [orange_m[:, 1][orange_sources[i_or]], orange_m[:, 1][orange_targets[i_or]]]
+                #ax.plot(orange_x, orange_y, color='purple') #visualize entire MST
+
+            G_orange = ig.Graph(n=orange_mst.shape[0], edges= orange_edgelist,edge_attrs={'weight': orange_mst.data.tolist()}, )
+            path_orange = G_orange.get_shortest_paths(0, to=orange_mst.shape[0]-1, weights='weight')[0]
+            print('path orange', path_orange)
+            len_path_orange = len(path_orange)
+
+            for path_i in range(len_path_orange-1):
+                path_x_start = orange_m[path_orange[path_i], 0]
+                path_x_end = orange_m[path_orange[path_i+1], 0]
+                orange_x = [orange_m[path_orange[path_i], 0], orange_m[path_orange[path_i+1], 0]]
+                orange_minx = min(orange_x)
+                orange_maxx = max(orange_x)
+
+                path_y_start =  orange_m[path_orange[path_i ], 1]
+                path_y_end =path_x_end = orange_m[path_orange[path_i+1], 0]
+                orange_y = [orange_m[path_orange[path_i], 1], orange_m[path_orange[path_i + 1], 1]]
+                orange_miny = min(orange_y)
+                orange_maxy = max(orange_y)
+                orange_embedding_sub = embedding[((embedding[:,0]<=orange_maxx) & (embedding[:,0]>=orange_minx))&((embedding[:,1]<=orange_maxy)&((embedding[:,1]>=orange_miny)))]
+                print('orange sub size', orange_embedding_sub.shape)
+                if (orange_maxy-orange_miny>5) | (orange_maxx-orange_minx>5):
+                    orange_n_reps = 150
+                else: orange_n_reps = 100
+                or_reps  =np.repeat(np.array([[ orange_x[0],orange_y[0]]]),orange_n_reps,axis=0)
+                orange_embedding_sub = np.concatenate((orange_embedding_sub, or_reps), axis=0)
+                or_reps = np.repeat(np.array([[ orange_x[1],orange_y[1]]]), orange_n_reps, axis=0)
+                orange_embedding_sub = np.concatenate((orange_embedding_sub, or_reps), axis=0)
+
+                orangeGam = pg.LinearGAM(n_splines=8, spline_order=3, lam=10).fit(orange_embedding_sub[:,0], orange_embedding_sub[:,1])
+
+                orange_GAM_xval = np.linspace(orange_minx, orange_maxx, 200)
+                yg_orange = orangeGam.predict(X=orange_GAM_xval)
+
+
+
+
+                #ax.plot(orange_x, orange_y, color='purple')
+                ax.plot(orange_GAM_xval, yg_orange, color='dimgrey', linewidth = 2, zorder = 3, linestyle=(0, (5, 2, 1, 2)), dash_capstyle='round')
+                step = 1
+
+                     # , head_starts_at_zero = direction_arrow )
+
+                #ax.plot(orange_GAM_xval, yg_orange, color='black', linewidth=2, zorder=3, linestyle = ':')
+                cur_x1 = orange_GAM_xval[-1]
+                cur_y1 = yg_orange[-1]
+                cur_x2 = orange_GAM_xval[0]
+                cur_y2 = yg_orange[0]
+                if path_i >= 1:
+                    for mmddi in range(2):
+                        xy11= euclidean_distances(np.array([cur_x1, cur_y1]).reshape(1,-1),np.array([prev_x1, prev_y1]).reshape(1,-1))
+                        xy12 = euclidean_distances(np.array([cur_x1, cur_y1]).reshape(1, -1),np.array([prev_x2, prev_y2]).reshape(1, -1))
+                        xy21 = euclidean_distances(np.array([cur_x2, cur_y2]).reshape(1, -1), np.array([prev_x1, prev_y1]).reshape(1, -1))
+                        xy22 = euclidean_distances(np.array([cur_x2, cur_y2]).reshape(1, -1), np.array([prev_x2, prev_y2]).reshape(1, -1))
+                        mmdd_temp_array = np.asarray([xy11,xy12,xy21,xy22])
+                        mmdd_loc = np.where(mmdd_temp_array==np.min(mmdd_temp_array))[0][0]
+                        if mmdd_loc ==0:
+                            ax.plot([cur_x1, prev_x1], [cur_y1, prev_y1], color='black',linestyle=(0, (5, 2, 1, 2)), dash_capstyle='round')
+                        if mmdd_loc ==1:
+                            ax.plot([cur_x1, prev_x2], [cur_y1, prev_y2], color='black',linestyle=(0, (5, 2, 1, 2)), dash_capstyle='round')
+                        if mmdd_loc ==2:
+                            ax.plot([cur_x2, prev_x1], [cur_y2, prev_y1], color='black',linestyle=(0, (5, 2, 1, 2)), dash_capstyle='round')
+                        if mmdd_loc == 3:
+                            ax.plot([cur_x2, prev_x2], [cur_y2, prev_y2], color='black',linestyle=(0, (5, 2, 1, 2)), dash_capstyle='round')
+                    if (path_x_start>path_x_end): direction_arrow_orange = -1 #going LEFT
+                    if (path_x_start<=path_x_end): direction_arrow_orange = 1  # going RIGHT
+
+                    if (abs(path_x_start- path_x_end) > 2.5):# |(abs(orange_m[path_i, 2] - orange_m[path_i + 1, 1]) > 1)):
+                        if (direction_arrow_orange==-1):#& :
+                            ax.arrow(orange_GAM_xval[100], yg_orange[100], orange_GAM_xval[99] - orange_GAM_xval[100],
+                                 yg_orange[99] - yg_orange[100], shape='full', lw=0,     length_includes_head=True,head_width=0.5, color='dimgray',zorder=3)
+                            print('direction arrow', direction_arrow_orange, 'path', path_i, 'to', path_i+1)
+                            print('x,y,dx,dy', orange_GAM_xval[100], yg_orange[100], orange_GAM_xval[99] - orange_GAM_xval[100],yg_orange[99] - yg_orange[100])
+
+                        if (direction_arrow_orange==1):#&(abs(orange_m[path_i,0]-orange_m[path_i+1,0])>0.5):
+                            ax.arrow(orange_GAM_xval[100], yg_orange[100], orange_GAM_xval[101] - orange_GAM_xval[100],
+                                         yg_orange[101] - yg_orange[100], shape='full', lw=0, length_includes_head=True, head_width=0.5,
+                                         color='dimgray', zorder=3)
+                            print('direction arrow', direction_arrow_orange, 'path', path_i, 'to', path_i + 1)
+                prev_x1 = cur_x1
+                prev_y1 = cur_y1
+                prev_x2= cur_x2
+                prev_y2 = cur_y2
+
+
+
+            '''
+            
+                #temp_list.append(orange_sources[i_or])
+                #temp_list.append(orange_targets[i_or])
+            '''
+            #orange_x = orange_m[:,0][np.array(temp_list)]
+            #orange_y = orange_m[:, 1][np.array(temp_list)]
+            #print('number of x and y', len(orange_x))
+
+
+        orange_m=pd.DataFrame(orange_m).sort_values(2).values
+        print('orange m', orange_m)
+        #ax.plot(orange_m[:,0],orange_m[:,1])
+        ax.scatter(x_sc, y_sc, color='pink', zorder=3, label=str(ti), s=18)
+        ax.text(x_sc + 0.5, y_sc + 0.5, 'TS ' + str(ti), color='black')
+        weights = p1.single_cell_bp[:, i]  # /np.sum(p1.single_cell_bp[:,i])
+        weights[weights < 0.05] = 0
+        weights[np.where(np.asarray(p1.labels) == root_i)[0]] = 0.9
+        weights[np.where(np.asarray(p1.labels) == ti)[0]] = 1
+        weights[labels[0]] = 1
+        loc_z = np.where(weights > 0)[0]
+        min_weight = np.min(weights[weights != 0])
+        weights[weights == 0] = min_weight * 0.000001
+        print('number of zeros in weights', np.sum([weights==0 ]))
+
+        minx = min(x_root[p1.connected_comp_labels[i]], x_sc)  # np.min(x))
+        maxx = max(x_root[p1.connected_comp_labels[i]], x_sc)  # np.max(x))
+        if minx == x_sc: #the root-cell is on the RHS
+            loc_i = np.where(embedding[:, 0] <=maxx)[0]
+        else:
+            loc_i = np.where(embedding[:, 0] >= minx)[0]
+        xp = np.linspace(minx, maxx, len(loc_z))
+        print('max sc_pt',max(p1.single_cell_pt_markov))
+        xpt = np.linspace(0, max(p1.single_cell_pt_markov), len(loc_z)).reshape((len(loc_z),-1))
+        loc_i = np.where((embedding[:, 0] <= maxx) & (embedding[:, 0] >= minx))[0]
+        loc_pt= np.where(p1.single_cell_pt_markov<=np.percentile(val_pt, 95)) #doesnt help much
+        loc_inter = np.intersect1d(loc_i, loc_z)
+        x_val = embedding[loc_i, 0].reshape(len(loc_i), -1)
+        print('x-val shape0', x_val.shape)
+        #scGam = pg.LinearGAM(n_splines=10, spline_order=3, lam=10).fit(x_val, embedding[loc_i, 1], weights=weights[loc_i].reshape(len(loc_i), -1))
+        Xin = np.asarray([p1.single_cell_pt_markov,embedding[:,0]]).T
+        Xin = Xin[loc_inter,:]
+        print('Xin shape', Xin.shape)
+        n_reps = 100
+        rep =np.repeat(np.array([[ max(val_pt),x_sc]]),n_reps,axis=0)
+        rep = rep+np.random.normal(0,.1,rep.shape)
+        Xin = np.concatenate((Xin,rep),axis=0)
+        print('Xin shape', Xin.shape, xx_root)
+        rep = np.repeat(np.array([[ 0,xx_root]]),n_reps,axis=0) +  np.random.normal(0,.1,rep.shape)
+        Xin = np.concatenate((Xin, rep), axis=0)
+        print('Xin shape', Xin.shape)
+        weights = weights.reshape((embedding.shape[0], 1))[loc_inter, 0]
+        weights = weights.reshape((len(loc_inter),1))
+        print('weights shape', weights.shape)
+        rep = np.repeat(np.array([[1]]), 2*n_reps, axis=0)
+        print('rep shape', rep.shape)
+        weights = np.concatenate((weights,rep),axis=0)
+
+        print('weights shape', weights.shape, y_sc)
+        rep = np.repeat(np.array([y_sc]), n_reps, axis=0)
+        print('repy shape', rep.shape)
+        yin=embedding[loc_inter,1]
+        yin = yin.reshape((-1,1))
+        print('yin shape', yin.shape)
+        yin = np.concatenate((yin,rep),axis=0)
+        print('yin shape', yin.shape)
+        rep = np.repeat(np.array([yy_root]), n_reps, axis=0)
+        yin = np.concatenate((yin, rep), axis=0)
+        print('yin shape', yin.shape)
+        Xin_yin = np.concatenate((Xin,yin), axis=1)
+        Xin_yin = np.concatenate((Xin_yin, weights), axis=1)
+        print('shape Xin_yin', Xin_yin.shape)
+        temp_max = max(Xin_yin[:,1])
+        temp_min = min(Xin_yin[:, 1])
+        print('temp_ranges', temp_min, temp_max)
+        n_bins = 20
+        bin_width = (temp_max-temp_min)/n_bins
+        final_input = np.zeros((1,4))
+        print('final input', final_input)
+        for i in range(n_bins):
+            bin_start = temp_min + bin_width*i
+            bin_end= bin_start+bin_width
+            temp= Xin_yin[(Xin_yin[:,1]< bin_end)&(Xin_yin[:,1]>= bin_start)]
+            print('bin', i, 'has temp shape before trimming', temp.shape)
+            if temp.shape[1]>10:
+                temp = temp[(temp[:,2]<=(np.mean(temp[:,2])+0.5*np.std(temp[:,2])))&(temp[:,2]>=(np.mean(temp[:,2])-0.5*np.std(temp[:,2])))]
+                print('cutoff bin values', np.mean(temp[:, 2]) + np.std(temp[:, 2]))
+            print('temp shape after trimming', temp.shape)
+
+            final_input = np.concatenate((final_input, temp), axis=0)
+
+        final_input = final_input[1:,:]
+        final_input = final_input[(final_input[:,1]<=maxx) & (final_input[:,1]>=minx) ]
+        print('final input', final_input.shape)
+        print('final input', final_input)
+        scGamx = pg.LinearGAM(n_splines=5, spline_order=3, lam=10).fit(final_input[:,0:2], final_input[:,2], weights=final_input[:,3])#25#fit(Xin, yin, weights=weights)#25
+        #scGamx.gridsearch(Xin,  embedding[loc_z,1], weights=weights)
+       # scGamy = pg.LinearGAM(n_splines=10, spline_order=3, lam=10).fit(p1.single_cell_pt_markov, embedding[:, 1],
+                                                             #weights=weights.reshape(embedding.shape[0], -1))
+
+        ax.scatter(xx_root, yy_root, s=13, c='red')
+        ax.text(x_root[p1.connected_comp_labels[ti]]+0.5, y_root[p1.connected_comp_labels[ti]]+0.5, 'root' + str(ti), color='black')
+        XX = scGamx.generate_X_grid(term=1, n=500)
+        print('xp shape before', xp.shape)
+        print('xpt shape before', xpt.shape)
+        xp_ = np.concatenate((xpt,xp),axis=1)
+        print('xp shape', xp.shape)
+        #XX=scGamx.generate_X_grid(term=1, n=500)
+
+        #predsx = scGamx.predict(xp)
+        #print('xx shape', XX.shape, XX)
+        #print('predsx shape', predsx.shape)
+        #predsy = scGamy.predict(predsx)
+        Xin = pd.DataFrame(final_input[:,0:2]).sort_values(1).values #Xin
+        #print('xin', Xin)# +  np.random.normal(0,.01,Xin.shape)
+        yg = scGamx.predict(X=Xin)
+        print('yg', yg.shape)
+        #ax.plot(Xin[:,1], yg, linewidth=2, c='dimgray')
+        Xin = Xin[:,1].reshape((len(yg),-1))
+        print('final xin', Xin.shape)
+        scGam = pg.LinearGAM(n_splines=5, spline_order=3, lam=1000).gridsearch(Xin, yg)
+        XX = scGam.generate_X_grid(term=0, n=500)
+        preds = scGam.predict(XX)
+        #ax.plot(XX, preds, linewidth=2, c='dimgray')
+    return
 def get_biased_weights(edgelist, weights, pt, round_no=1):
     #print('weights', type(weights), weights)
     # small nu means less biasing (0.5 is quite mild)
@@ -347,7 +726,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
     line = np.linspace(0, 1, num_parc_group)
     for color, group in zip(line, set(true_label)):
         where = np.where(np.array(true_label) == group)[0]
-        ax1.scatter(X_dimred[where, 0], X_dimred[where, 1], label=group, c=plt.cm.jet(color))
+        ax1.scatter(X_dimred[where, 0], X_dimred[where, 1], label=group, c=np.asarray(plt.cm.jet(color)).reshape(-1,4))
     ax1.legend(fontsize=6)
     ax1.set_title('true labels, ncomps:'+str(ncomp)+'. knn:'+str(knn))
     for e_i, (start, end) in enumerate(super_edgelist):
@@ -590,7 +969,7 @@ def draw_trajectory_dimred(X_dimred, sc_supercluster_nn, cluster_labels, super_c
     line = np.linspace(0, 1, num_parc_group)
     for color, group in zip(line, set(true_label)):
         where = np.where(np.array(true_label) == group)[0]
-        ax1.scatter(X_dimred[where, 0], X_dimred[where, 1], label=group, c=plt.cm.jet(color))
+        ax1.scatter(X_dimred[where, 0], X_dimred[where, 1], label=group, c=np.asarray(plt.cm.jet(color)).reshape(-1,4))
     ax1.legend(fontsize=6)
     ax1.set_title('true labels, ncomps:'+str(ncomp)+'. knn:'+str(knn))
     for e_i, (start, end) in enumerate(super_edgelist):
@@ -794,24 +1173,68 @@ def draw_trajectory_dimred(X_dimred, sc_supercluster_nn, cluster_labels, super_c
     plt.title(title_str)
 
     return
+def csr_mst(adjacency_matrix):
+
+    Tcsr = adjacency_matrix.copy()
+    Tcsr.data = -1 * Tcsr.data
+    Tcsr.data = Tcsr.data - np.min(Tcsr.data)
+    Tcsr.data = Tcsr.data + 1
+    Tcsr = minimum_spanning_tree(Tcsr)  # adjacency_matrix)
+    Tcsr = (Tcsr + Tcsr.T) * 0.5
+    return Tcsr
+def connect_all_components(Tcsr, cluster_graph_csr, adjacency_matrix):
+    n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+
+    Td = Tcsr  # .todense()
+    # Td[Td==0]=999.999
+    while n_components > 1:
+        sub_td = Td[comp_labels == 0, :][:, comp_labels != 0]
+        print(min(sub_td.data))
+        # locxy=np.where(Td ==np.min(sub_td.data))
+        locxy = scipy.sparse.find(Td == np.min(sub_td.data))
+        for i in range(len(locxy[0])):
+            if (comp_labels[locxy[0][i]] == 0) & (comp_labels[locxy[1][i]] != 0):
+                x = locxy[0][i]
+                y = locxy[1][i]
+        minval = adjacency_matrix[
+            x, y]  # np.min(Td[comp_labels==0,:][:,comp_labels!=0])#np.min(Td[np.where(np.asarray(comp_labels)==0),np.where(comp_labels!=0)])
+        print('inside reconnecting components', x, y, minval)
+        cluster_graph_csr[x, y] = minval
+
+        n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+        print('number of connected componnents after reconnecting ', n_components)
+    return cluster_graph_csr
+    '''
+    Td = Tcsr.todense()
+    Td[Td == 0] = 999.999
+    while n_components > 1:
+        sub_td = Td[comp_labels == 0, :][:, comp_labels != 0]
+        locxy = np.where(Td == np.min(sub_td))
+        for i in range(len(locxy[0])):
+            if (comp_labels[locxy[0][i]] == 0) & (comp_labels[locxy[1][i]] != 0):
+                x = locxy[0][i]
+                y = locxy[1][i]
+        minval = adjacency_matrix[x, y]  # np.min(Td[comp_labels==0,:][:,comp_labels!=0])#np.min(Td[np.where(np.asarray(comp_labels)==0),np.where(comp_labels!=0)])
+        print('inside reconnecting components', x, y, minval)
+        cluster_graph_csr[x, y] = minval
+        n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False,
+                                                         return_labels=True)
+        print('number of connected componnents after reconnecting ', n_components)
+    '''
+
 
 def local_pruning_clustergraph_mst(adjacency_matrix,  global_pruning_std=1, max_outgoing=30, preserve_disconnected = False, visual = False):
     # larger pruning_std factor means less pruning
     #the mst is only used to reconnect components that become disconnect due to pruning
     from scipy.sparse.csgraph import minimum_spanning_tree
-    Tcsr = adjacency_matrix.copy()
-    #print('adjacency before mst', Tcsr)
-    Tcsr.data = -1*Tcsr.data
-    Tcsr.data = Tcsr.data - np.min(Tcsr.data)
-    Tcsr.data = Tcsr.data+1
-    Tcsr = minimum_spanning_tree(Tcsr)#adjacency_matrix)
-    #print('adjacency after mst', Tcsr)
-    Tcsr = (Tcsr+Tcsr.T)*0.5
+    #Tcsr = adjacency_matrix.copy()
 
-    #Tcsr.data = Tcsr.data / (np.std(Tcsr.data))
+    Tcsr = csr_mst(adjacency_matrix)
+
+
 
     sources, targets = adjacency_matrix.nonzero()
-    original_edgelist = list(zip(sources, targets))
+    #original_edgelist = list(zip(sources, targets))
 
     initial_links_n = len(adjacency_matrix.data)
     #print('initial links n', adjacency_matrix, initial_links_n)
@@ -863,7 +1286,7 @@ def local_pruning_clustergraph_mst(adjacency_matrix,  global_pruning_std=1, max_
     n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
     print('number of connected components after pruning', n_components)
     if (preserve_disconnected ==True) & ( n_components>n_components_0): #preserve initial disconnected components
-        Td = Tcsr.todense()
+        Td = Tcsr#.todense()
         Td[Td == 0] = 999.999
         n_components_ = n_components
         while n_components_>n_components_0:
@@ -897,11 +1320,16 @@ def local_pruning_clustergraph_mst(adjacency_matrix,  global_pruning_std=1, max_
     if (n_components>1) & (preserve_disconnected==False):
         #Tcsr.data = Tcsr.data / (np.std(Tcsr.data))
         #Tcsr.data = 1/Tcsr.data
-        Td = Tcsr.todense()
-        Td[Td==0]=999.999
+        cluster_graph_csr=connect_all_components(Tcsr, cluster_graph_csr, adjacency_matrix)
+        n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+        '''
+        Td = Tcsr#.todense()
+        #Td[Td==0]=999.999
         while n_components >1:
             sub_td = Td[comp_labels==0,:][:,comp_labels!=0]
-            locxy=np.where(Td ==np.min(sub_td))
+            print(min(sub_td.data))
+            #locxy=np.where(Td ==np.min(sub_td.data))
+            locxy = scipy.sparse.find(Td == np.min(sub_td.data))
             for i in range(len(locxy[0])):
                 if (comp_labels[locxy[0][i]]==0) &(comp_labels[locxy[1][i]]!=0):
                     x = locxy[0][i]
@@ -912,9 +1340,7 @@ def local_pruning_clustergraph_mst(adjacency_matrix,  global_pruning_std=1, max_
 
             n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
             print('number of connected componnents after reconnecting ', n_components)
-
-
-
+        '''
     sources, targets = cluster_graph_csr.nonzero()
     edgelist = list(zip(sources, targets))
     if global_pruning_std<0.5:
@@ -2031,6 +2457,36 @@ class PARC:
             print('setting arbitrary root', cluster_i)
             self.root = cluster_i
         return graph_node_label, majority_truth_labels, deg_list, root
+    def full_graph_paths(self,X_data):
+        neighbor_array, distance_array = self.knn_struct.knn_query(X_data, k=3)
+        csr_array = self.make_csrmatrix_noselfloop(neighbor_array, distance_array)
+        n_comp, comp_labels = connected_components(csr_array, return_labels=True)
+        k_0 = 3
+        while n_comp >1:
+            k_0 = k_0+1
+            neighbor_array, distance_array = self.knn_struct.knn_query(X_data, k=k_0)
+            csr_array = self.make_csrmatrix_noselfloop(neighbor_array, distance_array)
+            n_comp, comp_labels = connected_components(csr_array, return_labels=True)
+        row_list = []
+        neighbor_array = neighbor_array  # not listed in in any order of proximity
+        print('size neighbor array', neighbor_array.shape)
+        num_neigh = neighbor_array.shape[1]
+        n_neighbors = neighbor_array.shape[1]
+        n_cells = neighbor_array.shape[0]
+
+        row_list.extend(list(np.transpose(np.ones((n_neighbors, n_cells)) * range(0, n_cells)).flatten()))
+        col_list = neighbor_array.flatten().tolist()
+        weight_list = (distance_array.flatten()).tolist()
+        csr_full_graph = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
+                                    shape=(n_cells, n_cells))
+
+
+        sources, targets = csr_full_graph.nonzero()
+        edgelist = list(zip(sources.tolist(), targets.tolist()))
+        Gr = ig.Graph(edgelist, edge_attrs={'weight': csr_full_graph.data.tolist()})
+        Gr.simplify(combine_edges='sum')
+        return Gr
+
     def run_subPARC(self):
         root_str = self.root_str
         X_data = self.data
@@ -2051,17 +2507,12 @@ class PARC:
 
         #### construct full graph
         row_list = []
-        col_list = []
-        weight_list = []
         neighbor_array = neighbor_array  # not listed in in any order of proximity
         print('size neighbor array', neighbor_array.shape)
         num_neigh = neighbor_array.shape[1]
-        distance_array = distance_array
         n_neighbors = neighbor_array.shape[1]
         n_cells = neighbor_array.shape[0]
-        rowi = 0
-        count_0dist = 0
-        discard_count = 0
+
 
         row_list.extend(list(np.transpose(np.ones((n_neighbors, n_cells)) * range(0, n_cells)).flatten()))
         col_list = neighbor_array.flatten().tolist()
@@ -2074,9 +2525,15 @@ class PARC:
         sources, targets = csr_full_graph.nonzero()
         edgelist = list(zip(sources.tolist(), targets.tolist()))
         G = ig.Graph(edgelist, edge_attrs={'weight': csr_full_graph.data.tolist()})
+
         sim_list = G.similarity_jaccard(pairs=edgelist)  # list of jaccard weights
         ig_fullgraph = ig.Graph(list(edgelist), edge_attrs={'weight': sim_list})
         ig_fullgraph.simplify(combine_edges='sum')
+        inv_simlist = [1-i for i in sim_list]
+        #full_graph_shortpath = ig.Graph(list(edgelist), edge_attrs={'weight': inv_simlist}) #the weights reflect distances
+        #full_graph_shortpath.simplify(combine_edges='sum')
+        #self.full_graph_shortpath = full_graph_shortpath
+        self.full_graph_shortpath = self.full_graph_paths(X_data)
         ####
 
 
@@ -2270,6 +2727,7 @@ class PARC:
             else:  global_pruning_std = 0.15
             edgeweights, edgelist, comp_labels = local_pruning_clustergraph_mst(reweighted_sparse_vc, global_pruning_std= global_pruning_std, preserve_disconnected=self.preserve_disconnected)  #0.8 on 20knn and 40ncomp #0.15
             self.connected_comp_labels = comp_labels
+            print('final comp labels set', set(comp_labels))
             #edgeweights_maxout, edgelist_maxout = local_pruning_clustergraph(reweighted_sparse_vc, local_pruning_std=0.0, global_pruning_std=0.15,  max_outgoing=4)
             row_list = []
             col_list = []
@@ -2425,7 +2883,7 @@ class PARC:
 
                 for target_terminal in terminal_clus_ai:
 
-                    prob_ai = self.prob_reaching_terminal_state(target_terminal, terminal_clus_ai, adjacency_matrix2_ai,  new_root_index, pt=markov_hitting_times_ai, num_sim=500)
+                    prob_ai = self.prob_reaching_terminal_state(target_terminal, terminal_clus_ai, adjacency_matrix2_ai,  new_root_index, pt=markov_hitting_times_ai, num_sim=100) #500 !!!! CHANGE BACK AFTER TESTING
                     df_graph['terminal_clus'+str(cluster_labels_subi[target_terminal])] = 0.0000000
                     pd_columnnames_terminal.append('terminal_clus'+str(cluster_labels_subi[target_terminal]))
 
@@ -3009,8 +3467,8 @@ def mainHuman():
     'Erythroid_CD34- CD71+ GlyA-':"ERY2",'Erythroid_CD34- CD71+ GlyA+':"ERY3",'Erythroid_CD34+ CD71+ GlyA-':"ERY1",'Erythroid_CD34- CD71lo GlyA+':'ERY4','Granulocyte/monocyte progenitors':"GMP",'Hematopoietic stem cells_CD133+ CD34dim':"HSC1",'Hematopoietic stem cells_CD38- CD34+':"HSC2",
     'Mature B cells class able to switch':"B_a2",'Mature B cells class switched':"B_a4",'Mature NK cells_CD56- CD16- CD3-':"Nka3",'Monocytes':"MONO2",'Megakaryocyte/erythroid progenitors':"MEP",'Myeloid Dendritic Cells':'mDC','Naïve B cells':"B_a1",'Plasmacytoid Dendritic Cells':"pDC",'Pro B cells':'PRE_B3'}
     import palantir
-    ncomps = 200 #40 ncomps and 20KNN works well
-    knn = 30
+    ncomps = 50 #40 ncomps and 20KNN works well
+    knn = 30#30
     print('ncomp =', ncomps,' knn=', knn)
     nover_labels = pd.read_csv('/home/shobi/Trajectory/Datasets/HumanCD34/Nover_Cor_PredFine_notLogNorm.csv')['x'].values.tolist()
     nover_labels = [dict_abb[i] for i in nover_labels]
@@ -3063,7 +3521,7 @@ def mainHuman():
 
     for color, group in zip(line, set(revised_clus)):
         where = np.where(np.array(revised_clus) == group)[0]
-        ax1.scatter(tsnem[where, 0],tsnem[where, 1], label=group, c=plt.cm.jet(color))
+        ax1.scatter(tsnem[where, 0],tsnem[where, 1], label=group, c=np.asarray(plt.cm.jet(color)).reshape(-1,4))
     ax1.legend()
     ax1.set_title('Palantir Phenograph Labels')
 
@@ -3133,7 +3591,7 @@ def mainHuman():
     p0 = PARC(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
               too_big_factor=0.4,
               pseudotime=True, path="/home/shobi/Trajectory/Datasets/HumanCD34/", root=1,
-              root_str=4823, humanCD34=True)  # *.4
+              root_str=4823, humanCD34=True, preserve_disconnected=False)  # *.4
     p0.run_PARC()
     super_labels = p0.labels
 
@@ -3158,7 +3616,7 @@ def mainHuman():
               too_big_factor=0.05,
               path="/home/shobi/Trajectory/Datasets/HumanCD34/", pseudotime=True, root=1,
               super_cluster_labels=super_labels, super_node_degree_list=p0.node_degree_list, super_terminal_cells=tsi_list, root_str=4823,
-              x_lazy=0.99, alpha_teleport=0.99, humanCD34=True)  # *.4
+              x_lazy=0.99, alpha_teleport=0.99, humanCD34=True, preserve_disconnected=False)  # *.4
     p1.run_PARC()
     labels = p1.labels
     label_df = pd.DataFrame(labels, columns=['parc'])
@@ -3188,7 +3646,7 @@ def mainHuman():
     else:
         #embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'][:,0:15])
         #print('tsne input size', adata_counts.obsm['X_pca'].shape)
-        embedding = umap.UMAP().fit_transform(adata_counts.obsm['X_pca'][:,0:20])
+        embedding =tsnem#umap.UMAP().fit_transform(adata_counts.obsm['X_pca'][:,0:20])
         idx = np.random.randint(len(labels), size=len(labels))
     print('end tsne')
 
@@ -3256,7 +3714,7 @@ def mainHuman():
             where = np.where(np.array(p0.labels)[idx] == group)[0]
         else:
             where = np.where(np.array(p0.labels) == group)[0]
-        ax11.scatter(embedding[where, 0], embedding[where, 1], label=group, c=plt.cm.jet(color))
+        ax11.scatter(embedding[where, 0], embedding[where, 1], label=group, c=np.asarray(plt.cm.jet(color)).reshape(-1,4))
     ax11.legend(fontsize=6)
     ax11.set_title('p0 labels')
 
@@ -3265,7 +3723,7 @@ def mainHuman():
             where = np.where(np.array(p1.labels)[idx] == group)[0]
         else:
             where = np.where(np.array(p1.labels) == group)[0]
-        ax22.scatter(embedding[where, 0], embedding[where, 1], label=group, c=plt.cm.jet(color))
+        ax22.scatter(embedding[where, 0], embedding[where, 1], label=group, c=np.asarray(plt.cm.jet(color)).reshape(-1,4))
     ax22.legend(fontsize=6)
     ax22.set_title('p1 labels')
 
@@ -3312,7 +3770,7 @@ def mainHuman():
         ax2.text(np.mean(x) + 0.05, np.mean(y) + 0.05, 'TS' + str(ti), color='black', zorder=3)
         ax2.legend(fontsize=6)
 
-    draw_sc_evolution_trajectory_pt(p1, embedding, knn_hnsw)
+    draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, p1.full_graph_shortpath)
     '''
     root = 4823
     loc_i = np.where(np.asarray(p0.labels) == p0.root[0])[0]
@@ -3594,7 +4052,7 @@ def mainToy():
             where = np.where(np.array(true_label)[idx] == group)[0]
         else:
             where = np.where(np.array(true_label) == group)[0]
-        ax1.scatter(embedding[where, 0], embedding[where, 1], label=group, c=plt.cm.jet(color))
+        ax1.scatter(embedding[where, 0], embedding[where, 1], label=group, c=np.asarray(plt.cm.jet(color)).reshape(-1,4))
     ax1.legend(fontsize=6)
     ax1.set_title('true labels')
 
