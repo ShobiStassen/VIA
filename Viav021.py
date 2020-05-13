@@ -27,11 +27,12 @@ import palantir #/home/shobi/anaconda3/envs/ViaEnv/lib/python3.7/site-packages/p
 # version before translating chinese on Feb13
 # jan2020 Righclick->GIT->Repository-> PUSH
 def plot_sc_pb(ax, embedding, prob, ti):
-    threshold = np.mean(prob) + 2 * np.std(prob)
-    prob = [x if x < threshold else threshold for x in prob]
+    #threshold = #np.percentile(prob, 95)#np.mean(prob) + 3 * np.std(prob)
+    #print('thresold', threshold, np.max(prob))
+    #prob = [x if x < threshold else threshold for x in prob]
 
     cmap = matplotlib.cm.get_cmap('viridis')
-    norm = matplotlib.colors.Normalize(vmin=0, vmax=threshold)
+    norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
     prob = np.asarray(prob)
 
     c = cmap(norm(prob))
@@ -42,9 +43,12 @@ def plot_sc_pb(ax, embedding, prob, ti):
     c[loc_c, 3] = 0.5
     loc_c = np.where((prob > 0.5) & (prob <= 0.7))[0]
     c[loc_c, 3] = 0.8
+    loc_c = np.where((prob >0.7))[0]
+    c[loc_c, 3] = 0.8
     ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=10, cmap='viridis',
                edgecolors='none')
     ax.set_title('Target: ' + str(ti))
+
 
 
 def simulate_multinomial(vmultinomial):
@@ -1070,7 +1074,7 @@ class PARC:
                  num_threads=-1, distance='l2', time_smallpop=15, pseudotime=False,
                  root=0, path='/home/shobi/Trajectory/', super_cluster_labels=False,
                  super_node_degree_list=False, super_terminal_cells=False, x_lazy=0.95, alpha_teleport=0.99,
-                 root_user="root_cluster", preserve_disconnected=True, dataset="humanCD34", super_terminal_clusters=[]):
+                 root_user="root_cluster", preserve_disconnected=True, dataset="humanCD34", super_terminal_clusters=[], do_magic=False):
         # higher dist_std_local means more edges are kept
         # highter jac_std_global means more edges are kept
         if keep_all_local_dist == 'auto':
@@ -1107,6 +1111,7 @@ class PARC:
         self.preserve_disconnected = preserve_disconnected
         self.dataset = dataset
         self.super_terminal_clusters = super_terminal_clusters
+        self.do_magic = do_magic
 
 
     def get_terminal_clusters(self, A, markov_pt, root_ai):
@@ -1829,6 +1834,7 @@ class PARC:
         print(weight_array)
         bp_array_sc = weight_array.dot(bp_array_clus)
         bp_array_sc = bp_array_sc * 1. / np.max(bp_array_sc, axis=0) #divide cell by max value in that column
+        print('column max:',np.max(bp_array_sc, axis=0))
         #print('sc bp array max', np.max(bp_array_sc))
         #bp_array_sc = bp_array_sc/np.max(bp_array_sc)
         for i, label_ts in enumerate(list(self.terminal_clusters)):
@@ -1836,7 +1842,8 @@ class PARC:
             print('set terminal clus' ,set(self.terminal_clusters))
 
             loc_i = np.where(np.asarray(self.labels) == label_ts)[0]
-            bp_array_sc[loc_i,i]=1
+            loc_noti = np.where(np.asarray(self.labels) != label_ts)[0]
+            if np.max(bp_array_sc[loc_noti,i])==1: bp_array_sc[loc_i,i]=1.2
             print('terminal cluster', label_ts, len(loc_i), loc_i)
         print('sc bp array', bp_array_sc)
         self.single_cell_bp = bp_array_sc
@@ -2280,10 +2287,11 @@ class PARC:
                                     shape=(n_cells, n_cells))
 
         #DO MAGIC IMPUTATION#
-        from sklearn.preprocessing import normalize
-        magic_steps = 3
-        #Transition_full_graph = normalize(csr_full_graph, norm='l1', axis=1) ** magic_steps
-        #imputed_data = pd.DataFrame(np.dot(T_steps.todense(), data), index=data.index, columns=data.columns  )
+        if self.do_magic == True:
+            from sklearn.preprocessing import normalize
+            magic_steps = 3
+            Transition_full_graph = normalize(csr_full_graph, norm='l1', axis=1) ** magic_steps
+            imputed_data = pd.DataFrame(np.dot(Transition_full_graph.todense(), data), index=data.index, columns=data.columns  )
 
         n_original_comp, n_original_comp_labels = connected_components(csr_full_graph, directed=False)
         sources, targets = csr_full_graph.nonzero()
@@ -2763,6 +2771,7 @@ class PARC:
                             cluster_labels_subi[target_terminal])] = prob_ii
                 bp_array = df_graph[pd_columnnames_terminal].values
                 bp_array[np.isnan(bp_array)]=0.00000001
+                print('final bp_array NOT normed by rowsum', bp_array)
                 bp_array = bp_array / bp_array.sum(axis=1)[:, None]
                 bp_array[np.isnan(bp_array)] = 0.00000001
                 print('final bp_array normed by rowsum', bp_array)
@@ -4184,7 +4193,7 @@ def main_Bcell():
 def main():
     dataset = 'Human'#'bcell'##''Human'  # 'Toy'
     if dataset == 'Human':
-        main_Human(ncomps=160, knn=100, p0_random_seed=5, run_palantir_func=False)
+        main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False)
     elif dataset == 'bcell':
         main_Bcell()
     else:
