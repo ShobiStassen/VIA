@@ -177,8 +177,8 @@ def sc_loc_ofsuperCluster_embeddedspace(embedding, p0, p1, idx):
         # labels, distances = p.knn_query(temp, k=1)
         ci_list.append(labelsq[0][0])
         ci_dict[ci] = labelsq[0][0]
-        print('sc_loc nn clusterp0', ci, np.mean(x), np.mean(y))
-        print(embedding[labelsq[0][0], 0], embedding[labelsq[0][0], 1])
+        #print('sc_loc nn clusterp0', ci, np.mean(x), np.mean(y))
+        #print(embedding[labelsq[0][0], 0], embedding[labelsq[0][0], 1])
     return knn_hnsw, ci_dict
 
 
@@ -521,6 +521,8 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
                          title_str="hitting times", ):
     x = X_dimred[:, 0]
     y = X_dimred[:, 1]
+    max_x = np.percentile(x, 90)
+    noise0 = max_x/1000
 
     df = pd.DataFrame({'x': x, 'y': y, 'cluster': cluster_labels, 'super_cluster': super_cluster_labels,
                        'projected_sc_pt': projected_sc_pt},
@@ -600,7 +602,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         if abs(minx - maxx) <= 1:
             very_straight = True
             straight_level = 10
-            noise = 0.01#0.000001 for 2MORGAN # 0.01
+            noise = noise0#0.000001#else 0.01#0.000001 for 2MORGAN # 0.01
             x_super = np.array(
                 [super_start_x, super_end_x, super_start_x, super_end_x,super_start_x, super_end_x, super_start_x, super_end_x, super_start_x + noise, super_end_x + noise,
                  super_start_x - noise, super_end_x - noise, super_mid_x])
@@ -609,7 +611,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
                  super_start_y - noise, super_end_y - noise, super_mid_y])
         else:
             straight_level = 3
-            noise = 0.01#0.000001 for 2MORGAN # 0.01
+            noise = noise0#0.000001#0.01#0.000001 for 2MORGAN # 0.01
             x_super = np.array(
                 [super_start_x, super_end_x, super_start_x, super_end_x,super_start_x, super_end_x, super_start_x, super_end_x, super_start_x + noise, super_end_x + noise,
                  super_start_x - noise, super_end_x - noise])
@@ -637,7 +639,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
             for i in range(k):
                 midpoint_xy.append(list_selected_clus[midpoint_loc[i]])
 
-            noise = 0.05 #0.000001 for 2MORGAN  # 0.05
+            noise = noise0*2# 0.000001#0.05 #0.000001 for 2MORGAN  # 0.05
 
             if k == 1:
                 mid_x = np.array([midpoint_xy[0][0], midpoint_xy[0][0] + noise, midpoint_xy[0][
@@ -689,7 +691,8 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
                 closest_val = xp_val
                 closest_loc = idx_keep[i]
         step = 1
-        head_width = 0.2 #0.05 for mESC #0.00001 (#for 2MORGAN and others) # 0.5#1
+
+        head_width = noise*50##0.2 #0.05 for mESC #0.00001 (#for 2MORGAN and others) # 0.5#1
         if direction_arrow == 1:
             #print('arrow direction', direction_arrow)
             ax2.arrow(xp[closest_loc], preds[closest_loc], xp[closest_loc + step] - xp[closest_loc],
@@ -754,17 +757,17 @@ def csr_mst(adjacency_matrix):
     Tcsr = adjacency_matrix.copy()
     n_components_mst, comp_labels_mst = connected_components(csgraph=Tcsr, directed=False, return_labels=True)
     print('number of components before mst', n_components_mst)
-    print('len Tcsr data', len(Tcsr.data))
+    #print('len Tcsr data', len(Tcsr.data))
     Tcsr.data = -1 * Tcsr.data
     Tcsr.data = Tcsr.data - np.min(Tcsr.data)
     Tcsr.data = Tcsr.data + 1
-    print('len Tcsr data', len(Tcsr.data))
+    #print('len Tcsr data', len(Tcsr.data))
     Tcsr = minimum_spanning_tree(Tcsr)  # adjacency_matrix)
     n_components_mst, comp_labels_mst = connected_components(csgraph=Tcsr, directed=False, return_labels=True)
     print('number of components after mst', n_components_mst)
     Tcsr = (Tcsr + Tcsr.T) * 0.5  # make symmetric
-    print('number of components after symmetric mst', n_components_mst)
-    print('len Tcsr data', len(Tcsr.data))
+    #print('number of components after symmetric mst', n_components_mst)
+    #print('len Tcsr data', len(Tcsr.data))
     return Tcsr
 
 
@@ -1870,6 +1873,68 @@ class VIA:
         sources, targets = sparse_clustergraph.nonzero()
         edgelist = list(zip(sources, targets))
         return sparse_clustergraph, edgelist
+
+    def find_root_iPSC(self, graph_dense, PARC_labels_leiden, root_user, true_labels, super_cluster_labels_sub,
+                       super_node_degree_list):
+        majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
+        graph_node_label = []
+        min_deg = 1000
+        super_min_deg = 1000
+        found_super_and_sub_root = False
+        found_any_root = False
+        true_labels = np.asarray(true_labels)
+
+        deg_list = graph_dense.sum(axis=1).reshape((1, -1)).tolist()[0]
+
+        print('deg list', deg_list)  # locallytrimmed_g.degree()
+
+        for ci, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
+
+            cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
+
+            majority_truth = str(self.func_mode(list(true_labels[cluster_i_loc])))
+
+            if self.super_cluster_labels != False:
+                super_majority_cluster = self.func_mode(list(np.asarray(super_cluster_labels_sub)[cluster_i_loc]))
+                super_majority_cluster_loc = np.where(np.asarray(super_cluster_labels_sub) == super_majority_cluster)[0]
+                super_majority_truth = self.func_mode(list(true_labels[super_majority_cluster_loc]))
+
+                super_node_degree = super_node_degree_list[super_majority_cluster]
+
+                if (str(root_user) == majority_truth) & (str(root_user) == str(super_majority_truth)):
+                    if super_node_degree < super_min_deg:
+                        found_super_and_sub_root = True
+                        root = cluster_i
+                        found_any_root = True
+                        min_deg = deg_list[ci]
+                        super_min_deg = super_node_degree
+                        print('new root is', root, ' with degree', min_deg, 'and super node degree',
+                              super_min_deg)
+            majority_truth_labels[cluster_i_loc] = str(majority_truth) + 'c' + str(cluster_i)
+
+            graph_node_label.append(str(majority_truth) + 'c' + str(cluster_i))
+        if (self.super_cluster_labels == False) | (found_super_and_sub_root == False):
+            print('self.super_cluster_labels', super_cluster_labels_sub, ' foundsuper_cluster_sub and super root',
+                  found_super_and_sub_root)
+            for ic, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
+                cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
+                print('cluster', cluster_i, 'set true labels', set(true_labels))
+                true_labels = np.asarray(true_labels)
+
+                majority_truth = str(self.func_mode(list(true_labels[cluster_i_loc])))
+                print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
+                if (str(root_user) == str(majority_truth)):
+                    print('did not find a super and sub cluster with majority ', root_user)
+                    if deg_list[ic] < min_deg:
+                        root = cluster_i
+                        found_any_root = True
+                        min_deg = deg_list[ic]
+                        print('new root is', root, ' with degree', min_deg, majority_truth)
+        # print('len graph node label', graph_node_label)
+        if found_any_root == False:
+            print('setting arbitrary root', cluster_i)
+            root = cluster_i
+        return graph_node_label, majority_truth_labels, deg_list, root
 
     def find_root_HumanCD34(self, graph_dense, PARC_labels_leiden, root_idx, true_labels):
         majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
@@ -3773,9 +3838,10 @@ def main_Toy(ncomps=100, knn=30, random_seed=41):
         idx = np.random.randint(len(labels), size=len(labels))
     print('end tsne')
 
-    knn_hnsw, ci_list = sc_loc_ofsuperCluster_embeddedspace(embedding, p0, p1, idx)
+    #knn_hnsw, ci_list = sc_loc_ofsuperCluster_embeddedspace(embedding, p0, p1, idx)
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(p0, p1, idx)
     print('super terminal and sub terminal', p0.super_terminal_cells, p1.terminal_clusters)
-    draw_trajectory_gams(embedding, ci_list, labels, super_labels, super_edges,
+    draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, labels, super_labels, super_edges,
                          p1.x_lazy, p1.alpha_teleport, sc_pt_markov, true_label, knn=p0.knn,
                          final_super_terminal=p1.revised_super_terminal_clusters,
                          sub_terminal_clusters=p1.terminal_clusters,
@@ -4477,8 +4543,8 @@ def main_EB(ncomps=100, knn=20, p0_random_seed=21):
     plt.show()
 
     knn_hnsw, ci_list = sc_loc_ofsuperCluster_embeddedspace(U, p0, p1, np.arange(0, len(labels)))
-
-    draw_trajectory_gams(U, ci_list, labels, super_labels, p0.edgelist_maxout,
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(p0, p1, np.arange(0, len(labels)))
+    draw_trajectory_gams(U, super_clus_ds_PCA_loc, labels, super_labels, p0.edgelist_maxout,
                          p1.x_lazy, p1.alpha_teleport, p1.single_cell_pt_markov, time_labels, knn=p0.knn,
                          final_super_terminal=p1.revised_super_terminal_clusters,
                          sub_terminal_clusters=p1.terminal_clusters,
