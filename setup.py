@@ -13,7 +13,7 @@ setuptools.setup(
     author_email = 'shobana.venkat88@gmail.com',
     url = 'https://github.com/ShobiStassen/VIA',
     setup_requires = ['numpy','pybind11'],
-    install_requires=['pybind11','numpy','scipy','pandas','hnswlib','python-igraph','leidenalg==0.7.0','umap-learn','math','multiprocessing', 'sklearn', 'termcolor'],
+    install_requires=['pybind11','numpy','scipy','pandas','hnswlib','python-igraph','leidenalg==0.7.0','umap-learn','math','multiprocessing', 'sklearn', 'termcolor','pygam'],
     long_description=long_description,
     long_description_content_type='text/markdown'
 )
