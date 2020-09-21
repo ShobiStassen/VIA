@@ -21,3 +21,12 @@ We note that the latest version of leidenalg (0.8.0. released April 2020) is slo
 pip install python-igraph, leidenalg==0.7.0, hnswlib, umap-learn
 pip install pyVIA
 ```
+## Examples
+### Human Embryoid 
+save the Raw data matrix as'EBdata.mat'  # the cells have been filtered for too small/large libraries by Moon et al. 2019 
+The function main_EB_clean() preprocesses the cells (normalized by library size, sqrt transformation). It then calls VIA to: plot the pseudotimes, terminal states, lineage pathways and gene-clustermap.
+```
+import pyVia.core as via
+via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20) # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
+```
+
