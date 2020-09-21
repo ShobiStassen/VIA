@@ -23,10 +23,11 @@ pip install pyVIA
 ```
 ## Examples
 ### Human Embryoid 
-save the Raw data matrix as'EBdata.mat'  # the cells have been filtered for too small/large libraries by Moon et al. 2019 
+save the [Raw data](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9Ew4RHf/view?usp=sharing) matrix as'EBdata.mat'  # the cells have been filtered for too small/large libraries by Moon et al. 2019 
+
 The function main_EB_clean() preprocesses the cells (normalized by library size, sqrt transformation). It then calls VIA to: plot the pseudotimes, terminal states, lineage pathways and gene-clustermap.
 ```
 import pyVia.core as via
-via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20) # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
+via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20, foldername = '') # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
 ```
-
+![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/EB_fig.png)
