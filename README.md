@@ -33,6 +33,9 @@ via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20, foldername = '') # Most 
 If you wish to run the data using UMAP or tsne, or require more control of the parameters/outputs, then use the following code:
 ```
 import pyVia.core as via
+#pre-process the data as needed and provide to via as a numpy array
+#root_user is the index of the cell corresponding to a suitable start/root cell
+
 v0 = via.VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,too_big_factor=p0_too_big, 
 root_user=1, dataset='EB', random_seed=p0_random_seed, do_magic_bool=True, is_coarse=True, preserve_disconnected=True) 
 v0.run_VIA()
@@ -57,7 +60,7 @@ plt.show()
 #obtain the single-cell locations of the terminal clusters to be used for visualization of trajectories/lineages 
 super_clus_ds_PCA_loc = via.sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v1.labels)))
 #draw the overall lineage paths on the embedding
-draw_trajectory_gams(Y_phate, super_clus_ds_PCA_loc, p1.labels, v0.labels, v0.edgelist_maxout,
+via.draw_trajectory_gams(Y_phate, super_clus_ds_PCA_loc, p1.labels, v0.labels, v0.edgelist_maxout,
                      v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, time_labels, knn=v0.knn,
                      final_super_terminal=v1.revised_super_terminal_clusters,
                      sub_terminal_clusters=v1.terminal_clusters,
@@ -65,7 +68,7 @@ draw_trajectory_gams(Y_phate, super_clus_ds_PCA_loc, p1.labels, v0.labels, v0.ed
 
 2D_knn_hnsw = via.make_knn_embeddedspace(Y_phate)
 #draw the individual lineage paths and cell-fate probabilities at single-cell level 
-via.draw_sc_evolution_trajectory_dijkstra(v1, Y_phate, 2D_knn_hnsw, p0.full_graph_shortpath,
+via.draw_sc_evolution_trajectory_dijkstra(v1, Y_phate, 2D_knn_hnsw, v0.full_graph_shortpath,
                                       idx=np.arange(0, input_data.shape[0]), X_data=input_data)
 
 plt.show()
