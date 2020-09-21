@@ -10,15 +10,15 @@ pip install pyVIA // tested on linux
 ```
 ### install by cloning repository and running setup.py (ensure dependencies are installed)
 ```
-git clone https://github.com/ShobiStassen/PARC.git 
+git clone https://github.com/ShobiStassen/VIA.git 
 python3 setup.py install // cd into the directory of the cloned PARC folder containing setup.py and issue this command
 ```
 
 ### install dependencies separately if needed (linux)
 If the pip install doesn't work, it usually suffices to first install all the requirements (using pip) and subsequently install parc (also using pip)
-We note that the latest version of leidenalg (0.8.0. released April 2020) is slower than its predecessor. Please ensure that the leidenalg installed is version 0.7.0 for the time being.
+We note that the latest version of leidenalg (0.8.0. released April 2020) is slower than its predecessor. Please ensure that the leidenalg installed is version 0.7.0 for the time being. Some of the examples use umap and/or phate so we make note of them below
 ```
-pip install python-igraph, leidenalg==0.7.0, hnswlib, umap-learn
+pip install python-igraph, leidenalg==0.7.0, hnswlib, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate
 pip install pyVIA
 ```
 ## Examples
