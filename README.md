@@ -74,3 +74,13 @@ via.draw_sc_evolution_trajectory_dijkstra(v1, Y_phate, 2D_knn_hnsw, v0.full_grap
 plt.show()
 ```
 ![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/EB_fig0.png)
+
+### Toy data (Multifurcation and Disconnected)
+Two example toy datasets generated using DynToy are provided. 
+```
+import pyVia.core as via
+via.main_Toy(ncomps=30, knn=20,dataset='Toy3', root_user = 'M1') #multifurcation
+via.main_Toy(ncomps=30, knn=20,dataset='Toy4') #2 disconnected trajectories 
+
+
+```
