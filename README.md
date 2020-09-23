@@ -76,11 +76,11 @@ plt.show()
 ![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/EB_fig0.png)
 
 ### Toy data (Multifurcation and Disconnected)
-Two example toy datasets generated using DynToy are provided. 
+Two example [toy datasets](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing) with annotations are generated using DynToy are provided. 
 ```
 import pyVia.core as via
-via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2) #multifurcation
-via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2) #2 disconnected trajectories
+via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername = ".../Trajectory/Datasets/") #multifurcation
+via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Trajectory/Datasets/") #2 disconnected trajectories
 ```
 ## Output of Multifurcating toy dataset
 ![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png)
