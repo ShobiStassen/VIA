@@ -79,8 +79,10 @@ plt.show()
 Two example toy datasets generated using DynToy are provided. 
 ```
 import pyVia.core as via
-via.main_Toy(ncomps=30, knn=20,dataset='Toy3', root_user = 'M1') #multifurcation
-via.main_Toy(ncomps=30, knn=20,dataset='Toy4') #2 disconnected trajectories 
-
-
+via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2) #multifurcation
+via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2) #2 disconnected trajectories
 ```
+## Output of Multifurcating toy dataset
+![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png)
+## Output of disconnected toy dataset
+![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png)
