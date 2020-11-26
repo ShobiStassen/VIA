@@ -24,9 +24,52 @@ import matplotlib.cm as cm
 import palantir  # /home/shobi/anaconda3/envs/ViaEnv/lib/python3.7/site-packages/palantir
 from termcolor import colored
 import seaborn as sns
+from matplotlib.path import get_path_collection_extents
 
 
-# for EB data, def get_full_paths() graph has 4 NN instead of 3NN and we revise the path to remove clusters that are only visited once (noisy)
+def getbb(sc, ax):
+    """
+    Function to return a list of bounding boxes in data coordinates for a scatter plot.
+    Directly taken from https://stackoverflow.com/questions/55005272/
+    """
+    ax.figure.canvas.draw()  # need to draw before the transforms are set.
+    transform = sc.get_transform()
+    transOffset = sc.get_offset_transform()
+    offsets = sc._offsets
+    paths = sc.get_paths()
+    transforms = sc.get_transforms()
+
+    if not transform.is_affine:
+        paths = [transform.transform_path_non_affine(p) for p in paths]
+        transform = transform.get_affine()
+    if not transOffset.is_affine:
+        offsets = transOffset.transform_non_affine(offsets)
+        transOffset = transOffset.get_affine()
+
+    if isinstance(offsets, np.ma.MaskedArray):
+        offsets = offsets.filled(np.nan)
+
+    bboxes = []
+
+    if len(paths) and len(offsets):
+        if len(paths) < len(offsets):
+            # for usual scatters you have one path, but several offsets
+            paths = [paths[0]] * len(offsets)
+        if len(transforms) < len(offsets):
+            # often you may have a single scatter size, but several offsets
+            transforms = [transforms[0]] * len(offsets)
+
+        for p, o, t in zip(paths, offsets, transforms):
+            result = get_path_collection_extents(
+                transform.frozen(), [p], [t], [o], transOffset.frozen()
+            )
+            # bboxes.append(result.inverse_transformed(ax.transData))
+            bboxes.append(result.transformed(ax.transData.inverted()))
+
+    return bboxes
+
+
+# will be adding scATAC data #buenrostra
 
 # jan2020 Righclick->GIT->Repository-> PUSH
 def plot_sc_pb(ax, embedding, prob, ti):
@@ -37,7 +80,7 @@ def plot_sc_pb(ax, embedding, prob, ti):
     cmap = matplotlib.cm.get_cmap('viridis')
     norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
     prob = np.asarray(prob)
-    print('prob plot stats (min, max, mean)', min(prob), max(prob), np.mean(prob))
+    # print('prob plot stats (min, max, mean)', min(prob), max(prob), np.mean(prob))
     # changing the alpha transapency parameter for plotting points
     c = cmap(norm(prob))
     c = c.reshape(-1, 4)
@@ -49,13 +92,29 @@ def plot_sc_pb(ax, embedding, prob, ti):
     c[loc_c, 3] = 0.8
     loc_c = np.where((prob > 0.7))[0]
     c[loc_c, 3] = 0.8
-    ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=10, cmap='viridis',
+    ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=30, cmap='viridis',
                edgecolors='none')
     ax.set_title('Target: ' + str(ti))
 
 
+def get_loc_terminal_states(via0, X_input):
+    # we need the location of terminal states from first iteration (Via0) to pass onto the second iterations of Via (Via1)
+    # this will allow identification of the terminal-cluster in fine-grained Via1 that best captures the terminal state from coarse Via0
+    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster in PCA space (
+    for tsi in via0.terminal_clusters:
+        loc_i = np.where(np.asarray(via0.labels) == tsi)[0]
+        val_pt = [via0.single_cell_pt_markov[i] for i in loc_i]
+        th_pt = np.percentile(val_pt, 50)  # 50
+        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
+        temp = np.mean(X_input[loc_i], axis=0)
+        labelsq, distances = via0.knn_struct.knn_query(temp, k=1)
+        print(labelsq[0])
+        tsi_list.append(labelsq[0][0])
+    return tsi_list
+
+
 def simulate_multinomial(vmultinomial):
-    #used in Markov Simulations
+    # used in Markov Simulations
     r = np.random.uniform(0.0, 1.0)
     CS = np.cumsum(vmultinomial)
     CS = np.insert(CS, 0, 0)
@@ -65,14 +124,14 @@ def simulate_multinomial(vmultinomial):
 
 
 def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
-    #ci_list first finds location in unsampled PCA space of the location of the super-cluster or sub-terminal-cluster and root
-    #Returns location (index) of cell nearest to the ci_list in the downsampled space
+    # ci_list first finds location in unsampled PCA space of the location of the super-cluster or sub-terminal-cluster and root
+    # Returns location (index) of cell nearest to the ci_list in the downsampled space
     print("dict of terminal state pairs, Super: sub: ", p1.dict_terminal_super_sub_pairs)
     p0_labels = np.asarray(p0.labels)
     p1_labels = np.asarray(p1.labels)
     p1_sc_markov_pt = p1.single_cell_pt_markov
     ci_list = []
-    for ci in list(set(p0.labels)):
+    for ci in range(len(list(set(p0.labels)))):
         if ci in p1.revised_super_terminal_clusters:  # p0.terminal_clusters:
             loc_i = np.where(p1_labels == p1.dict_terminal_super_sub_pairs[ci])[0]
             # loc_i = np.where(p0_labels == ci)[0]
@@ -84,7 +143,7 @@ def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
             labelsq, distances = p0.knn_struct.knn_query(temp, k=1)
             ci_list.append(labelsq[0][0])
 
-        elif ci in p0.root:
+        elif (ci in p0.root) & (len(p0.root) == 1):
             loc_root = np.where(np.asarray(p0.root) == ci)[0][0]
             # print('loc root', loc_root)
             p1_root_label = p1.root[loc_root]
@@ -111,14 +170,16 @@ def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
         p_ds.add_items(X_ds)
         p_ds.set_ef(50)
 
-        new_superclust_index_ds = []
-        for item in ci_list:
+        new_superclust_index_ds = {}
+        for en_item, item in enumerate(ci_list):
             labelsq, distances = p_ds.knn_query(p0.data[item, :], k=1)
-            new_superclust_index_ds.append(labelsq[0][0])
+            # new_superclust_index_ds.append(labelsq[0][0])
+            new_superclust_index_ds.update({en_item: labelsq[0][0]})
+    # print('new_superclust_index_ds',new_superclust_index_ds)
     return new_superclust_index_ds
 
 
-def sc_loc_ofsuperCluster_embeddedspace(embedding, p0, p1, idx):
+def sc_loc_ofsuperCluster_embeddedspace1(embedding, p0, p1, idx):
     # ci_list: single cell location of average location of supercluster based on embedded space hnsw
     # idx is the indices of the subsampled elements
     print("dict of terminal state pairs, Super: sub: ", p1.dict_terminal_super_sub_pairs)
@@ -177,12 +238,22 @@ def sc_loc_ofsuperCluster_embeddedspace(embedding, p0, p1, idx):
         # labels, distances = p.knn_query(temp, k=1)
         ci_list.append(labelsq[0][0])
         ci_dict[ci] = labelsq[0][0]
-        #print('sc_loc nn clusterp0', ci, np.mean(x), np.mean(y))
-        #print(embedding[labelsq[0][0], 0], embedding[labelsq[0][0], 1])
+        print('sc_loc nn clusterp0', ci, np.mean(x), np.mean(y))
+        print(embedding[labelsq[0][0], 0], embedding[labelsq[0][0], 1])
     return knn_hnsw, ci_dict
 
 
-def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, X_data):
+def make_knn_embeddedspace(embedding):
+    # knn struct built in the embedded space to be used for drawing the lineage trajectories onto the 2D plot
+    knn_hnsw = hnswlib.Index(space='l2', dim=embedding.shape[1])
+    knn_hnsw.init_index(max_elements=embedding.shape[0], ef_construction=200, M=16)
+    knn_hnsw.add_items(embedding)
+    knn_hnsw.set_ef(50)
+
+    return knn_hnsw
+
+
+def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx):
     # G is the igraph knn (low K) used for shortest path in high dim space. no idx needed as it's made on full sample
     # knn_hnsw is the knn made in the embedded space used for query to find the nearest point in the downsampled embedding
     #   that corresponds to the single cells in the full graph
@@ -195,6 +266,7 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, X_dat
     p1_labels = np.asarray(p1.labels)[idx]
     p1_sc_pt_markov = list(np.asarray(p1.single_cell_pt_markov)[idx])
     p1_cc = p1.connected_comp_labels
+    X_data = p1.data
 
     X_ds = X_data[idx, :]
     p_ds = hnswlib.Index(space='l2', dim=X_ds.shape[1])
@@ -237,7 +309,7 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, X_dat
         start_time = time.time()
         labelsq1, distances1 = p1.knn_struct.knn_query(X_ds[labels[0][0], :],
                                                        k=1)  # find the nearest neighbor in the PCA-space full graph
-        print('labels root and labels[0]', root1_list[p1_cc[ti]], labels[0])
+        # print('labels root and labels[0]', root1_list[p1_cc[ti]], labels[0])
 
         path = G.get_shortest_paths(root1_list[p1_cc[ti]], to=labelsq1[0][0])  # weights='weight')
         # G is the knn of all sc points
@@ -246,14 +318,14 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, X_dat
         # get the nearest-neighbor in this downsampled PCA-space graph. These will make the new path-way points
         path = path[0]
 
-        print(f"get_shortest_paths time: {time.time()-start_time}")
-        print('paths sc indices', path)
+        # print(f"get_shortest_paths time: {time.time()-start_time}")
+        # print('paths sc indices', path)
         # clusters of path
         cluster_path = []
         for cell_ in path:
             cluster_path.append(p1.labels[cell_])
 
-        print(colored('cluster_path', 'green'), colored('terminal state: ', 'blue'), ti, cluster_path)
+        # print(colored('cluster_path', 'green'), colored('terminal state: ', 'blue'), ti, cluster_path)
         revised_cluster_path = []
         revised_sc_path = []
         for enum_i, clus in enumerate(cluster_path):
@@ -266,7 +338,7 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, X_dat
                     revised_cluster_path.append(clus)
                     revised_sc_path.append(path[enum_i])
         print(colored('cluster_path_revised', 'green'), colored('terminal state: ', 'blue'), ti, revised_cluster_path)
-        print(colored('sc_path_revised', 'green'), colored('terminal state: ', 'blue'), ti, revised_sc_path)
+        # print(colored('sc_path_revised', 'green'), colored('terminal state: ', 'blue'), ti, revised_sc_path)
         path = revised_sc_path  # (based on hi-dim PCA KNN)
 
         for pii in path:
@@ -287,7 +359,7 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, X_dat
             orange_m[enum_point, 1] = embedding[point, 1]
             orange_m[enum_point, 2] = p1_sc_pt_markov[point]
         from sklearn.neighbors import NearestNeighbors
-        k_orange = 3  # increasing can smoothen in simple trajectories (Toy)
+        k_orange = min(3, n_orange)  # increasing can smoothen in simple trajectories (Toy)
         nbrs = NearestNeighbors(n_neighbors=k_orange, algorithm='ball_tree').fit(
             orange_m[:, 0:])  # make a knn in low-dim space using points of path in embedded space
         distances, indices = nbrs.kneighbors(orange_m[:, 0:])
@@ -304,7 +376,7 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, X_dat
 
         orange_adjacency_knn = csr_matrix((np.array(dist_list), (np.array(row_list), np.array(col_list))),
                                           shape=(n_orange, n_orange))
-        print('orange adj knn shape', orange_adjacency_knn.shape)
+        # print('orange adj knn shape', orange_adjacency_knn.shape)
 
         n_mst, comp_labels_mst = connected_components(csgraph=orange_adjacency_knn, directed=False, return_labels=True)
 
@@ -347,7 +419,7 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, X_dat
             G_orange = ig.Graph(n=orange_adjacency_knn.shape[0], edges=orange_edgelist,
                                 edge_attrs={'weight': orange_adjacency_knn.data.tolist()}, )
             path_orange = G_orange.get_shortest_paths(0, to=orange_adjacency_knn.shape[0] - 1, weights='weight')[0]
-            print('path orange', path_orange)
+            # print('path orange', path_orange)
             len_path_orange = len(path_orange)
 
             for path_i in range(len_path_orange - 1):
@@ -434,7 +506,7 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, X_dat
                 prev_y2 = cur_y2
 
         ax.scatter(x_sc, y_sc, color='pink', zorder=3, label=str(ti), s=22)
-        ax.text(x_sc + 0.5, y_sc + 0.5, 'TS ' + str(ti), color='black')
+        # ax.text(x_sc + 0.5, y_sc + 0.5, 'TS ' + str(ti), color='black')
 
     return
 
@@ -464,12 +536,11 @@ def get_biased_weights(edgelist, weights, pt, round_no=1):
     edgelist_hi = [edgelist[i] for i in loc_high_weights]
 
     for i in loc_high_weights:
-        # print('loc of high weight along edgeweight', i)
+
         start = edgelist[i][0]
         end = edgelist[i][1]
         # print('start and end node', start, end)
         if (start in loc_high_pt) | (end in loc_high_pt):
-            # print("found a high pt high weight node", (start, end), pt[start], pt[end])
             weights[i] = 0.5 * np.mean(weights)
 
     upper_lim = np.percentile(weights, 90)  # 80
@@ -486,12 +557,7 @@ def get_biased_weights(edgelist, weights, pt, round_no=1):
         Bias_ab = K / ((C + math.exp(b * (t_ab + c)))) ** nu
         new_weight = (Bias_ab * P_ab)
         bias_weight.append(new_weight)
-        # print('tab', t_ab, 'pab', P_ab, 'biased_pab', new_weight)
-    # print('original weights', len(weights), list(enumerate(zip(edgelist, weights))))
-    # print('bias weights', list(enumerate(zip(edgelist, bias_weight))))
-    # print('length bias weights', len(bias_weight))
-    # bias_weight=np.asarray(bias_weight)
-    # bias_weight = (bias_weight-np.min(bias_weight)+0.1)/(np.max(bias_weight)-np.min(bias_weight)+0.1)
+
     return list(bias_weight)
 
 
@@ -518,11 +584,11 @@ def most_likely_path(P_transition_absorbing_markov, start_i, end_i):
 def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_cluster_labels, super_edgelist, x_lazy,
                          alpha_teleport,
                          projected_sc_pt, true_label, knn, ncomp, final_super_terminal, sub_terminal_clusters,
-                         title_str="hitting times", ):
+                         title_str="hitting times", super_root=[0]):
     x = X_dimred[:, 0]
     y = X_dimred[:, 1]
     max_x = np.percentile(x, 90)
-    noise0 = max_x/1000
+    noise0 = max_x / 1000
 
     df = pd.DataFrame({'x': x, 'y': y, 'cluster': cluster_labels, 'super_cluster': super_cluster_labels,
                        'projected_sc_pt': projected_sc_pt},
@@ -530,13 +596,10 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
     df_mean = df.groupby('cluster', as_index=False).mean()
     sub_cluster_isin_supercluster = df_mean[['cluster', 'super_cluster']]
 
-    print('sub_cluster_isin_supercluster', sub_cluster_isin_supercluster)
     sub_cluster_isin_supercluster = sub_cluster_isin_supercluster.sort_values(by='cluster')
     sub_cluster_isin_supercluster['int_supercluster'] = sub_cluster_isin_supercluster['super_cluster'].round(0).astype(
         int)
-    print('sub_cluster_isin_supercluster', sub_cluster_isin_supercluster)
 
-    print('final_super_terminal', final_super_terminal)
     df_super_mean = df.groupby('super_cluster', as_index=False).mean()
 
     pt = df_super_mean['projected_sc_pt'].values
@@ -545,16 +608,30 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
     pt_sub = [str(int(i)) for i in df_mean['projected_sc_pt'].values]
 
     f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
-    num_parc_group = len(set(true_label))
-    line = np.linspace(0, 1, num_parc_group)
+    num_true_group = len(set(true_label))
+    num_cluster = len(set(super_cluster_labels))
+    line = np.linspace(0, 1, num_true_group)
     for color, group in zip(line, sorted(set(true_label))):
         where = np.where(np.array(true_label) == group)[0]
         ax1.scatter(X_dimred[where, 0], X_dimred[where, 1], label=group, c=np.asarray(plt.cm.jet(color)).reshape(-1, 4),
-                    alpha=0.5, s=4)
+                    alpha=0.5, s=60)  # 0.5 and 4
     ax1.legend(fontsize=6)
     ax1.set_title('true labels, ncomps:' + str(ncomp) + '. knn:' + str(knn))
-    for e_i, (start, end) in enumerate(super_edgelist):
-        print('start and end', start, end)
+
+    G_orange = ig.Graph(n=num_cluster, edges=super_edgelist)
+    ll_ = []
+    for fst_i in final_super_terminal:
+        print('draw traj gams:', G_orange.get_shortest_paths(super_root[0], to=fst_i))
+        path_orange = G_orange.get_shortest_paths(super_root[0], to=fst_i)[0]
+        len_path_orange = len(path_orange)
+        for enum_edge, edge_fst in enumerate(path_orange):
+            if enum_edge < (len_path_orange - 1):
+                ll_.append((edge_fst, path_orange[enum_edge + 1]))
+        # print('path orange in trajectory gams', path_orange)
+        # print('ll_',set(ll_))
+    for e_i, (start, end) in enumerate(
+            super_edgelist):  # enumerate(list(set(ll_))):# : use the ll_ if you want to simplify the curves
+        # print('start and end', start, end)
 
         if pt[start] >= pt[end]:
             temp = end
@@ -571,7 +648,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         super_end_x = X_dimred[sc_supercluster_nn[end], 0]  # df[df['super_cluster'] == end].mean()['x']
         super_start_y = X_dimred[sc_supercluster_nn[start], 1]  # df[df['super_cluster'] == start].mean()['y']
         super_end_y = X_dimred[sc_supercluster_nn[end], 1]  # df[df['super_cluster'] == end].mean()['y']
-        #print('super_start_x', start, super_start_x, super_start_y)
+        # print('super_start_x', start, super_start_x, super_start_y)
         if super_start_x > super_end_x: direction_arrow = -1
         ext_maxx = False
         minx = min(super_start_x, super_end_x)
@@ -592,7 +669,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
 
         x_val = x_val[idx_keep]  # X_dimred[idx_keep,0]#
         y_val = y_val[idx_keep]  # X_dimred[idx_keep,1]# y_val[idx_keep]
-        print('start and end', start, '', end)
+        # print('start and end', start, '', end)
 
         super_mid_x = (super_start_x + super_end_x) / 2
         super_mid_y = (super_start_y + super_end_y) / 2
@@ -602,21 +679,25 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         if abs(minx - maxx) <= 1:
             very_straight = True
             straight_level = 10
-            noise = noise0#0.000001#else 0.01#0.000001 for 2MORGAN # 0.01
+            noise = noise0  # 0.000001#else 0.01#0.000001 for 2MORGAN # 0.01
             x_super = np.array(
-                [super_start_x, super_end_x, super_start_x, super_end_x,super_start_x, super_end_x, super_start_x, super_end_x, super_start_x + noise, super_end_x + noise,
+                [super_start_x, super_end_x, super_start_x, super_end_x, super_start_x, super_end_x, super_start_x,
+                 super_end_x, super_start_x + noise, super_end_x + noise,
                  super_start_x - noise, super_end_x - noise, super_mid_x])
             y_super = np.array(
-                [super_start_y, super_end_y, super_start_y, super_end_y,super_start_y, super_end_y, super_start_y, super_end_y, super_start_y + noise, super_end_y + noise,
+                [super_start_y, super_end_y, super_start_y, super_end_y, super_start_y, super_end_y, super_start_y,
+                 super_end_y, super_start_y + noise, super_end_y + noise,
                  super_start_y - noise, super_end_y - noise, super_mid_y])
         else:
             straight_level = 3
-            noise = noise0#0.000001#0.01#0.000001 for 2MORGAN # 0.01
+            noise = noise0  # 0.000001#0.01#0.000001 for 2MORGAN # 0.01
             x_super = np.array(
-                [super_start_x, super_end_x, super_start_x, super_end_x,super_start_x, super_end_x, super_start_x, super_end_x, super_start_x + noise, super_end_x + noise,
+                [super_start_x, super_end_x, super_start_x, super_end_x, super_start_x, super_end_x, super_start_x,
+                 super_end_x, super_start_x + noise, super_end_x + noise,
                  super_start_x - noise, super_end_x - noise])
             y_super = np.array(
-                [super_start_y, super_end_y, super_start_y, super_end_y,super_start_y, super_end_y, super_start_y, super_end_y, super_start_y + noise, super_end_y + noise,
+                [super_start_y, super_end_y, super_start_y, super_end_y, super_start_y, super_end_y, super_start_y,
+                 super_end_y, super_start_y + noise, super_end_y + noise,
                  super_start_y - noise, super_end_y - noise])
 
         for i in range(straight_level):  # DO THE SAME FOR A MIDPOINT TOO
@@ -639,7 +720,8 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
             for i in range(k):
                 midpoint_xy.append(list_selected_clus[midpoint_loc[i]])
 
-            noise = noise0*2# 0.000001#0.05 #0.000001 for 2MORGAN  # 0.05
+            noise = noise0 * 2
+            # 0.000001#0.05 #0.000001 for 2MORGAN  # 0.05
 
             if k == 1:
                 mid_x = np.array([midpoint_xy[0][0], midpoint_xy[0][0] + noise, midpoint_xy[0][
@@ -678,7 +760,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
             idx_keep = np.where((xp <= (maxx)) & (xp >= (minx)))[0]  # maxx-3
 
         # cc = ['black', 'red', 'blue', 'yellow', 'pink'][random.randint(0, 4)]
-        ax2.plot(XX, preds, linewidth=1, c='dimgray')  # 1
+        ax2.plot(XX, preds, linewidth=2, c='#323538')  # #2 1 #dimgray
 
         # med_loc = np.where(xp == np.median(xp[idx_keep]))[0]
         mean_temp = np.mean(xp[idx_keep])
@@ -692,18 +774,19 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
                 closest_loc = idx_keep[i]
         step = 1
 
-        head_width = noise*50##0.2 #0.05 for mESC #0.00001 (#for 2MORGAN and others) # 0.5#1
+        head_width = noise * 25  # 40#30  ##0.2 #0.05 for mESC #0.00001 (#for 2MORGAN and others) # 0.5#1
         if direction_arrow == 1:
-            #print('arrow direction', direction_arrow)
+            # print('arrow direction', direction_arrow)
             ax2.arrow(xp[closest_loc], preds[closest_loc], xp[closest_loc + step] - xp[closest_loc],
-                      preds[closest_loc + step] - preds[closest_loc], shape='full', lw=0, length_includes_head=True,
-                      head_width=head_width, color='gray')  # , head_starts_at_zero = direction_arrow )
+                      preds[closest_loc + step] - preds[closest_loc], shape='full', lw=0, length_includes_head=False,
+                      # True
+                      head_width=head_width, color='#323538')  # , head_starts_at_zero = direction_arrow )
 
         else:
             ax2.arrow(xp[closest_loc], preds[closest_loc], xp[closest_loc - step] - xp[closest_loc],
-                      preds[closest_loc - step] - preds[closest_loc], shape='full', lw=0, length_includes_head=True,
-                      head_width=head_width, color='gray')#dimgray
-
+                      preds[closest_loc - step] - preds[closest_loc], shape='full', lw=0, length_includes_head=False,
+                      # True
+                      head_width=head_width, color='#323538')  # dimgray head_width=head_width
 
     c_edge = []
     width_edge = []
@@ -711,7 +794,8 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
     super_cluster_label = []
     terminal_count_ = 0
     dot_size = []
-    for i in range(len(set(super_cluster_labels))):
+    # for i in list((set(super_cluster_labels))):#range(len(set(super_cluster_labels))):
+    for i in sc_supercluster_nn:
         if i in final_super_terminal:
             print('super cluster', i, 'is a super terminal with sub_terminal cluster',
                   sub_terminal_clusters[terminal_count_])
@@ -725,9 +809,9 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
             width_edge.append(0)
             c_edge.append('black')
             pen_color.append('red')
-            # super_cluster_label.append(str(i))
-            super_cluster_label.append('')
-            dot_size.append(0)  # 40
+            super_cluster_label.append(str(' '))  # i
+            # super_cluster_label.append('')
+            dot_size.append(00)  # 20
 
     # ax2.scatter(x_cluster, y_cluster, c='red') #doesnt visualize as well to just take the embedding cluster-mean x,y values
 
@@ -739,35 +823,36 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
     # ax2.text(x_cluster[i], y_cluster[i], 'c' + str(i))
     ax2.set_title('lazy:' + str(x_lazy) + ' teleport' + str(alpha_teleport) + 'super_knn:' + str(knn))
     # ax2.set_title('super_knn:' + str(knn) )
-    ax2.scatter(X_dimred[:, 0], X_dimred[:, 1], c=projected_sc_pt, cmap='viridis_r', alpha=0.5, s=6)
+    ax2.scatter(X_dimred[:, 0], X_dimred[:, 1], c=projected_sc_pt, cmap='viridis_r', alpha=0.7, s=50)  # 6
     # ax2.scatter(df_super_mean['x'], df_super_mean['y'], c='black', s=60, edgecolors = c_edge, linewidth = width_edge)
     count_ = 0
     # sc_supercluster_nn = [sc_supercluster_nn[scs] for scs in sc_supercluster_nn]
-    for i, c, w, pc, dsz in zip(sc_supercluster_nn, c_edge, width_edge, pen_color, dot_size):
+    loci = [sc_supercluster_nn[key] for key in sc_supercluster_nn]
+    for i, c, w, pc, dsz in zip(loci, c_edge, width_edge, pen_color, dot_size):  # sc_supercluster_nn
         ax2.scatter(X_dimred[i, 0], X_dimred[i, 1], c='black', s=dsz, edgecolors=c, linewidth=w)
-        ax2.text(X_dimred[i, 0] + 0.5, X_dimred[i, 1] + 0.5, super_cluster_label[count_],
-                 color=pc)  # using the SC_NN location is good
+        # ax2.text(X_dimred[i, 0] + 0.5, X_dimred[i, 1] + 0.5, super_cluster_label[count_], color=pc)  # using the SC_NN location is good
         count_ = count_ + 1
 
     plt.title(title_str)
     return
 
+
 def csr_mst(adjacency_matrix):
     # return minimum spanning tree from adjacency matrix (csr)
     Tcsr = adjacency_matrix.copy()
     n_components_mst, comp_labels_mst = connected_components(csgraph=Tcsr, directed=False, return_labels=True)
-    print('number of components before mst', n_components_mst)
-    #print('len Tcsr data', len(Tcsr.data))
+    # print('number of components before mst', n_components_mst)
+    # print('len Tcsr data', len(Tcsr.data))
     Tcsr.data = -1 * Tcsr.data
     Tcsr.data = Tcsr.data - np.min(Tcsr.data)
     Tcsr.data = Tcsr.data + 1
-    #print('len Tcsr data', len(Tcsr.data))
+    # print('len Tcsr data', len(Tcsr.data))
     Tcsr = minimum_spanning_tree(Tcsr)  # adjacency_matrix)
     n_components_mst, comp_labels_mst = connected_components(csgraph=Tcsr, directed=False, return_labels=True)
-    print('number of components after mst', n_components_mst)
+    # print('number of components after mst', n_components_mst)
     Tcsr = (Tcsr + Tcsr.T) * 0.5  # make symmetric
-    #print('number of components after symmetric mst', n_components_mst)
-    #print('len Tcsr data', len(Tcsr.data))
+    # print('number of components after symmetric mst', n_components_mst)
+    # print('len Tcsr data', len(Tcsr.data))
     return Tcsr
 
 
@@ -777,7 +862,7 @@ def connect_all_components(MSTcsr, cluster_graph_csr, adjacency_matrix):
     n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
     while n_components > 1:
         sub_td = MSTcsr[comp_labels == 0, :][:, comp_labels != 0]
-        print('minimum value of link connecting components', np.min(sub_td.data))
+        # print('minimum value of link connecting components', np.min(sub_td.data))
         locxy = scipy.sparse.find(MSTcsr == np.min(sub_td.data))
         for i in range(len(locxy[0])):
             if (comp_labels[locxy[0][i]] == 0) & (comp_labels[locxy[1][i]] != 0):
@@ -794,6 +879,7 @@ def local_pruning_clustergraph_mst(adjacency_matrix, global_pruning_std=1, max_o
                                    preserve_disconnected_after_pruning=False):
     # larger pruning_std factor means less pruning
     # the mst is only used to reconnect components that become disconnect due to pruning
+    print('global pruning std', global_pruning_std, 'max outoing', max_outgoing)
     from scipy.sparse.csgraph import minimum_spanning_tree
 
     Tcsr = csr_mst(adjacency_matrix)
@@ -837,18 +923,22 @@ def local_pruning_clustergraph_mst(adjacency_matrix, global_pruning_std=1, max_o
 
     cluster_graph_csr.data = cluster_graph_csr.data / (np.std(cluster_graph_csr.data))  # normalize
     threshold_global = np.mean(cluster_graph_csr.data) - global_pruning_std * np.std(cluster_graph_csr.data)
+    # print('threshold global', threshold_global, ' mean:', np.mean(cluster_graph_csr.data))
     mask |= (cluster_graph_csr.data < (threshold_global))  # smaller Jaccard weight means weaker edge
 
     cluster_graph_csr.data[mask] = 0
     cluster_graph_csr.eliminate_zeros()
-    print('shape of cluster graph', cluster_graph_csr.shape)
+    # print('shape of cluster graph', cluster_graph_csr.shape)
 
     n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
     print('number of connected components after pruning', n_components)
     print('number of connected components after pruning', comp_labels)
+    # print('n_components_0', n_components_0)
     n_components_preserve = n_components_0
     if preserve_disconnected_after_pruning == True: n_components_preserve = n_components
+    # if (n_components > n_components_0): print('n_components > n_components_0',n_components ,'is bigger than', n_components_0)
     if (preserve_disconnected == True) & (n_components > n_components_0):  # preserve initial disconnected components
+
         Td = Tcsr.todense()
         Td[Td == 0] = 999.999
         n_components_ = n_components
@@ -857,7 +947,7 @@ def local_pruning_clustergraph_mst(adjacency_matrix, global_pruning_std=1, max_o
                 loc_x = np.where(comp_labels_0 == i)[0]
 
                 len_i = len(set(comp_labels[loc_x]))
-                #print('locx', loc_x, len_i)
+                # print('locx', loc_x, len_i)
 
                 while len_i > 1:
                     s = list(set(comp_labels[loc_x]))
@@ -868,19 +958,19 @@ def local_pruning_clustergraph_mst(adjacency_matrix, global_pruning_std=1, max_o
                     # print('subtd-min', np.min(sub_td))
 
                     locxy = np.where(Td == np.min(sub_td))
-
+                    # print('locxy',locxy)
                     for i in range(len(locxy[0])):
                         if (comp_labels[locxy[0][i]] != comp_labels[locxy[1][i]]):
                             x = locxy[0][i]
                             y = locxy[1][i]
                     minval = adjacency_matrix[x, y]
-                    print('inside reconnecting components while preserving original ', x, y, minval)
+                    # print('inside reconnecting components while preserving original ', x, y, minval)
                     cluster_graph_csr[x, y] = minval
                     n_components_, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False,
                                                                       return_labels=True)
                     loc_x = np.where(comp_labels_0 == i)[0]
                     len_i = len(set(comp_labels[loc_x]))
-                print('number of connected componnents after reconnecting ', n_components_)
+        print('number of connected componnents after reconnecting ', n_components_)
 
     if (n_components > 1) & (preserve_disconnected == False):
         cluster_graph_csr = connect_all_components(Tcsr, cluster_graph_csr, adjacency_matrix)
@@ -894,8 +984,8 @@ def local_pruning_clustergraph_mst(adjacency_matrix, global_pruning_std=1, max_o
     trimmed_n = (initial_links_n - final_links_n) * 100 / initial_links_n
     trimmed_n_glob = (initial_links_n - len(edgeweights)) / initial_links_n
     if global_pruning_std < 0.5:
-        print("percentage links trimmed from local pruning relative to start", trimmed_n)
-        print("percentage links trimmed from global pruning relative to start", trimmed_n_glob)
+        print("percentage links trimmed from local pruning relative to start {:.1f}".format(trimmed_n))
+        print("percentage links trimmed from global pruning relative to start {:.1f}".format(trimmed_n_glob))
     return edgeweights, edgelist, comp_labels
 
 
@@ -919,14 +1009,16 @@ def get_sparse_from_igraph(graph, weight_attr=None):
 class VIA:
     def __init__(self, data, true_label=None, anndata=None, dist_std_local=2, jac_std_global='median',
                  keep_all_local_dist='auto',
-                 too_big_factor=0.4, small_pop=10, jac_weighted_edges=True, knn=30, n_iter_leiden=5, random_seed=42,
-                 num_threads=-1, distance='l2', time_smallpop=15, pseudotime=False,
-                 path='/home/shobi/Trajectory/', super_cluster_labels=False,
+                 too_big_factor=0.4, resolution_parameter=1.0, partition_type="ModularityVP", small_pop=10,
+                 jac_weighted_edges=True, knn=30, n_iter_leiden=5, random_seed=42,
+                 num_threads=-1, distance='l2', time_smallpop=15,
+                 super_cluster_labels=False,
                  super_node_degree_list=False, super_terminal_cells=False, x_lazy=0.95, alpha_teleport=0.99,
                  root_user="root_cluster", preserve_disconnected=True, dataset="humanCD34", super_terminal_clusters=[],
-                 do_magic_bool=False, is_coarse=True, csr_full_graph='', ig_full_graph='', csr_array_pruned='',
-                 full_neighbor_array='', embedding=None, df_annot=None, preserve_disconnected_after_pruning=False,
-                 secondary_annotations=None):
+                 do_magic_bool=False, is_coarse=True, csr_full_graph='', csr_array_locally_pruned='', ig_full_graph='',
+                 full_neighbor_array='', full_distance_array='', embedding=None, df_annot=None,
+                 preserve_disconnected_after_pruning=False,
+                 secondary_annotations=None, pseudotime_threshold_TS=30):
         # higher dist_std_local means more edges are kept
         # highter jac_std_global means more edges are kept
         if keep_all_local_dist == 'auto':
@@ -935,6 +1027,8 @@ class VIA:
             else:
                 keep_all_local_dist = False
 
+        if resolution_parameter != 1:
+            partition_type = "RBVP"  # Reichardt and Bornholdt’s Potts model. Note that this is the same as ModularityVertexPartition when setting 𝛾 = 1 and normalising by 2m
         self.data = data
         self.true_label = true_label
         self.anndata = anndata
@@ -942,6 +1036,8 @@ class VIA:
         self.jac_std_global = jac_std_global  ##0.15 is also a recommended value performing empirically similar to 'median'
         self.keep_all_local_dist = keep_all_local_dist
         self.too_big_factor = too_big_factor  ##if a cluster exceeds this share of the entire cell population, then the PARC will be run on the large cluster. at 0.4 it does not come into play
+        self.resolution_parameter = resolution_parameter
+        self.partition_type = partition_type
         self.small_pop = small_pop  # smallest cluster population to be considered a community
         self.jac_weighted_edges = jac_weighted_edges
         self.knn = knn
@@ -950,9 +1046,6 @@ class VIA:
         self.num_threads = num_threads  # number of threads used in KNN search/construction
         self.distance = distance  # Euclidean distance 'l2' by default; other options 'ip' and 'cosine'
         self.time_smallpop = time_smallpop
-        self.pseudotime = pseudotime
-
-        self.path = path
 
         self.super_cluster_labels = super_cluster_labels
         self.super_node_degree_list = super_node_degree_list
@@ -967,12 +1060,15 @@ class VIA:
         self.is_coarse = is_coarse
         self.csr_full_graph = csr_full_graph
         self.ig_full_graph = ig_full_graph
-        self.csr_array_pruned = csr_array_pruned
+        # self.csr_array_pruned = csr_array_pruned
+        self.csr_array_locally_pruned = csr_array_locally_pruned
         self.full_neighbor_array = full_neighbor_array
+        self.full_distance_array = full_distance_array
         self.embedding = embedding
         self.df_annot = df_annot
         self.preserve_disconnected_after_pruning = preserve_disconnected_after_pruning
         self.secondary_annotations = secondary_annotations
+        self.pseudotime_threshold_TS = pseudotime_threshold_TS
 
     def knngraph_visual(self, data_visual, knn_umap=15, downsampled=False):
         k_umap = knn_umap
@@ -1044,11 +1140,11 @@ class VIA:
         if n_ <= 10: n_outlier_std = 3
         if (n_ <= 40) & (n_ > 10): n_outlier_std = 2
 
-        if n_ >= 40: n_outlier_std = 2 # 1
+        if n_ >= 40: n_outlier_std = 2  # 1
 
         pop_list = []
 
-        print('get terminal', set(self.labels), np.where(self.labels == 0))
+        # print('get terminal', set(self.labels), np.where(self.labels == 0))
         for i in list(set(self.labels)):
             pop_list.append(len(np.where(self.labels == i)[0]))
         # we weight the out-degree based on the population of clusters to avoid allowing small clusters to become the terminals based on population alone
@@ -1076,10 +1172,10 @@ class VIA:
         closeness_list = [i for i, score in enumerate(closeness_score) if
                           score < (np.mean(closeness_score_takeout_outlier) - 0 * np.std(
                               closeness_score_takeout_outlier))]
-        print('closeness_score ', [(i, score) for i, score in enumerate(closeness_score)])
+        # print('closeness_score ', [(i, score) for i, score in enumerate(closeness_score)])
         print('closeness_score shortlist', closeness_list)
 
-        print('betweeness_score ', [(i, score) for i, score in enumerate(betweenness_score)])
+        # print('betweeness_score ', [(i, score) for i, score in enumerate(betweenness_score)])
         print('betweeness_score shortlist', betweenness_list)
 
         out_deg = A_new.sum(axis=1)
@@ -1097,16 +1193,15 @@ class VIA:
         if n_ <= 10:
             loc_deg = np.where(out_deg <= np.percentile(out_deg, 50))[0]
             print('low deg super', loc_deg)
-            loc_pt = np.where(markov_pt >= np.percentile(markov_pt, 60))[
-                0]  # 60 Ttoy #10 for human but not sure ever in play
-            loc_deg_in = np.where(in_deg <= np.percentile(in_deg, 10))[0]
+            loc_pt = np.where(markov_pt >= np.percentile(markov_pt, 50))[0]
+            # loc_deg_in = np.where(in_deg <= np.percentile(in_deg, 10))[0]
             print('high pt super', loc_pt)
         if (n_ <= 40) & (n_ > 10):
             loc_deg = np.where(out_deg <= np.percentile(out_deg, 50))[
                 0]  # np.mean(out_deg[out_deg>(np.mean(out_deg)-1*np.std(out_deg))]))[0]#np.percentile(out_deg, 50))[0]#np.mean(out_deg[out_deg>(np.mean(out_deg)-1*np.std(out_deg))]))[0]#np.percentile(out_deg, 50))[0]  # 30 for Toy #was 50 for Human
-            loc_deg_in = np.where(in_deg <= np.percentile(in_deg, 20))[0]
+            # loc_deg_in = np.where(in_deg <= np.percentile(in_deg, 20))[0]
             print('low deg super', loc_deg)
-            print('low in-deg super', loc_deg_in)
+            # print('low in-deg super', loc_deg_in)
             loc_pt = np.where(markov_pt >= np.percentile(markov_pt, 10))[0]  # 60 Toy #10 Human
             print('high pt super', loc_pt)
         if n_ > 40:
@@ -1114,7 +1209,7 @@ class VIA:
             print('low deg', loc_deg)
             loc_pt = np.where(markov_pt >= np.percentile(markov_pt, 30))[0]  # 60Toy #30 Human #40 for 2M until Aug 28
             print('high pt', loc_pt)
-            loc_deg_in = np.where(in_deg <= np.percentile(in_deg, 10))[0]
+            # loc_deg_in = np.where(in_deg <= np.percentile(in_deg, 10))[0]
         loc_deg = outdeg_list
 
         terminal_clusters_1 = list(set(closeness_list) & set(betweenness_list))
@@ -1140,8 +1235,7 @@ class VIA:
                     # print('terminal state', terminal_i)
                     if item in terminal_clusters:
                         ts_neigh.append(item)
-                        print('item and terminal',
-                              item, terminal_clusters)
+                        # print('item and terminal', item, terminal_clusters)
                         count_nn = count_nn + 1
 
                     if n_ >= 10:
@@ -1150,7 +1244,7 @@ class VIA:
                                 terminal_clusters.remove(terminal_i)
                                 print('we removed cluster', terminal_i, 'from the shortlist of terminal states ')
                                 removed_terminal_i = True
-                if count_nn >= 3:
+                if count_nn >= 2:  # 2
                     if removed_terminal_i == False:
                         temp_remove = terminal_i
                         temp_time = markov_pt[terminal_i]
@@ -1314,7 +1408,7 @@ class VIA:
             # avoid division by zero on states that were never reached (e.g. terminal states that come after the target terminal state)
 
         cumstateChangeHist_all[cumstateChangeHist_all == 0] = 1
-        #prob_ = cumstateChangeHist / cumstateChangeHist_all
+        # prob_ = cumstateChangeHist / cumstateChangeHist_all
 
         np.set_printoptions(precision=3)
         q.append([cumstateChangeHist, cumstateChangeHist_all])
@@ -1390,9 +1484,9 @@ class VIA:
             n_jobs = 1
         elif ncpu > 2:
             n_jobs = min(ncpu - 1, 5)
-        print('njobs', n_jobs)
+        # print('njobs', n_jobs)
         num_sim_pp = int(num_sim / n_jobs)  # num of simulations per process
-        print('num_sim_pp', num_sim_pp)
+        # print('num_sim_pp', num_sim_pp)
 
         jobs = []
 
@@ -1446,7 +1540,7 @@ class VIA:
             loc_1 = np.where(prob_ == 1)
 
             loc_1 = loc_1[1]
-            #print('loc_1', loc_1)
+            # print('loc_1', loc_1)
             # prob_[0, terminal_state] = 0  # starting at the root, index=0
             prob_[0, loc_1] = 0
             # print('zerod out prob', prob_)
@@ -1456,9 +1550,9 @@ class VIA:
         # prob_[0, terminal_state] = 1
         prob_[0, loc_1] = 1
         # prob_ = np.sqrt(prob_)
-        print('np.max', np.max(prob_))
+        # print('np.max', np.max(prob_))
         # prob_ = prob_/np.max(prob_)
-        print('scaled prob', prob_)
+        # print('scaled prob', prob_)
         return list(prob_)[0]
 
     def simulate_markov(self, A, root):
@@ -1470,9 +1564,9 @@ class VIA:
         alpha_teleport = self.alpha_teleport
         # bias_P is the transition probability matrix
 
-        # P = x_lazy * P + (1 - x_lazy) * np.identity(n_states)
+        P = x_lazy * P + (1 - x_lazy) * np.identity(n_states)
         # print(P, P.sum(axis=1))
-        # P = alpha_teleport * P + ((1 - alpha_teleport) * (1 / n_states) * (np.ones((n_states, n_states))))
+        P = alpha_teleport * P + ((1 - alpha_teleport) * (1 / n_states) * (np.ones((n_states, n_states))))
         # print('check prob of each row sum to one', P.sum(axis=1))
 
         currentState = root
@@ -1516,7 +1610,7 @@ class VIA:
         hitting_array = q[0]
         for qi in q[1:]:
             hitting_array = np.append(hitting_array, qi, axis=1)  # .get(), axis=1)
-        print('finished getting from queue', hitting_array.shape)
+        # print('finished getting from queue', hitting_array.shape)
         hitting_array_final = np.zeros((1, n_states))
         no_times_state_reached_array = np.zeros((1, n_states))
 
@@ -1546,7 +1640,7 @@ class VIA:
                 hitting_array_final[0, i] = (n_steps + 1)
 
         # hitting_array=np.mean(hitting_array, axis=1)
-        print('hitting from sim markov', [(i, val) for i, val in enumerate(hitting_array_final.flatten())])
+        # print('hitting from sim markov', [(i, val) for i, val in enumerate(hitting_array_final.flatten())])
         return hitting_array_final[0]
 
     def compute_hitting_time_onbias(self, laplacian, inv_sqr_deg, root, x_lazy, alpha_teleport, number_eig=0):
@@ -1600,48 +1694,29 @@ class VIA:
         roundtrip_times = roundtrip_commute_matrix[root, :]
         return abs(final_hitting_times), roundtrip_times
 
-    def project_hittingtimes_sc(self, pt):
-        if self.data.shape[0] > 1000:
-            knn_sc = 10
-        else:
-            knn_sc = 10
-        neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=knn_sc)
-
-        labels = np.asarray(self.labels)
-        sc_pt = np.zeros((len(self.labels),))
-
-        i = 0
-        for row in neighbor_array:
-            mean_weight = 0
-            neighboring_clus = labels[row]
-            for clus_i in set(list(neighboring_clus)):
-                hitting_time_clus_i = pt[clus_i]
-                num_clus_i = np.sum(neighboring_clus == clus_i)
-                mean_weight = mean_weight + hitting_time_clus_i * num_clus_i / knn_sc
-            sc_pt[i] = mean_weight
-            i = i + 1
-        return sc_pt
-
     def project_branch_probability_sc(self, bp_array_clus, pt):
-        if self.data.shape[0] > 1000:
-            knn_sc = 10
+        labels = np.asarray(self.labels)
+        n_cells = self.data.shape[0]
+        if n_cells > 1000:
+            knn_sc = 3
         else:
             knn_sc = 10
 
         neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=knn_sc)
         print('shape of neighbor in project onto sc', neighbor_array.shape)
-        labels = np.asarray(self.labels)
+
         n_clus = len(list(set(labels)))
-
-        weight_array = np.zeros((len(labels), n_clus))
-
+        print('initialize csr')
+        weight_array = csr_matrix((n_cells, n_clus))  # np.zeros((len(labels), n_clus))
+        print('filling in weight array')
         for irow, row in enumerate(neighbor_array):
             neighboring_clus = labels[row]
             for clus_i in set(list(neighboring_clus)):
                 num_clus_i = np.sum(neighboring_clus == clus_i)
                 wi = num_clus_i / knn_sc
                 weight_array[irow, clus_i] = wi
-
+        print('convert weight array in sc_project_bp to csr_matrix')
+        # weight_array = csr_matrix(weight_array)
         bp_array_sc = weight_array.dot(bp_array_clus)
         bp_array_sc = bp_array_sc * 1. / np.max(bp_array_sc, axis=0)  # divide cell by max value in that column
 
@@ -1737,7 +1812,6 @@ class VIA:
             # distance_array = np.sqrt(distance_array)
             weight_list = (1. / (distance_array.flatten() + 0.01))
 
-
         weight_list = weight_list * (np.mean(distance_array) ** 2)
 
         weight_list = weight_list.tolist()
@@ -1792,11 +1866,25 @@ class VIA:
         G_sim.simplify(combine_edges='sum')
         resolution_parameter = 1
         if jac_weighted_edges == True:
-            partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition, weights='weight',
-                                                 n_iterations=self.n_iter_leiden, seed=self.random_seed)
+            if self.partition_type == 'ModularityVP':
+                partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition, weights='weight',
+                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed)
+                print('partition type MVP')
+            else:
+                partition = leidenalg.find_partition(G_sim, leidenalg.RBConfigurationVertexPartition, weights='weight',
+                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed,
+                                                     resolution_parameter=self.resolution_parameter)
+
         else:
-            partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition,
-                                                 n_iterations=self.n_iter_leiden, seed=self.random_seed)
+            if self.partition_type == 'ModularityVP':
+                print('partition type MVP')
+                partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition,
+                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed)
+            else:
+                print('partition type RBC')
+                partition = leidenalg.find_partition(G_sim, leidenalg.RBConfigurationVertexPartition,
+                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed,
+                                                     resolution_parameter=self.resolution_parameter)
         # print('Q= %.2f' % partition.quality())
         PARC_labels_leiden = np.asarray(partition.membership)
         PARC_labels_leiden = np.reshape(PARC_labels_leiden, (n_elements, 1))
@@ -1843,7 +1931,7 @@ class VIA:
 
         dummy, PARC_labels_leiden = np.unique(list(PARC_labels_leiden.flatten()), return_inverse=True)
         self.labels = PARC_labels_leiden
-        print('finished run_toobig', time.ctime())
+        # print('finished run_toobig', time.ctime())
         return PARC_labels_leiden
 
     def recompute_weights(self, clustergraph_ig, pop_list_raw):
@@ -1886,7 +1974,7 @@ class VIA:
 
         deg_list = graph_dense.sum(axis=1).reshape((1, -1)).tolist()[0]
 
-        print('deg list', deg_list)  # locallytrimmed_g.degree()
+        # print('deg list', deg_list)  # locallytrimmed_g.degree()
 
         for ci, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
 
@@ -1908,8 +1996,7 @@ class VIA:
                         found_any_root = True
                         min_deg = deg_list[ci]
                         super_min_deg = super_node_degree
-                        print('new root is', root, ' with degree', min_deg, 'and super node degree',
-                              super_min_deg)
+                        print('new root is', root)
             majority_truth_labels[cluster_i_loc] = str(majority_truth) + 'c' + str(cluster_i)
 
             graph_node_label.append(str(majority_truth) + 'c' + str(cluster_i))
@@ -1918,13 +2005,13 @@ class VIA:
                   found_super_and_sub_root)
             for ic, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
                 cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
-                print('cluster', cluster_i, 'set true labels', set(true_labels))
+                # print('cluster', cluster_i, 'set true labels', set(true_labels))
                 true_labels = np.asarray(true_labels)
 
                 majority_truth = str(self.func_mode(list(true_labels[cluster_i_loc])))
-                print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
+                # print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
                 if (str(root_user) == str(majority_truth)):
-                    print('did not find a super and sub cluster with majority ', root_user)
+                    # print('did not find a super and sub cluster with majority ', root_user)
                     if deg_list[ic] < min_deg:
                         root = cluster_i
                         found_any_root = True
@@ -1937,12 +2024,13 @@ class VIA:
         return graph_node_label, majority_truth_labels, deg_list, root
 
     def find_root_HumanCD34(self, graph_dense, PARC_labels_leiden, root_idx, true_labels):
+        # single cell index given corresponding to user defined root cell
         majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
         graph_node_label = []
         true_labels = np.asarray(true_labels)
 
         deg_list = graph_dense.sum(axis=1).reshape((1, -1)).tolist()[0]
-        secondary_annotations = np.asarray(self.secondary_annotations)
+
         for ci, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
             cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
 
@@ -1954,10 +2042,10 @@ class VIA:
 
             graph_node_label.append(str(majority_truth)[0:5] + 'c' + str(cluster_i))
 
-
         return graph_node_label, majority_truth_labels, deg_list, root
 
     def find_root_2Morgan(self, graph_dense, PARC_labels_leiden, root_idx, true_labels):
+        # single cell index given corresponding to user defined root cell
         majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
         graph_node_label = []
         true_labels = np.asarray(true_labels)
@@ -1976,7 +2064,10 @@ class VIA:
 
             graph_node_label.append(str(majority_truth)[0:5] + 'c' + str(cluster_i) + str(majority_truth_secondary))
 
+            return graph_node_label, majority_truth_labels, deg_list, root
+
     def find_root_bcell(self, graph_dense, PARC_labels_leiden, root_user, true_labels):
+        # root-user is the singlecell index given by the user when running VIA
         majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
         graph_node_label = []
         true_labels = np.asarray(true_labels)
@@ -1995,45 +2086,8 @@ class VIA:
         root = PARC_labels_leiden[root_user]
         return graph_node_label, majority_truth_labels, deg_list, root
 
-
-    def find_root_2M(self, graph_dense, PARC_labels_leiden, root_user, true_labels):
-
-        # PARC_labels_leiden is the subset belonging to the component of the graph being considered. graph_dense is a component of the full graph
-        majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
-        graph_node_label = []
-        min_deg = 1000
-
-        found_any_root = False
-        true_labels = np.asarray(true_labels)
-        max_count_root = 0
-        deg_list = graph_dense.sum(axis=1).reshape((1, -1)).tolist()[0]
-
-        print('deg list', deg_list)  # locallytrimmed_g.degree()
-
-        for ci, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
-
-            cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
-            count_root = list(true_labels[cluster_i_loc]).count(root_user)
-            majority_truth = str(self.func_mode(list(true_labels[cluster_i_loc])))
-            majority_truth_secondary = str(self.func_mode(self.secondary_annotations))
-            if count_root >= max_count_root:
-                if deg_list[ci] < min_deg:
-                    root = cluster_i
-                    found_any_root = True
-                    min_deg = deg_list[ci]
-                    print('new root is', root, ' with degree', min_deg, majority_truth)
-
-            majority_truth_labels[cluster_i_loc] = str(majority_truth) + 'c' + str(cluster_i)
-            graph_node_label.append(str(majority_truth)[0:5] + 'c' + str(cluster_i) + str(majority_truth_secondary))
-
-        if found_any_root == False:
-            print('setting arbitrary root', cluster_i)
-            root = cluster_i
-
-        return graph_node_label, majority_truth_labels, deg_list, root
-
-    def find_root(self, graph_dense, PARC_labels_leiden, root_user, true_labels, super_cluster_labels_sub,
-                  super_node_degree_list):
+    def find_root_toy(self, graph_dense, PARC_labels_leiden, root_user, true_labels, super_cluster_labels_sub,
+                      super_node_degree_list):
         # PARC_labels_leiden is the subset belonging to the component of the graph being considered. graph_dense is a component of the full graph
         majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
         graph_node_label = []
@@ -2044,8 +2098,6 @@ class VIA:
         true_labels = np.asarray(true_labels)
 
         deg_list = graph_dense.sum(axis=1).reshape((1, -1)).tolist()[0]
-
-        print('deg list', deg_list)  # locallytrimmed_g.degree()
 
         for ci, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
 
@@ -2077,14 +2129,14 @@ class VIA:
                   found_super_and_sub_root)
             for ic, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
                 cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
-                print('cluster', cluster_i, 'set true labels', set(true_labels))
+                # print('cluster', cluster_i, 'set true labels', set(true_labels))
                 true_labels = np.asarray(true_labels)
 
                 majority_truth = str(self.func_mode(list(true_labels[cluster_i_loc])))
-                print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
-                print('root user and majority', root_user, majority_truth)
+                # print('cluster', cluster_i, 'has majority', majority_truth, 'with degree list', deg_list)
+                # print('root user and majority', root_user, majority_truth)
                 if (str(root_user) in str(majority_truth)):
-                    print('did not find a super and sub cluster with majority ', root_user)
+                    # print('did not find a super and sub cluster with majority ', root_user)
                     if deg_list[ic] < min_deg:
                         root = cluster_i
                         found_any_root = True
@@ -2105,7 +2157,7 @@ class VIA:
         neighbor_array, distance_array = self.knn_struct.knn_query(X_data, k=3)
         csr_array = self.make_csrmatrix_noselfloop(neighbor_array, distance_array, auto_=False)
         n_comp, comp_labels = connected_components(csr_array, return_labels=True)
-        k_0 = 3
+        k_0 = 3  # 3
         if n_components_original == 1:
             while (n_comp > 1):
                 k_0 = k_0 + 1
@@ -2153,9 +2205,59 @@ class VIA:
             if len(np.where(sc_bp[:, i] > 0.8)[
                        0]) > 0:  # check in case this terminal state i cannot be reached (sc_bp is all 0)
 
-                #loc_terminal_i = np.where(np.asarray(self.labels) == self.terminal_clusters[i])[0]
+                # loc_terminal_i = np.where(np.asarray(self.labels) == self.terminal_clusters[i])[0]
 
                 loc_i = np.where(sc_bp[:, i] > 0.8)[0]
+                val_pt = [sc_pt[pt_i] for pt_i in loc_i]  # TODO,  replace with array to speed up
+
+                max_val_pt = max(val_pt)
+
+                loc_i_bp = np.where(sc_bp[:, i] > 0.000)[0]  # 0.000
+                loc_i_sc = np.where(np.asarray(sc_pt) <= max_val_pt)[0]
+
+                loc_ = np.intersect1d(loc_i_bp, loc_i_sc)
+
+                gam_in = np.asarray(sc_pt)[loc_]
+                x = gam_in.reshape(-1, 1)
+                y = np.asarray(gene_exp)[loc_].reshape(-1, 1)
+                print(loc_)
+
+                weights = np.asarray(sc_bp[:, i])[loc_].reshape(-1, 1)
+
+                if len(loc_) > 1:
+                    # geneGAM = pg.LinearGAM(n_splines=20, spline_order=5, lam=10).fit(x, y, weights=weights)
+                    # geneGAM = pg.LinearGAM(n_splines=10, spline_order=4, lam=10).fit(x, y, weights=weights) default
+                    geneGAM = pg.LinearGAM(n_splines=10, spline_order=4, lam=10).fit(x, y, weights=weights)  # 8 splines
+                    nx_spacing = 100
+                    xval = np.linspace(min(sc_pt), max_val_pt, nx_spacing * 2)
+                    yg = geneGAM.predict(X=xval)
+                else:
+                    print('loc_ has length zero')
+
+                ax.plot(xval, yg, color=cmap_[i], linewidth=3.5, zorder=3, label='TS:' + str(
+                    self.terminal_clusters[i]))  # linestyle=(0, (5, 2, 1, 2)),    dash_capstyle='round'
+            plt.legend()
+            plt.title('Trend:' + title_gene)
+        return
+
+    def get_gene_expression_multi(self, ax, gene_exp, title_gene=""):
+
+        # fig_0, ax = plt.subplots()
+        sc_pt = self.single_cell_pt_markov
+        sc_bp_original = self.single_cell_bp
+        n_terminal_states = sc_bp_original.shape[1]
+
+        jet = cm.get_cmap('jet', n_terminal_states)
+        cmap_ = jet(range(n_terminal_states))
+
+        for i in [1]:  # range(n_terminal_states):
+            sc_bp = sc_bp_original.copy()
+            if len(np.where(sc_bp[:, i] > 0.9)[
+                       0]) > 0:  # check in case this terminal state i cannot be reached (sc_bp is all 0)
+
+                # loc_terminal_i = np.where(np.asarray(self.labels) == self.terminal_clusters[i])[0]
+
+                loc_i = np.where(sc_bp[:, i] > 0.9)[0]
                 val_pt = [sc_pt[pt_i] for pt_i in loc_i]  # TODO,  replace with array to speed up
 
                 max_val_pt = max(val_pt)
@@ -2168,23 +2270,24 @@ class VIA:
                 gam_in = np.asarray(sc_pt)[loc_]
                 x = gam_in.reshape(-1, 1)
                 y = np.asarray(gene_exp)[loc_].reshape(-1, 1)
+                print(loc_)
 
                 weights = np.asarray(sc_bp[:, i])[loc_].reshape(-1, 1)
 
-
                 if len(loc_) > 1:
                     # geneGAM = pg.LinearGAM(n_splines=20, spline_order=5, lam=10).fit(x, y, weights=weights)
+                    # geneGAM = pg.LinearGAM(n_splines=10, spline_order=4, lam=10).fit(x, y, weights=weights)
                     geneGAM = pg.LinearGAM(n_splines=10, spline_order=4, lam=10).fit(x, y, weights=weights)
                     nx_spacing = 100
                     xval = np.linspace(min(sc_pt), max_val_pt, nx_spacing * 2)
                     yg = geneGAM.predict(X=xval)
                 else:
                     print('loc_ has length zero')
-
-                ax.plot(xval, yg, color=cmap_[i], linewidth=2, zorder=3, linestyle=(0, (5, 2, 1, 2)),
+                # cmap_[i]
+                ax.plot(xval, yg, color='navy', linewidth=2, zorder=3, linestyle=(0, (5, 2, 1, 2)),
                         dash_capstyle='round', label='TS:' + str(self.terminal_clusters[i]))
             plt.legend()
-            plt.title('Gene Expression ' + title_gene)
+            ax.set_title(title_gene)
         return
 
     def do_magic(self, df_gene, magic_steps=3, gene_list=[]):
@@ -2196,6 +2299,7 @@ class VIA:
             from sklearn.preprocessing import normalize
             transition_full_graph = normalize(self.csr_full_graph, norm='l1',
                                               axis=1) ** magic_steps  # normalize across columns to get Transition matrix.
+
             print('shape of transition matrix raised to power 3', transition_full_graph.shape)
             subset = df_gene[gene_list].values
             print('subset shape', subset.shape)
@@ -2220,37 +2324,42 @@ class VIA:
             neighbor_array, distance_array = self.knn_struct.knn_query(X_data, k=self.knn)
             csr_array_locally_pruned = self.make_csrmatrix_noselfloop(neighbor_array,
                                                                       distance_array)  # incorporates  local distance pruning
-            sources, targets = csr_array_locally_pruned.nonzero()
+        else:
+            neighbor_array = self.full_neighbor_array
+            distance_array = self.full_distance_array
+            csr_array_locally_pruned = self.csr_array_locally_pruned
 
-            edgelist = list(zip(sources, targets))
+        sources, targets = csr_array_locally_pruned.nonzero()
 
-            edgelist_copy = edgelist.copy()
+        edgelist = list(zip(sources, targets))
 
-            G = ig.Graph(n=X_data.shape[0], edges=edgelist,
-                         edge_attrs={'weight': csr_array_locally_pruned.data.tolist()})  # used for PARC
-            # print('average degree of prejacard graph is %.1f'% (np.mean(G.degree())))
-            # print('computing Jaccard metric')
-            sim_list = G.similarity_jaccard(pairs=edgelist_copy)
+        edgelist_copy = edgelist.copy()
 
-            print('time is', time.ctime())
-            print('size neighbor array', neighbor_array.shape)
-            print('commencing global pruning')
+        G = ig.Graph(n=X_data.shape[0], edges=edgelist,
+                     edge_attrs={'weight': csr_array_locally_pruned.data.tolist()})  # used for PARC
+        # print('average degree of prejacard graph is %.1f'% (np.mean(G.degree())))
+        # print('computing Jaccard metric')
+        sim_list = G.similarity_jaccard(pairs=edgelist_copy)
 
-            sim_list_array = np.asarray(sim_list)
-            edge_list_copy_array = np.asarray(edgelist_copy)
+        print('time is', time.ctime())
+        print('size neighbor array', neighbor_array.shape)
+        print('commencing global pruning')
 
-            if jac_std_global == 'median':
-                threshold = np.median(sim_list)
-            else:
-                threshold = np.mean(sim_list) - jac_std_global * np.std(sim_list)
-            strong_locs = np.where(sim_list_array > threshold)[0]
-            print('Share of edges kept after Global Pruning %.2f' % (len(strong_locs) * 100 / len(sim_list)), '%')
-            new_edgelist = list(edge_list_copy_array[strong_locs])
-            sim_list_new = list(sim_list_array[strong_locs])
+        sim_list_array = np.asarray(sim_list)
+        edge_list_copy_array = np.asarray(edgelist_copy)
 
-            G_sim = ig.Graph(n=n_elements, edges=list(new_edgelist), edge_attrs={'weight': sim_list_new})
+        if jac_std_global == 'median':
+            threshold = np.median(sim_list)
+        else:
+            threshold = np.mean(sim_list) - jac_std_global * np.std(sim_list)
+        strong_locs = np.where(sim_list_array > threshold)[0]
+        print('Share of edges kept after Global Pruning %.2f' % (len(strong_locs) * 100 / len(sim_list)), '%')
+        new_edgelist = list(edge_list_copy_array[strong_locs])
+        sim_list_new = list(sim_list_array[strong_locs])
 
-            G_sim.simplify(combine_edges='sum')
+        G_sim = ig.Graph(n=n_elements, edges=list(new_edgelist), edge_attrs={'weight': sim_list_new})
+
+        G_sim.simplify(combine_edges='sum')
 
         if self.is_coarse == True:
             #### construct full graph that has no pruning to be used for Clustergraph edges,  # not listed in in any order of proximity
@@ -2270,8 +2379,7 @@ class VIA:
             # and hence too many good neighbors end up having a weight near 0 which is misleading and non-neighbors have weight =0
             weight_list = weight_list.tolist()
 
-            print('distance values', np.percentile(distance_array, 5), np.percentile(distance_array, 95),
-                  np.mean(distance_array))
+            # print('distance values', np.percentile(distance_array, 5), np.percentile(distance_array, 95),   np.mean(distance_array))
             csr_full_graph = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
                                         shape=(n_cells, n_cells))
 
@@ -2284,34 +2392,48 @@ class VIA:
             ig_fullgraph = ig.Graph(list(edgelist), edge_attrs={'weight': sim_list})
             ig_fullgraph.simplify(combine_edges='sum')
 
-            self.csr_array_pruned = G_sim  # this graph is pruned for use in PARC
+            # self.csr_array_pruned = G_sim  # this graph is pruned (locally and globally) for use in PARC
+            self.csr_array_locally_pruned = csr_array_locally_pruned
             self.ig_full_graph = ig_fullgraph  # for VIA we prune the vertex cluster graph *after* making the clustergraph
             self.csr_full_graph = csr_full_graph
             self.full_neighbor_array = neighbor_array
+            self.full_distance_array = distance_array
 
         if self.is_coarse == True:
             # knn graph used for making trajectory drawing on the visualization
             # print('skipping full_graph_shortpath')
+
             self.full_graph_shortpath = self.full_graph_paths(X_data, n_original_comp)
             neighbor_array = self.full_neighbor_array
+
         if self.is_coarse == False:
             ig_fullgraph = self.ig_full_graph  # for Trajectory
-            G_sim = self.csr_array_pruned  # for PARC
-            neighbor_array = self.full_neighbor_array  # needed to assign spurious outliers to clusters
+            # G_sim = self.csr_array_pruned  # for PARC
+            # neighbor_array = self.full_neighbor_array  # needed to assign spurious outliers to clusters
 
         # print('average degree of SIMPLE graph is %.1f' % (np.mean(G_sim.degree())))
         print('commencing community detection')
+        start_leiden = time.time()
         if jac_weighted_edges == True:
-            start_leiden = time.time()
-            # print('call leiden on weighted graph for ', self.n_iter_leiden, 'iterations')
-            partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition, weights='weight',
-                                                 n_iterations=self.n_iter_leiden, seed=self.random_seed)
-            print(round(time.time() - start_leiden), ' seconds for leiden')
+            if self.partition_type == 'ModularityVP':
+                partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition, weights='weight',
+                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed)
+                print('partition type MVP')
+            else:
+                partition = leidenalg.find_partition(G_sim, leidenalg.RBConfigurationVertexPartition, weights='weight',
+                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed,
+                                                     resolution_parameter=self.resolution_parameter)
+                print('partition type RBC')
         else:
-            start_leiden = time.time()
-            # print('call leiden on unweighted graph', self.n_iter_leiden, 'iterations')
-            partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition,
-                                                 n_iterations=self.n_iter_leiden, seed=self.random_seed)
+            if self.partition_type == 'ModularityVP':
+                print('partition type MVP')
+                partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition,
+                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed)
+            else:
+                print('partition type RBC')
+                partition = leidenalg.find_partition(G_sim, leidenalg.RBConfigurationVertexPartition,
+                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed,
+                                                     resolution_parameter=self.resolution_parameter)
             print(round(time.time() - start_leiden), ' seconds for leiden')
         time_end_PARC = time.time()
         # print('Q= %.1f' % (partition.quality()))
@@ -2337,7 +2459,7 @@ class VIA:
         cluster_i_loc = np.where(PARC_labels_leiden == 0)[
             0]  # the 0th cluster is the largest one. so if cluster 0 is not too big, then the others wont be too big either
         pop_i = len(cluster_i_loc)
-        print('largest cluster population', pop_i, too_big_factor, n_elements)
+
         if pop_i > too_big_factor * n_elements:
             too_big = True
             print('too big is', too_big, ' cluster 0 will be Expanded')
@@ -2360,7 +2482,7 @@ class VIA:
             for item in set(list(PARC_labels_leiden_big.flatten())):
                 pop_list.append([item, list(PARC_labels_leiden_big.flatten()).count(item)])
 
-            print('pop of new big labels', pop_list)
+            # print('pop of new big labels', pop_list)
             jj = 0
 
             for j in cluster_big_loc:
@@ -2448,289 +2570,318 @@ class VIA:
         self.labels = PARC_labels_leiden  # list
         n_clus = len(set(self.labels))
 
-        ##determine majority truth
+        ## Make cluster-graph
 
-        if self.pseudotime == True:
+        vc_graph = ig.VertexClustering(ig_fullgraph,
+                                       membership=PARC_labels_leiden)  # jaccard weights, bigger is better
 
-            ## Make cluster-graph (1)
+        vc_graph = vc_graph.cluster_graph(combine_edges='sum')
 
-            vc_graph = ig.VertexClustering(ig_fullgraph,
-                                           membership=PARC_labels_leiden)  # jaccard weights, bigger is better
+        # print('vc graph G_sim', vc_graph)
+        # print('vc graph G_sim old', vc_graph_old)
 
-            vc_graph = vc_graph.cluster_graph(combine_edges='sum')
+        reweighted_sparse_vc, edgelist = self.recompute_weights(vc_graph, pop_list_raw)
 
-            # print('vc graph G_sim', vc_graph)
-            # print('vc graph G_sim old', vc_graph_old)
+        # print('len old edge list', edgelist)  # 0.15 for CD34
+        if self.dataset == 'toy':  # ''humanCD34':# == False:
+            global_pruning_std = 1  # 2
+            print('Toy: global cluster graph pruning level', global_pruning_std)
+        # toy data is usually simpler so we dont need to prune the links as the clusters are usually well separated such that spurious links dont exist
+        elif self.dataset == 'bcell':
+            global_pruning_std = 0.15
+            print('Bcell: global cluster graph pruning level', global_pruning_std)
+        elif self.dataset == 'iPSC':
+            global_pruning_std = 0.15
+            print('iPSC: global cluster graph pruning level', global_pruning_std)
+        elif self.dataset == 'EB':
+            global_pruning_std = 0.15
+            print('EB: global cluster graph pruning level', global_pruning_std)
 
-            reweighted_sparse_vc, edgelist = self.recompute_weights(vc_graph, pop_list_raw)
+        elif self.dataset == 'mESC':
+            global_pruning_std = 0.0
+            print('mESC: global cluster graph pruning level', global_pruning_std)
+        elif self.dataset == '2M':
+            global_pruning_std = 0.15  # 0 for the knn20ncomp30 and knn30ncomp30 run on Aug 12 and Aug11
+            print('2M: global cluster graph pruning level', global_pruning_std)
+        elif self.dataset == 'scATAC':
+            global_pruning_std = 0.15
+            print('scATAC: global cluster graph pruning level', global_pruning_std)
+        elif self.dataset == 'droso':
+            global_pruning_std = 0.15  # 0.15#-.1
+            print('droso: global cluster graph pruning level', global_pruning_std)
+        elif self.dataset == 'faced':
+            global_pruning_std = 1  # 0.3# 0.15#1
+        elif self.dataset == 'pancreas':
+            global_pruning_std = 0  # 0#.15#-.1  # 0.5#0.3# 0.15#1
+            print(self.dataset, ': global cluster graph pruning level', global_pruning_std)
+        elif self.dataset == 'cardiac':
+            global_pruning_std = 0.15  # 0.15#0.15#0#.15#-.1  # 0.5#0.3# 0.15#1
+            print(self.dataset, ': global cluster graph pruning level', global_pruning_std)
+        elif self.dataset == 'cardiac_merge':
+            global_pruning_std = .6  # .5#0.5#0.15#0.15#0#.15#-.1  # 0.5#0.3# 0.15#1
+            print(self.dataset, ': global cluster graph pruning level', global_pruning_std)
 
-            print('len old edge list', edgelist)  # 0.15 for CD34
-            if self.dataset == 'toy':  # ''humanCD34':# == False:
-                global_pruning_std = 0.5  # 2
-                print('Toy: global cluster graph pruning level', global_pruning_std)
-            # toy data is usually simpler so we dont need to prune the links as the clusters are usually well separated such that spurious links dont exist
-            elif self.dataset == 'bcell':
-                global_pruning_std = 0.15
-                print('Bcell: global cluster graph pruning level', global_pruning_std)
-            elif self.dataset == 'iPSC':
-                global_pruning_std = 0.15
-                print('iPSC: global cluster graph pruning level', global_pruning_std)
-            elif self.dataset == 'EB':
-                global_pruning_std = 0.15
-                print('EB: global cluster graph pruning level', global_pruning_std)
+        else:
+            global_pruning_std = 0.15  # .10.15
+            print(self.dataset, ': global cluster graph pruning level', global_pruning_std)
+        edgeweights, edgelist, comp_labels = local_pruning_clustergraph_mst(reweighted_sparse_vc,
+                                                                            global_pruning_std=global_pruning_std,
+                                                                            preserve_disconnected=self.preserve_disconnected,
+                                                                            preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning)  # 0.8 on 20knn and 40ncomp #0.15
+        self.connected_comp_labels = comp_labels
 
-            elif self.dataset == 'mESC':
-                global_pruning_std = 0.0
-                print('mESC: global cluster graph pruning level', global_pruning_std)
-            elif self.dataset == '2M':
-                global_pruning_std = 0.15  # 0 for the knn20ncomp30 and knn30ncomp30 run on Aug 12 and Aug11
-                print('2M: global cluster graph pruning level', global_pruning_std)
-            else:
-                global_pruning_std = 0.15  # .10.15
-                print(self.dataset, ': global cluster graph pruning level', global_pruning_std)
-            edgeweights, edgelist, comp_labels = local_pruning_clustergraph_mst(reweighted_sparse_vc,
-                                                                                global_pruning_std=global_pruning_std,
-                                                                                preserve_disconnected=self.preserve_disconnected,
-                                                                                preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning)  # 0.8 on 20knn and 40ncomp #0.15
-            self.connected_comp_labels = comp_labels
+        # print('len new edge list', len(edgelist), edgelist)
+        locallytrimmed_g = ig.Graph(edgelist, edge_attrs={'weight': edgeweights.tolist()})
+        # print('locally trimmed_g', locallytrimmed_g)
+        locallytrimmed_g = locallytrimmed_g.simplify(combine_edges='sum')
+        # print('locally trimmed and simplified', locallytrimmed_g)
 
+        locallytrimmed_sparse_vc = get_sparse_from_igraph(locallytrimmed_g, weight_attr='weight')
+        layout = locallytrimmed_g.layout_fruchterman_reingold(weights='weight')  ##final layout based on locally trimmed
+        # layout = locallytrimmed_g.layout_kamada_kawai()
+        # layout = locallytrimmed_g.layout_graphopt(niter=500, node_charge=0.001, node_mass=5, spring_length=0, spring_constant=1,max_sa_movement=5, seed=None)
 
+        # globally trimmed link
+        sources, targets = locallytrimmed_sparse_vc.nonzero()
+        edgelist_simple = list(zip(sources.tolist(), targets.tolist()))
+        edgelist_unique = set(tuple(sorted(l)) for l in edgelist_simple)  # keep only one of (0,1) and (1,0)
+        self.edgelist_unique = edgelist_unique
+        # print('edge list unique', edgelist_unique)
+        self.edgelist = edgelist
 
+        # print('edgelist', edgelist)
+        x_lazy = self.x_lazy
+        alpha_teleport = self.alpha_teleport
 
-            locallytrimmed_g = ig.Graph(edgelist, edge_attrs={'weight': edgeweights.tolist()})
-            # print('locally trimmed_g', locallytrimmed_g)
-            locallytrimmed_g = locallytrimmed_g.simplify(combine_edges='sum')
-            # print('locally trimmed and simplified', locallytrimmed_g)
+        # number of components
 
-            locallytrimmed_sparse_vc = get_sparse_from_igraph(locallytrimmed_g, weight_attr='weight')
-            layout = locallytrimmed_g.layout_fruchterman_reingold(
-                weights='weight')  ##final layout based on locally trimmed
+        n_components, labels_cc = connected_components(csgraph=locallytrimmed_sparse_vc, directed=False,
+                                                       return_labels=True)
+        print('there are ', n_components, 'components in the graph')
+        df_graph = pd.DataFrame(locallytrimmed_sparse_vc.todense())
+        df_graph['cc'] = labels_cc
+        df_graph['pt'] = float('NaN')
 
-            # globally trimmed link
-            sources, targets = locallytrimmed_sparse_vc.nonzero()
-            edgelist_simple = list(zip(sources.tolist(), targets.tolist()))
-            edgelist_unique = set(tuple(sorted(l)) for l in edgelist_simple)  # keep only one of (0,1) and (1,0)
-            self.edgelist_unique = edgelist_unique
-            print('edge list unique', edgelist_unique)
-            self.edgelist = edgelist
+        df_graph['majority_truth'] = 'maj truth'
+        df_graph['graph_node_label'] = 'node label'
+        set_parc_labels = list(set(PARC_labels_leiden))
+        set_parc_labels.sort()
+        print('parc labels', set_parc_labels)
 
-            x_lazy = self.x_lazy
-            alpha_teleport = self.alpha_teleport
+        tsi_list = []
+        print('root user', root_user)
+        df_graph['markov_pt'] = float('NaN')
+        terminal_clus = []
+        node_deg_list = []
+        super_terminal_clus_revised = []
+        pd_columnnames_terminal = []
+        dict_terminal_super_sub_pairs = {}
+        self.root = []
+        large_components = []
+        for comp_i in range(n_components):
+            loc_compi = np.where(labels_cc == comp_i)[0]
+            if len(loc_compi) > 1:
+                large_components.append(comp_i)
+        for comp_i in large_components:  # range(n_components):
+            loc_compi = np.where(labels_cc == comp_i)[0]
 
-            # number of components
-            graph_dict = {}
-            n_components, labels_cc = connected_components(csgraph=locallytrimmed_sparse_vc, directed=False,
-                                                           return_labels=True)
-            print('there are ', n_components, 'components in the graph')
-            df_graph = pd.DataFrame(locallytrimmed_sparse_vc.todense())
-            df_graph['cc'] = labels_cc
-            df_graph['pt'] = float('NaN')
-
-            df_graph['majority_truth'] = 'maj truth'
-            df_graph['graph_node_label'] = 'node label'
-            set_parc_labels = list(set(PARC_labels_leiden))
-            set_parc_labels.sort()
-            print('parc labels', set_parc_labels)
-
-            tsi_list = []
-            print('root user', root_user)
-            df_graph['markov_pt'] = float('NaN')
-            terminal_clus = []
-            node_deg_list = []
-            super_terminal_clus_revised = []
-            pd_columnnames_terminal = []
-            dict_terminal_super_sub_pairs = {}
-            self.root = []
-            large_components = []
-            for comp_i in range(n_components):
-                loc_compi = np.where(labels_cc == comp_i)[0]
-                if len(loc_compi) > 1:
-                    large_components.append(comp_i)
-            for comp_i in large_components:  # range(n_components):
-                loc_compi = np.where(labels_cc == comp_i)[0]
-
-                a_i = df_graph.iloc[loc_compi][loc_compi].values
-                a_i = csr_matrix(a_i, (a_i.shape[0], a_i.shape[0]))
-                cluster_labels_subi = [x for x in loc_compi]
-                print('cluster_labels_subi', cluster_labels_subi)
-                sc_labels_subi = [PARC_labels_leiden[i] for i in range(len(PARC_labels_leiden)) if
+            a_i = df_graph.iloc[loc_compi][loc_compi].values
+            a_i = csr_matrix(a_i, (a_i.shape[0], a_i.shape[0]))
+            cluster_labels_subi = [x for x in loc_compi]
+            # print('cluster_labels_subi', cluster_labels_subi)
+            sc_labels_subi = [PARC_labels_leiden[i] for i in range(len(PARC_labels_leiden)) if
+                              (PARC_labels_leiden[i] in cluster_labels_subi)]
+            sc_truelabels_subi = [self.true_label[i] for i in range(len(PARC_labels_leiden)) if
                                   (PARC_labels_leiden[i] in cluster_labels_subi)]
-                sc_truelabels_subi = [self.true_label[i] for i in range(len(PARC_labels_leiden)) if
-                                      (PARC_labels_leiden[i] in cluster_labels_subi)]
 
-                if ((self.dataset == 'toy')):
+            if ((self.dataset == 'toy') | (self.dataset == 'faced')):
 
-                    if self.super_cluster_labels != False:
-                        #find which sub-cluster has the super-cluster root
+                if self.super_cluster_labels != False:
+                    # find which sub-cluster has the super-cluster root
 
-                        if 'T1_M1' in sc_truelabels_subi:
-                            root_user = 'T1_M1'
-                        elif 'T2_M1' in sc_truelabels_subi:
-                            root_user = 'T2_M1'
-                        super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if
-                                             (PARC_labels_leiden[i] in cluster_labels_subi)]
-                        print('super node degree', self.super_node_degree_list)
-                        # print('component', comp_i, 'has root', root_user[comp_i])
-                        print('super_labels_subi', super_labels_subi)
+                    if 'T1_M1' in sc_truelabels_subi:
+                        root_user = 'T1_M1'
+                    elif 'T2_M1' in sc_truelabels_subi:
+                        root_user = 'T2_M1'
+                    super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if
+                                         (PARC_labels_leiden[i] in cluster_labels_subi)]
+                    # print('super node degree', self.super_node_degree_list)
+                    # print('component', comp_i, 'has root', root_user[comp_i])
+                    # print('super_labels_subi', super_labels_subi)
 
-                        graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root(a_i,
+                    graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_toy(a_i,
                                                                                                           sc_labels_subi,
                                                                                                           root_user,
                                                                                                           sc_truelabels_subi,
                                                                                                           super_labels_subi,
                                                                                                           self.super_node_degree_list)
-                    else:
-                        if 'T1_M1' in sc_truelabels_subi:
-                            root_user = 'T1_M1'
-                        elif 'T2_M1' in sc_truelabels_subi:
-                            root_user = 'T2_M1'
-                        # print('component', comp_i, 'has root', root_user[comp_i])
-                        graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root(a_i,
+                else:
+                    if 'T1_M1' in sc_truelabels_subi:
+                        root_user = 'T1_M1'
+                    elif 'T2_M1' in sc_truelabels_subi:
+                        root_user = 'T2_M1'
+                    # print('component', comp_i, 'has root', root_user[comp_i])
+                    graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_toy(a_i,
                                                                                                           sc_labels_subi,
                                                                                                           root_user,
                                                                                                           sc_truelabels_subi,
                                                                                                           [], [])
 
-                elif (self.dataset == 'humanCD34') | (self.dataset == '2M'):
-                    graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_HumanCD34(a_i,
-                                                                                                                sc_labels_subi,
-                                                                                                                root_user,
-                                                                                                                sc_truelabels_subi)
-
-                elif (self.dataset == '2M'):
-                    graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_2Morgan(a_i, sc_labels_subi,
-                                                                                                                root_user,
-                                                                                                                sc_truelabels_subi)
-
-                elif (self.dataset == 'bcell') | (self.dataset == 'EB'):
-
-                    graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_bcell(a_i,
-                                                                                                           sc_labels_subi,
+            elif (self.dataset == 'humanCD34'):  # | (self.dataset == '2M'):
+                graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_HumanCD34(a_i,
+                                                                                                            sc_labels_subi,
                                                                                                             root_user,
                                                                                                             sc_truelabels_subi)
-                elif ((self.dataset == 'iPSC') | (self.dataset == 'mESC')):
-                    print('in iPSC root')
-                    if self.super_cluster_labels != False:
-                        super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if
-                                             (PARC_labels_leiden[i] in cluster_labels_subi)]
-                        print('super node degree', self.super_node_degree_list)
 
-                        graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_iPSC(a_i,
-                                                                                                               sc_labels_subi,
-                                                                                                               root_user,
-                                                                                                               sc_truelabels_subi,
-                                                                                                               super_labels_subi,
-                                                                                                               self.super_node_degree_list)
-                    else:
-                        graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_iPSC(a_i,
-                                                                                                               sc_labels_subi,
-                                                                                                               root_user,
-                                                                                                               sc_truelabels_subi,
-                                                                                                               [],
-                                                                                                               [])
+            elif (self.dataset == '2M'):
+                graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_2Morgan(a_i,
+                                                                                                          sc_labels_subi,
+                                                                                                          root_user,
+                                                                                                          sc_truelabels_subi)
 
-                self.root.append(root_i)
-                for item in node_deg_list_i:
-                    node_deg_list.append(item)
-                print('a_i shape, true labels shape', a_i.shape, len(sc_truelabels_subi), len(sc_labels_subi))
+            elif (self.dataset == 'bcell') | (self.dataset == 'EB'):
 
-                new_root_index_found = False
-                for ii, llabel in enumerate(cluster_labels_subi):
-                    if root_i == llabel:
-                        new_root_index = ii
-                        new_root_index_found = True
-                        print('new root index', new_root_index, ' original root cluster was', root_i)
-                if new_root_index_found == False:
-                    print('cannot find the new root index')
-                    new_root_index = 0
-                hitting_times, roundtrip_times = self.compute_hitting_time(a_i, root=new_root_index,
-                                                                           x_lazy=x_lazy,
-                                                                           alpha_teleport=alpha_teleport)
-                # rescale hitting times
-                very_high = np.mean(hitting_times) + 1.5 * np.std(hitting_times)
-                without_very_high_pt = [iii for iii in hitting_times if iii < very_high]
-                new_very_high = np.mean(without_very_high_pt) + np.std(without_very_high_pt)
-                print('very high, and new very high', very_high, new_very_high)
-                new_hitting_times = [x if x < very_high else very_high for x in hitting_times]
-                hitting_times = np.asarray(new_hitting_times)
-                scaling_fac = 10 / max(hitting_times)
-                hitting_times = hitting_times * scaling_fac
-                s_ai, t_ai = a_i.nonzero()
-                edgelist_ai = list(zip(s_ai, t_ai))
-                edgeweights_ai = a_i.data
-                # print('edgelist ai', edgelist_ai)
-                # print('edgeweight ai', edgeweights_ai)
-                biased_edgeweights_ai = get_biased_weights(edgelist_ai, edgeweights_ai, hitting_times)
+                graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_bcell(a_i,
+                                                                                                        sc_labels_subi,
+                                                                                                        root_user,
+                                                                                                        sc_truelabels_subi)
+            elif ((self.dataset == 'iPSC') | (self.dataset == 'mESC')):
+                print('in iPSC root')
+                if self.super_cluster_labels != False:
+                    super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if
+                                         (PARC_labels_leiden[i] in cluster_labels_subi)]
+                    # print('super node degree', self.super_node_degree_list)
 
-                # biased_sparse = csr_matrix((biased_edgeweights, (row, col)))
-                adjacency_matrix_ai = np.zeros((a_i.shape[0], a_i.shape[0]))
+                    graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_iPSC(a_i,
+                                                                                                           sc_labels_subi,
+                                                                                                           root_user,
+                                                                                                           sc_truelabels_subi,
+                                                                                                           super_labels_subi,
+                                                                                                           self.super_node_degree_list)
+                else:
+                    graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_iPSC(a_i,
+                                                                                                           sc_labels_subi,
+                                                                                                           root_user,
+                                                                                                           sc_truelabels_subi,
+                                                                                                           [],
+                                                                                                           [])
+            else:
+                print('len sclabels', len(sc_labels_subi))
+                graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_bcell(a_i,
+                                                                                                        sc_labels_subi,
+                                                                                                        root_user,
+                                                                                                        sc_truelabels_subi)
 
-                for i, (start, end) in enumerate(edgelist_ai):
-                    adjacency_matrix_ai[start, end] = biased_edgeweights_ai[i]
+            self.root.append(root_i)
+            for item in node_deg_list_i:
+                node_deg_list.append(item)
+            print('a_i shape, true labels shape', a_i.shape, len(sc_truelabels_subi), len(sc_labels_subi))
 
-                markov_hitting_times_ai = self.simulate_markov(adjacency_matrix_ai,
-                                                               new_root_index)  # +adjacency_matrix.T))
-                print('markov_hitting times ')
-                # for eee, ttt in enumerate(markov_hitting_times_ai):print('cluster ', eee, ' had markov time', ttt)
+            new_root_index_found = False
+            for ii, llabel in enumerate(cluster_labels_subi):
+                if root_i == llabel:
+                    new_root_index = ii
+                    new_root_index_found = True
+                    print('new root index', new_root_index, ' original root cluster was', root_i)
+            if new_root_index_found == False:
+                print('cannot find the new root index')
+                new_root_index = 0
+            hitting_times, roundtrip_times = self.compute_hitting_time(a_i, root=new_root_index,
+                                                                       x_lazy=x_lazy,
+                                                                       alpha_teleport=alpha_teleport)
+            # rescale hitting times
+            very_high = np.mean(hitting_times) + 1.5 * np.std(hitting_times)
+            without_very_high_pt = [iii for iii in hitting_times if iii < very_high]
+            new_very_high = np.mean(without_very_high_pt) + np.std(without_very_high_pt)
+            # print('very high, and new very high', very_high, new_very_high)
+            new_hitting_times = [x if x < very_high else very_high for x in hitting_times]
+            hitting_times = np.asarray(new_hitting_times)
+            scaling_fac = 10 / max(hitting_times)
+            hitting_times = hitting_times * scaling_fac
+            s_ai, t_ai = a_i.nonzero()
+            edgelist_ai = list(zip(s_ai, t_ai))
+            edgeweights_ai = a_i.data
+            # print('edgelist ai', edgelist_ai)
+            # print('edgeweight ai', edgeweights_ai)
+            biased_edgeweights_ai = get_biased_weights(edgelist_ai, edgeweights_ai, hitting_times)
 
-                very_high = np.mean(markov_hitting_times_ai) + 1.5 * np.std(markov_hitting_times_ai)  # 1.5
-                very_high = min(very_high, max(markov_hitting_times_ai))
-                without_very_high_pt = [iii for iii in markov_hitting_times_ai if iii < very_high]
-                new_very_high = min(np.mean(without_very_high_pt) + np.std(without_very_high_pt), very_high)
-                print('very high, and new very high', very_high, new_very_high)
-                new_markov_hitting_times_ai = [x if x < very_high else very_high for x in markov_hitting_times_ai]
-                # for eee, ttt in enumerate(new_markov_hitting_times_ai):      print('cluster ', eee, ' had markov time', ttt)
+            # biased_sparse = csr_matrix((biased_edgeweights, (row, col)))
+            adjacency_matrix_ai = np.zeros((a_i.shape[0], a_i.shape[0]))
 
-                markov_hitting_times_ai = np.asarray(new_markov_hitting_times_ai)
-                scaling_fac = 10 / max(markov_hitting_times_ai)
-                markov_hitting_times_ai = markov_hitting_times_ai * scaling_fac
-                # for eee, ttt in enumerate(markov_hitting_times_ai):print('cluster ', eee, ' had markov time', ttt)
+            for i, (start, end) in enumerate(edgelist_ai):
+                adjacency_matrix_ai[start, end] = biased_edgeweights_ai[i]
 
-                # print('markov hitting times', [(i, j) for i, j in enumerate(markov_hitting_times_ai)])
-                # print('hitting times', [(i, j) for i, j in enumerate(hitting_times)])
-                markov_hitting_times_ai = (markov_hitting_times_ai)  # + hitting_times)*.5 #consensus
-                adjacency_matrix_csr_ai = sparse.csr_matrix(adjacency_matrix_ai)
-                (sources, targets) = adjacency_matrix_csr_ai.nonzero()
-                edgelist_ai = list(zip(sources, targets))
-                weights_ai = adjacency_matrix_csr_ai.data
-                bias_weights_2_ai = get_biased_weights(edgelist_ai, weights_ai, markov_hitting_times_ai, round_no=2)
-                adjacency_matrix2_ai = np.zeros((adjacency_matrix_ai.shape[0], adjacency_matrix_ai.shape[0]))
+            markov_hitting_times_ai = self.simulate_markov(adjacency_matrix_ai,
+                                                           new_root_index)  # +adjacency_matrix.T))
 
-                for i, (start, end) in enumerate(edgelist_ai):
-                    adjacency_matrix2_ai[start, end] = bias_weights_2_ai[i]
-                if self.super_terminal_cells == False:
-                    print('new_root_index', new_root_index, ' before get terminal')
-                    terminal_clus_ai = self.get_terminal_clusters(adjacency_matrix2_ai, markov_hitting_times_ai,
-                                                                  new_root_index)
-                    for i in terminal_clus_ai:
+            # for eee, ttt in enumerate(markov_hitting_times_ai):print('cluster ', eee, ' had markov time', ttt)
+
+            very_high = np.mean(markov_hitting_times_ai) + 1.5 * np.std(markov_hitting_times_ai)  # 1.5
+            very_high = min(very_high, max(markov_hitting_times_ai))
+            without_very_high_pt = [iii for iii in markov_hitting_times_ai if iii < very_high]
+            new_very_high = min(np.mean(without_very_high_pt) + np.std(without_very_high_pt), very_high)
+
+            new_markov_hitting_times_ai = [x if x < very_high else very_high for x in markov_hitting_times_ai]
+            # for eee, ttt in enumerate(new_markov_hitting_times_ai):      print('cluster ', eee, ' had markov time', ttt)
+
+            markov_hitting_times_ai = np.asarray(new_markov_hitting_times_ai)
+            scaling_fac = 10 / max(markov_hitting_times_ai)
+            markov_hitting_times_ai = markov_hitting_times_ai * scaling_fac
+            # for eee, ttt in enumerate(markov_hitting_times_ai):print('cluster ', eee, ' had markov time', ttt)
+
+            # print('markov hitting times', [(i, j) for i, j in enumerate(markov_hitting_times_ai)])
+            # print('hitting times', [(i, j) for i, j in enumerate(hitting_times)])
+            markov_hitting_times_ai = (markov_hitting_times_ai)  # + hitting_times)*.5 #consensus
+            adjacency_matrix_csr_ai = sparse.csr_matrix(adjacency_matrix_ai)
+            (sources, targets) = adjacency_matrix_csr_ai.nonzero()
+            edgelist_ai = list(zip(sources, targets))
+            weights_ai = adjacency_matrix_csr_ai.data
+            bias_weights_2_ai = get_biased_weights(edgelist_ai, weights_ai, markov_hitting_times_ai, round_no=2)
+            adjacency_matrix2_ai = np.zeros((adjacency_matrix_ai.shape[0], adjacency_matrix_ai.shape[0]))
+
+            for i, (start, end) in enumerate(edgelist_ai):
+                adjacency_matrix2_ai[start, end] = bias_weights_2_ai[i]
+            if self.super_terminal_cells == False:
+                print('new_root_index', new_root_index, ' before get terminal')
+                terminal_clus_ai = self.get_terminal_clusters(adjacency_matrix2_ai, markov_hitting_times_ai,
+                                                              new_root_index)
+                for i in terminal_clus_ai:
+                    if markov_hitting_times_ai[i] > np.percentile(np.asarray(markov_hitting_times_ai),
+                                                                  self.pseudotime_threshold_TS):
+                        # print(i, markov_hitting_times_ai[i],np.percentile(np.asarray(markov_hitting_times_ai), self.pseudotime_threshold_TS))
                         terminal_clus.append(cluster_labels_subi[i])
 
 
-                elif len(self.super_terminal_clusters) > 0:  # round2 of PARC
-                    print('super_terminal_clusters', self.super_terminal_clusters)
-                    sub_terminal_clus_temp_ = []
-                    print('cluster_labels_subi', cluster_labels_subi)
-                    terminal_clus_ai = []
-                    super_terminal_clusters_i = [stc_i for stc_i in self.super_terminal_clusters if
-                                                 stc_i in cluster_labels_subi]
-                    print('super_terminal_clusters_i', super_terminal_clusters_i)
-                    for i in self.super_terminal_clusters:
-                        print('super cluster terminal label', i)
-                        sub_terminal_clus_temp_loc = np.where(np.asarray(self.super_cluster_labels) == i)[0]
-                        print(sub_terminal_clus_temp_loc)
-                        true_majority_i = [xx for xx in np.asarray(self.true_label)[sub_terminal_clus_temp_loc]]
-                        print(true_majority_i[0], 'true_majority_i', 'of cluster', i)
-                        # 0:1 for single connected structure #when using Toy as true label has T1 or T2
+            elif len(self.super_terminal_clusters) > 0:  # round2 of PARC
+                print('super_terminal_clusters', self.super_terminal_clusters)
+                sub_terminal_clus_temp_ = []
+                print('cluster_labels_subi', cluster_labels_subi)
+                terminal_clus_ai = []
+                super_terminal_clusters_i = [stc_i for stc_i in self.super_terminal_clusters if
+                                             stc_i in cluster_labels_subi]
+                print('super_terminal_clusters_i', super_terminal_clusters_i)
+                for i in self.super_terminal_clusters:
+                    print('super cluster terminal label', i)
+                    sub_terminal_clus_temp_loc = np.where(np.asarray(self.super_cluster_labels) == i)[0]
 
-                        temp_set = set(list(np.asarray(self.labels)[sub_terminal_clus_temp_loc]))
-                        print('first temp_set of TS', temp_set)
-                        temp_set = [t_s for t_s in temp_set if t_s in cluster_labels_subi]
-                        # print('temp set', temp_set)
-                        temp_max_pt = 0
-                        most_likely_sub_terminal = False
-                        count_frequency_super_in_sub = 0
-                        # IF USING TOY DATASETS then the TRUE labels and ROOTs will use the code below - can also see "Via_v024_Toy" and the remaining code below will be under the IF condition
-                        # if root_user[0:2] in true_majority_i[0]:  # 0:1 for single connected structure #when using Toy as true label has T1 or T2
+                    true_majority_i = [xx for xx in np.asarray(self.true_label)[sub_terminal_clus_temp_loc]]
+                    print(true_majority_i[0], 'true_majority_i', 'of cluster', i)
+                    # 0:1 for single connected structure #when using Toy as true label has T1 or T2
+
+                    temp_set = set(list(np.asarray(self.labels)[sub_terminal_clus_temp_loc]))
+                    print('first temp_set of TS', temp_set)
+                    temp_set = [t_s for t_s in temp_set if t_s in cluster_labels_subi]
+                    # print('temp set', temp_set)
+                    temp_max_pt = 0
+                    most_likely_sub_terminal = False
+                    count_frequency_super_in_sub = 0
+                    # If you have disconnected components and corresponding labels to identify which cell belongs to which components, then use the Toy 'T1_M1' format
+                    CHECK_BOOL = False
+                    if (self.dataset == 'toy'):
+                        if (root_user[0:2] in true_majority_i[0]) | (root_user[0:1] == 'M'): CHECK_BOOL = True
+
+                    if (CHECK_BOOL) | (
+                            self.dataset != 'toy'):  # 0:1 for single connected structure #when using Toy as true label has T1 or T2
 
                         # print('sub_terminal_clus_temp_loc', sub_terminal_clus_temp_loc)
                         # temp_set = set(list(np.asarray(self.labels)[sub_terminal_clus_temp_loc]))
@@ -2738,15 +2889,15 @@ class VIA:
                         # temp_set = [t_s for t_s in temp_set if t_s in cluster_labels_subi]
                         for j in temp_set:
                             loc_j_in_sub_ai = np.where(loc_compi == j)[0]
-                            print('loc_j_in_sub_ai', loc_j_in_sub_ai)
+                            # print('loc_j_in_sub_ai', loc_j_in_sub_ai)
                             super_cluster_composition_loc = np.where(np.asarray(self.labels) == j)[0]
                             super_cluster_composition = self.func_mode(
                                 list(np.asarray(self.super_cluster_labels)[super_cluster_composition_loc]))
-                            print('the composition of sub cluster', j, 'is mostly', super_cluster_composition)
+                            # print('the composition of sub cluster', j, 'is mostly', super_cluster_composition)
                             if (markov_hitting_times_ai[loc_j_in_sub_ai] > temp_max_pt) & (
                                     super_cluster_composition == i):
                                 temp_max_pt = markov_hitting_times_ai[loc_j_in_sub_ai]
-                                print('super, j and temp max pt', i, j, temp_max_pt)
+                                # print('super, j and temp max pt', i, j, temp_max_pt)
                                 most_likely_sub_terminal = j
                         if most_likely_sub_terminal == False:
                             print('no sub cluster has majority made of super-cluster ', i)
@@ -2766,7 +2917,7 @@ class VIA:
                         sub_terminal_clus_temp_.append(most_likely_sub_terminal)
 
                         if (markov_hitting_times_ai[loc_j_in_sub_ai] > np.percentile(
-                                np.asarray(markov_hitting_times_ai), 30)):  # 30
+                                np.asarray(markov_hitting_times_ai), self.pseudotime_threshold_TS)):  # 30
 
                             dict_terminal_super_sub_pairs.update({i: most_likely_sub_terminal})
                             super_terminal_clus_revised.append(i)
@@ -2781,201 +2932,225 @@ class VIA:
                                   most_likely_sub_terminal, 'but the pseudotime is too low')
 
 
-                else:
-                    print('super terminal cells', self.super_terminal_cells)
+            else:
+                print('super terminal cells', self.super_terminal_cells)
 
-                    print([self.labels[ti] for ti in
-                           self.super_terminal_cells])  # find the sub-cluster which contains the single-cell-superterminal
-                    temp = [self.labels[ti] for ti in self.super_terminal_cells if
-                            self.labels[ti] in cluster_labels_subi]
-                    terminal_clus_ai = []
-                    for i in temp:
-                        terminal_clus_ai.append(np.where(np.asarray(cluster_labels_subi) == i)[0][0])
-                        terminal_clus.append(i)
-                        dict_terminal_super_sub_pairs.update({i: most_likely_sub_terminal})
+                # print([self.labels[ti] for ti in   self.super_terminal_cells])  # find the sub-cluster which contains the single-cell-superterminal
+                temp = [self.labels[ti] for ti in self.super_terminal_cells if
+                        self.labels[ti] in cluster_labels_subi]
+                terminal_clus_ai = []
+                for i in temp:
+                    terminal_clus_ai.append(np.where(np.asarray(cluster_labels_subi) == i)[0][0])
+                    terminal_clus.append(i)
+                    dict_terminal_super_sub_pairs.update({i: most_likely_sub_terminal})
 
-                    # for i in temp:
-                    #    terminal_clus.append(i)
-                print('terminal clus in this a_i', terminal_clus_ai)
-                print('final terminal clus', terminal_clus)
-                for target_terminal in terminal_clus_ai:
+                # for i in temp:
+                #    terminal_clus.append(i)
+            print('terminal clus in this a_i', terminal_clus_ai)
+            print('final terminal clus', terminal_clus)
+            for target_terminal in terminal_clus_ai:
 
-                    # prob_ai = self.prob_reaching_terminal_state(target_terminal, terminal_clus_ai, adjacency_matrix2_ai,  new_root_index, pt=markov_hitting_times_ai,  num_sim=500)
-                    prob_ai = self.simulate_branch_probability(target_terminal, terminal_clus_ai,
-                                                               adjacency_matrix2_ai,
-                                                               new_root_index, pt=markov_hitting_times_ai,
-                                                               num_sim=50)  # 50 ToDO change back to 500 = numsim
-                    df_graph['terminal_clus' + str(cluster_labels_subi[target_terminal])] = 0.0000000
+                # prob_ai = self.prob_reaching_terminal_state(target_terminal, terminal_clus_ai, adjacency_matrix2_ai,  new_root_index, pt=markov_hitting_times_ai,  num_sim=500)
+                prob_ai = self.simulate_branch_probability(target_terminal, terminal_clus_ai,
+                                                           adjacency_matrix2_ai,
+                                                           new_root_index, pt=markov_hitting_times_ai,
+                                                           num_sim=500)  # 50 ToDO change back to 500 = numsim
+                df_graph['terminal_clus' + str(cluster_labels_subi[target_terminal])] = 0.0000000
 
-                    pd_columnnames_terminal.append('terminal_clus' + str(cluster_labels_subi[target_terminal]))
+                pd_columnnames_terminal.append('terminal_clus' + str(cluster_labels_subi[target_terminal]))
 
-                    print('prob ai for target terminal', target_terminal, prob_ai)
-                    for k, prob_ii in enumerate(prob_ai):
-                        df_graph.at[cluster_labels_subi[k], 'terminal_clus' + str(
-                            cluster_labels_subi[target_terminal])] = prob_ii
-                bp_array = df_graph[pd_columnnames_terminal].values
-                bp_array[np.isnan(bp_array)] = 0.00000001
-                # print('final bp_array NOT normed by rowsum', bp_array)
-                bp_array = bp_array / bp_array.sum(axis=1)[:, None]
-                bp_array[np.isnan(bp_array)] = 0.00000001
-                # print('final bp_array normed by rowsum', bp_array)
+                # print('prob ai for target terminal', target_terminal, prob_ai)
+                for k, prob_ii in enumerate(prob_ai):
+                    df_graph.at[cluster_labels_subi[k], 'terminal_clus' + str(
+                        cluster_labels_subi[target_terminal])] = prob_ii
+            bp_array = df_graph[pd_columnnames_terminal].values
+            bp_array[np.isnan(bp_array)] = 0.00000001
+            # print('final bp_array NOT normed by rowsum', bp_array)
+            bp_array = bp_array / bp_array.sum(axis=1)[:, None]
+            bp_array[np.isnan(bp_array)] = 0.00000001
+            # print('final bp_array normed by rowsum', bp_array)
 
-                for ei, ii in enumerate(loc_compi):
-                    df_graph.at[ii, 'pt'] = hitting_times[ei]
-                    df_graph.at[ii, 'graph_node_label'] = graph_node_label[ei]
+            for ei, ii in enumerate(loc_compi):
+                df_graph.at[ii, 'pt'] = hitting_times[ei]
+                df_graph.at[ii, 'graph_node_label'] = graph_node_label[ei]
 
-                    df_graph.at[ii, 'majority_truth'] = graph_node_label[ei]
+                df_graph.at[ii, 'majority_truth'] = graph_node_label[ei]
 
-                    df_graph.at[ii, 'markov_pt'] = markov_hitting_times_ai[ei]
+                df_graph.at[ii, 'markov_pt'] = markov_hitting_times_ai[ei]
 
-                locallytrimmed_g.vs["label"] = df_graph['graph_node_label'].values
+            locallytrimmed_g.vs["label"] = df_graph['graph_node_label'].values
 
-                hitting_times = df_graph['pt'].values
+            hitting_times = df_graph['pt'].values
 
-                if len(super_terminal_clus_revised) > 0:
-                    self.revised_super_terminal_clusters = super_terminal_clus_revised
-                else:
-                    self.revised_super_terminal_clusters = self.super_terminal_clusters
-                self.hitting_times = hitting_times  # * 1000
-                self.markov_hitting_times = df_graph['markov_pt'].values  # hitting_times#
-                self.terminal_clusters = terminal_clus
-                print('terminal clusters', terminal_clus)
-                self.node_degree_list = node_deg_list
-                print(colored('project onto sc', 'red'))
+        if len(super_terminal_clus_revised) > 0:
+            self.revised_super_terminal_clusters = super_terminal_clus_revised
+        else:
+            self.revised_super_terminal_clusters = self.super_terminal_clusters
+        self.hitting_times = hitting_times  # * 1000
+        self.markov_hitting_times = df_graph['markov_pt'].values  # hitting_times#
+        self.terminal_clusters = terminal_clus
+        print('terminal clusters', terminal_clus)
+        self.node_degree_list = node_deg_list
+        print(colored('project onto sc', 'red'))
 
-                self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
-                self.dict_terminal_super_sub_pairs = dict_terminal_super_sub_pairs
-                hitting_times = self.markov_hitting_times
+        self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
+        self.dict_terminal_super_sub_pairs = dict_terminal_super_sub_pairs
+        hitting_times = self.markov_hitting_times
+        # print('edge weights before 2_all', edgeweights)
+        # print('markov hittings times', self.markov_hitting_times)
+        bias_weights_2_all = get_biased_weights(edgelist, edgeweights, self.markov_hitting_times, round_no=2)
+        # print('bias_weights_2_all',bias_weights_2_all)
+        row_list = []
+        col_list = []
+        for (rowi, coli) in edgelist:
+            row_list.append(rowi)
+            col_list.append(coli)
+        # print('shape', a_i.shape[0], a_i.shape[0], row_list)
+        temp_csr = csr_matrix((np.array(bias_weights_2_all), (np.array(row_list), np.array(col_list))),
+                              shape=(n_clus, n_clus))
+        if (self.dataset == '2M') | (self.dataset == 'mESC'):
+            visual_global_pruning_std = 1
+            max_outgoing = 3  # 4
+        elif self.dataset == 'scATAC':
+            visual_global_pruning_std = 0.15
+            max_outgoing = 2  # 4
+        elif self.dataset == 'faced':
+            visual_global_pruning_std = 3  # 1
+            max_outgoing = 2  # 4
+        elif self.dataset == 'droso':
+            visual_global_pruning_std = 0.15  # -0.1 # 1 (2-4hrs use 0.15
+            max_outgoing = 2  # 3  # 4
+        elif self.dataset == 'pancreas':
+            visual_global_pruning_std = 0  # 1
+            max_outgoing = 1  # 3  # 4
+        elif self.dataset == 'cardiac':
+            visual_global_pruning_std = .3  # .15  # 1
+            max_outgoing = 2  # 3  # 4
+        elif self.dataset == 'cardiac_merge':
+            visual_global_pruning_std = .15  # .15#.15  # 1
+            max_outgoing = 2  # 3  # 4
+        else:
+            visual_global_pruning_std = 0.15  # 0.15  # 0.15#1 for 2Morgan  # 0.15 in other caseses #0 for human #1 for mESC
+            max_outgoing = 2  # 3 for 2Morgan  # 2 Aug12 changing to 3 from 2
+        # glob_std_pruning =0 and max_out = 2 for HumanCD34 to simplify structure
+        edgeweights_maxout_2, edgelist_maxout_2, comp_labels_2 = local_pruning_clustergraph_mst(temp_csr,
+                                                                                                global_pruning_std=visual_global_pruning_std,
+                                                                                                max_outgoing=max_outgoing,
+                                                                                                preserve_disconnected=self.preserve_disconnected)
 
-                bias_weights_2_all = get_biased_weights(edgelist, edgeweights, self.markov_hitting_times, round_no=2)
-                row_list = []
-                col_list = []
-                for (rowi, coli) in edgelist:
-                    row_list.append(rowi)
-                    col_list.append(coli)
-                # print('shape', a_i.shape[0], a_i.shape[0], row_list)
-                temp_csr = csr_matrix((np.array(bias_weights_2_all), (np.array(row_list), np.array(col_list))),
-                                      shape=(n_clus, n_clus))
-                if (self.dataset == '2M')| (self.dataset == 'mESC'):
-                    visual_global_pruning_std = 1
-                    max_outgoing = 2  # 4
-                else:
-                    visual_global_pruning_std =0.151#0.15  # 0.15#1 for 2Morgan  # 0.15 in other caseses #0 for human #1 for mESC
-                    max_outgoing = 2#3 for 2Morgan  # 2 Aug12 changing to 3 from 2
-                # glob_std_pruning =0 and max_out = 2 for HumanCD34 to simplify structure
-                edgeweights_maxout_2, edgelist_maxout_2, comp_labels_2 = local_pruning_clustergraph_mst(temp_csr,
-                                                                                                        global_pruning_std=visual_global_pruning_std,
-                                                                                                        max_outgoing=max_outgoing,
-                                                                                                        preserve_disconnected=self.preserve_disconnected)
+        row_list = []
+        col_list = []
+        for (rowi, coli) in edgelist_maxout_2:
+            row_list.append(rowi)
+            col_list.append(coli)
+        temp_csr = csr_matrix((np.array(edgeweights_maxout_2), (np.array(row_list), np.array(col_list))),
+                              shape=(n_clus, n_clus))
+        temp_csr = temp_csr.transpose().todense() + temp_csr.todense()
+        temp_csr = np.tril(temp_csr, -1)  # elements along the main diagonal and above are set to zero
+        temp_csr = csr_matrix(temp_csr)
+        edgeweights_maxout_2 = temp_csr.data
+        scale_factor = max(edgeweights_maxout_2) - min(edgeweights_maxout_2)
+        edgeweights_maxout_2 = [((wi + .1) * 2.5 / scale_factor) + 0.1 for wi in edgeweights_maxout_2]
 
-                row_list = []
-                col_list = []
-                for (rowi, coli) in edgelist_maxout_2:
-                    row_list.append(rowi)
-                    col_list.append(coli)
-                temp_csr = csr_matrix((np.array(edgeweights_maxout_2), (np.array(row_list), np.array(col_list))),
-                                      shape=(n_clus, n_clus))
-                temp_csr = temp_csr.transpose().todense() + temp_csr.todense()
-                temp_csr = np.tril(temp_csr, -1)  # elements along the main diagonal and above are set to zero
-                temp_csr = csr_matrix(temp_csr)
-                edgeweights_maxout_2 = temp_csr.data
-                scale_factor = max(edgeweights_maxout_2) - min(edgeweights_maxout_2)
-                edgeweights_maxout_2 = [((wi + .1) * 2.5 / scale_factor) + 0.1 for wi in edgeweights_maxout_2]
+        sources, targets = temp_csr.nonzero()
+        edgelist_maxout_2 = list(zip(sources.tolist(), targets.tolist()))
+        self.edgelist_maxout = edgelist_maxout_2
+        # print('edgelist_maxout_2', edgelist_maxout_2)
+        self.edgeweights_maxout = edgeweights_maxout_2
 
-                sources, targets = temp_csr.nonzero()
-                edgelist_maxout_2 = list(zip(sources.tolist(), targets.tolist()))
-                self.edgelist_maxout = edgelist_maxout_2
-                self.edgeweights_maxout = edgeweights_maxout_2
+        remove_outliers = hitting_times
 
-                remove_outliers = hitting_times
+        threshold = np.percentile(remove_outliers, 95)  # np.mean(remove_outliers) + 1* np.std(remove_outliers)
 
-                threshold = np.percentile(remove_outliers, 95)  # np.mean(remove_outliers) + 1* np.std(remove_outliers)
+        th_hitting_times = [x if x < threshold else threshold for x in hitting_times]
 
-                th_hitting_times = [x if x < threshold else threshold for x in hitting_times]
+        remove_outliers_low = hitting_times[hitting_times < (np.mean(hitting_times) - 0.3 * np.std(hitting_times))]
 
-                remove_outliers_low = hitting_times[
-                    hitting_times < (np.mean(hitting_times) - 0.3 * np.std(hitting_times))]
-                threshold_low = np.mean(remove_outliers_low) - 0.3 * np.std(remove_outliers_low)
-                threshold_low = np.percentile(remove_outliers_low, 5)
-                # print('thresh low', threshold_low)
-                th_hitting_times = [x if x > threshold_low else threshold_low for x in th_hitting_times]
+        # threshold_low = np.mean(remove_outliers_low) - 0.3 * np.std(remove_outliers_low)
+        if remove_outliers_low.size == 0:
+            threshold_low = 0
+        else:
+            threshold_low = np.percentile(remove_outliers_low, 5)
+        print('thresh low', threshold_low)
+        th_hitting_times = [x if x > threshold_low else threshold_low for x in th_hitting_times]
+        print('th hitting times', th_hitting_times)
+        scaled_hitting_times = (th_hitting_times - np.min(th_hitting_times))
+        scaled_hitting_times = scaled_hitting_times * (1000 / np.max(scaled_hitting_times))
 
-                scaled_hitting_times = (th_hitting_times - np.min(th_hitting_times))
-                scaled_hitting_times = scaled_hitting_times * (1000 / np.max(scaled_hitting_times))
+        self.scaled_hitting_times = scaled_hitting_times
+        # self.single_cell_pt = self.project_hittingtimes_sc(self.hitting_times)
+        # self.single_cell_pt_stationary_bias = self.project_hittingtimes_sc(self.stationary_hitting_times.flatten())
+        # self.dijkstra_hitting_times = self.path_length_onbias(edgelist, biased_edgeweights)
+        # print('dijkstra hitting times', [(i,j) for i,j in enumerate(self.dijkstra_hitting_times)])
+        # self.single_cell_pt_dijkstra_bias = self.project_hittingtimes_sc(self.dijkstra_hitting_times)
 
-                self.scaled_hitting_times = scaled_hitting_times
-                # self.single_cell_pt = self.project_hittingtimes_sc(self.hitting_times)
-                # self.single_cell_pt_stationary_bias = self.project_hittingtimes_sc(self.stationary_hitting_times.flatten())
-                # self.dijkstra_hitting_times = self.path_length_onbias(edgelist, biased_edgeweights)
-                # print('dijkstra hitting times', [(i,j) for i,j in enumerate(self.dijkstra_hitting_times)])
-                # self.single_cell_pt_dijkstra_bias = self.project_hittingtimes_sc(self.dijkstra_hitting_times)
+        scaled_hitting_times = scaled_hitting_times.astype(int)
 
-                scaled_hitting_times = scaled_hitting_times.astype(int)
+        pal = ig.drawing.colors.AdvancedGradientPalette(['yellow', 'green', 'blue'], n=1001)
 
-                pal = ig.drawing.colors.AdvancedGradientPalette(['yellow', 'green', 'blue'], n=1001)
+        all_colors = []
 
-                all_colors = []
+        for i in scaled_hitting_times:
+            all_colors.append(pal.get(int(i))[0:3])
 
-                for i in scaled_hitting_times:
-                    all_colors.append(pal.get(int(i))[0:3])
+        locallytrimmed_g.vs['hitting_times'] = scaled_hitting_times
 
-                locallytrimmed_g.vs['hitting_times'] = scaled_hitting_times
+        locallytrimmed_g.vs['color'] = [pal.get(i)[0:3] for i in scaled_hitting_times]
 
-                locallytrimmed_g.vs['color'] = [pal.get(i)[0:3] for i in scaled_hitting_times]
+        self.group_color = [colors.to_hex(v) for v in locallytrimmed_g.vs['color']]  # based on ygb scale
+        viridis_cmap = cm.get_cmap('viridis_r')
 
-                self.group_color = [colors.to_hex(v) for v in locallytrimmed_g.vs['color']]  # based on ygb scale
-                viridis_cmap = cm.get_cmap('viridis_r')
+        self.group_color_cmap = [colors.to_hex(v) for v in
+                                 viridis_cmap(scaled_hitting_times / 1000)]  # based on ygb scale
 
-                self.group_color_cmap = [colors.to_hex(v) for v in
-                                         viridis_cmap(scaled_hitting_times / 1000)]  # based on ygb scale
+        self.graph_node_label = df_graph['graph_node_label'].values
+        self.edgeweight = [e['weight'] * 1 for e in locallytrimmed_g.es]
+        # print('self edge weight', len(self.edgeweight), self.edgeweight)
+        # print('self edge list', len(self.edgelist_unique), self.edgelist_unique)
+        self.graph_node_pos = layout.coords
+        f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True)
 
-                self.graph_node_label = df_graph['graph_node_label'].values
-                self.edgeweight = [e['weight'] * 1 for e in locallytrimmed_g.es]
-                print('self edge weight', len(self.edgeweight), self.edgeweight)
-                print('self edge list', len(self.edgelist_unique), self.edgelist_unique)
-                self.graph_node_pos = layout.coords
-                f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True)
+        self.draw_piechart_graph(ax, ax1)
 
-                self.draw_piechart_graph(ax, ax1)
+        plt.show()
+        # plt.scatter(self.embedding[:, 0], self.embedding[:, 1], c=self.single_cell_pt_markov, cmap='viridis', s=4, alpha=0.5)
+        # plt.scatter(self.embedding[root_user, 0], self.embedding[root_user, 1], c='orange', s=15)
+        # plt.title('root cell' + str(root_user))
+        # plt.show()
 
-                plt.show()
-                # plt.scatter(self.embedding[:, 0], self.embedding[:, 1], c=self.single_cell_pt_markov, cmap='viridis', s=4, alpha=0.5)
-                # plt.scatter(self.embedding[root_user, 0], self.embedding[root_user, 1], c='orange', s=15)
-                # plt.title('root cell' + str(root_user))
-                # plt.show()
+        import statistics
+        from statistics import mode
+        for tsi in self.terminal_clusters:
+            loc_i = np.where(np.asarray(self.labels) == tsi)[0]
+            val_pt = [self.single_cell_pt_markov[i] for i in loc_i]
+            if self.dataset == '2M':
+                major_traj = [self.df_annot.loc[i, ['Main_trajectory']].values[0] for i in loc_i]
+                major_cell_type = [self.df_annot.loc[i, ['Main_cell_type']].values[0] for i in loc_i]
+                print(tsi, 'has major traj and cell type', mode(major_traj), mode(major_cell_type))
+            th_pt = np.percentile(val_pt, 50)  # 50
+            loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
+            temp = np.mean(self.data[loc_i], axis=0)
+            labelsq, distances = self.knn_struct.knn_query(temp, k=1)
 
-                import statistics
-                from statistics import mode
-                for tsi in self.terminal_clusters:
-                    loc_i = np.where(np.asarray(self.labels) == tsi)[0]
-                    val_pt = [self.single_cell_pt_markov[i] for i in loc_i]
-                    if self.dataset =='2M':
-                        major_traj = [self.df_annot.loc[i, ['Main_trajectory']].values[0] for i in loc_i]
-                        major_cell_type = [self.df_annot.loc[i, ['Main_cell_type']].values[0] for i in loc_i]
-                        print(tsi, 'has major traj and cell type', mode(major_traj), mode(major_cell_type))
-                    th_pt = np.percentile(val_pt, 50)  # 50
-                    loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-                    temp = np.mean(self.data[loc_i], axis=0)
-                    labelsq, distances = self.knn_struct.knn_query(temp, k=1)
-                    print(labelsq[0])
-                    tsi_list.append(labelsq[0][0])
+            tsi_list.append(labelsq[0][0])
 
-                if self.embedding !=None:
-                    plt.scatter(self.embedding[:, 0], self.embedding[:, 1], c=self.single_cell_pt_markov,
-                            cmap='viridis', s=3, alpha=0.5)
-                    plt.scatter(self.embedding[root_user, 0], self.embedding[root_user, 1], c='orange', s=20)
-                    plt.title('root:' + str(root_user) + 'knn' + str(self.knn) + 'Ncomp' + str(self.ncomp))
-                    for i in tsi_list:
-                        # print(i, ' has traj and cell type', self.df_annot.loc[i, ['Main_trajectory', 'Main_cell_type']])
-                        plt.text(self.embedding[i, 0], self.embedding[i, 1], str(i))
-                        plt.scatter(self.embedding[i, 0], self.embedding[i, 1], c='red', s=10)
-                    plt.show()
+        if self.embedding != None:
+            plt.scatter(self.embedding[:, 0], self.embedding[:, 1], c=self.single_cell_pt_markov,
+                        cmap='viridis', s=3, alpha=0.5)
+            plt.scatter(self.embedding[root_user, 0], self.embedding[root_user, 1], c='orange', s=20)
+            plt.title('root:' + str(root_user) + 'knn' + str(self.knn) + 'Ncomp' + str(self.ncomp))
+            for i in tsi_list:
+                # print(i, ' has traj and cell type', self.df_annot.loc[i, ['Main_trajectory', 'Main_cell_type']])
+                plt.text(self.embedding[i, 0], self.embedding[i, 1], str(i))
+                plt.scatter(self.embedding[i, 0], self.embedding[i, 1], c='red', s=10)
+            plt.show()
         return
 
-    def draw_piechart_graph(self, ax, ax1, type_pt='original', ):
+    def draw_piechart_graph(self, ax, ax1, type_pt='pt', gene_exp='', title=''):
 
+        # ax1 is the pseudotime
         arrow_head_w = 0.4  # 0.2
-        edgeweight_scale = 1
+        edgeweight_scale = 1.5
 
         node_pos = self.graph_node_pos
         edgelist = list(self.edgelist_maxout)
@@ -2984,9 +3159,16 @@ class VIA:
         node_pos = np.asarray(node_pos)
 
         graph_node_label = self.graph_node_label
-        if type_pt == 'original': pt = self.scaled_hitting_times
-        if type_pt == 'biased_stationary': pt = self.biased_hitting_times_stationary
-        if type_pt == 'markov': pt = self.markov_hitting_times
+        if type_pt == 'pt':
+            pt = self.scaled_hitting_times  # these are the final MCMC refined pt then slightly scaled
+            print('len pt', len(pt))
+            title_ax1 = "pseudotime"
+
+        # if type_pt == 'biased_stationary': pt = self.biased_hitting_times_stationary
+        # if type_pt == 'markov': pt = self.markov_hitting_times
+        if type_pt == 'gene':
+            pt = gene_exp
+            title_ax1 = title
         import matplotlib.lines as lines
 
         n_groups = len(set(self.labels))  # node_pos.shape[0]
@@ -2998,10 +3180,11 @@ class VIA:
             loc_i = np.where(self.labels == group_i)[0]
 
             group_pop[group_i] = len(loc_i)  # np.sum(loc_i) / 1000 + 1
-            true_label_in_group_i = list(np.asarray(self.true_label)[[loc_i]])
+            true_label_in_group_i = list(np.asarray(self.true_label)[loc_i])
             for ii in set(true_label_in_group_i):
                 group_frac[ii][group_i] = true_label_in_group_i.count(ii)
-        group_frac = group_frac.div(group_frac.sum(axis=1), axis=0)
+        # group_frac = group_frac.div(group_frac.sum(axis=1), axis=0)
+        # print('group frac', group_frac)
 
         line_true = np.linspace(0, 1, n_truegroups)
         color_true_list = [plt.cm.jet(color) for color in line_true]
@@ -3009,7 +3192,8 @@ class VIA:
         sct = ax.scatter(
             node_pos[:, 0], node_pos[:, 1],
             c='white', edgecolors='face', s=group_pop, cmap='jet')
-        print('draw triangle edgelist', len(edgelist), edgelist)
+        # print('draw triangle edgelist', len(edgelist), edgelist)
+        bboxes = getbb(sct, ax)
         for e_i, (start, end) in enumerate(edgelist):
             if pt[start] > pt[end]:
                 temp = start
@@ -3054,6 +3238,7 @@ class VIA:
         trans2 = ax.transAxes.inverted().transform
         pie_axs = []
         pie_size_ar = ((group_pop - np.min(group_pop)) / (np.max(group_pop) - np.min(group_pop)) + 0.5) / 10
+        # print('pie_size_ar', pie_size_ar)
 
         for node_i in range(n_groups):
             pie_size = pie_size_ar[node_i][0]
@@ -3065,10 +3250,11 @@ class VIA:
             xa = ax_x_min + (xa - pie_size / 2) * ax_len_x
             ya = ax_y_min + (ya - pie_size / 2) * ax_len_y
             # clip, the fruchterman layout sometimes places below figure
-            # if ya < 0: ya = 0
-            # if xa < 0: xa = 0
+            if ya < 0: ya = 0
+            if xa < 0: xa = 0
             rect = [xa, ya, pie_size * ax_len_x, pie_size * ax_len_y]
-            frac = group_frac.iloc[node_i].values
+            frac = np.asarray([ff for ff in group_frac.iloc[node_i].values])
+
             pie_axs.append(plt.axes(rect, frameon=False))
             pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
             pie_axs[node_i].set_xticks([])
@@ -3079,18 +3265,20 @@ class VIA:
         patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
         labels = list(set(self.true_label))
         plt.legend(patches, labels, loc=(-5, -5), fontsize=6)
-        if self.too_big_factor >= 0.1:
+        if self.is_coarse == True:  # self.too_big_factor >= 0.1:
             is_sub = ' super clusters'
         else:
             is_sub = ' sub clusters'
         ti = 'Reference Group Membership. K=' + str(self.knn) + '. ncomp = ' + str(self.ncomp) + is_sub
         ax.set_title(ti)
 
-        title_list = ["PT using Markov Simulation"]  # , "PT on undirected original graph"]
+        title_list = [title_ax1]  # , "PT on undirected original graph"]
         for i, ax_i in enumerate([ax1]):
-            print("drawing axis", i)
-            if i == 0:  pt = self.markov_hitting_times
-            if i == 1: pt = self.hitting_times
+
+            if type_pt == 'pt':
+                pt = self.markov_hitting_times
+            else:
+                pt = gene_exp
 
             for e_i, (start, end) in enumerate(edgelist):
                 if pt[start] > pt[end]:
@@ -3137,10 +3325,12 @@ class VIA:
                     l_width.append(0.0)
 
             gp_scaling = 500 / max(group_pop)
-            print(gp_scaling, 'gp_scaling')
+            # print(gp_scaling, 'gp_scaling')
             group_pop_scale = group_pop * gp_scaling
+            cmap = 'viridis_r'
+            if type_pt == 'gene': cmap = 'coolwarm'  # cmap = 'viridis'
 
-            ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap='viridis_r', edgecolors=c_edge,
+            ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap=cmap, edgecolors=c_edge,
                          alpha=1, zorder=3, linewidth=l_width)
             # for ii in range(node_pos.shape[0]):
             # ax_i.text(node_pos[ii, 0] + 0.5, node_pos[ii, 1] + 0.5, 'c' + str(ii), color='black', zorder=4)
@@ -3172,7 +3362,7 @@ class VIA:
             if majority_val == onevsall: print('cluster', kk, ' has majority', onevsall, 'with population', len(vals))
             if kk == -1:
                 len_unknown = len(vals)
-                print('len unknown', len_unknown)
+                # print('len unknown', len_unknown)
             if (majority_val == onevsall) and (kk != -1):
                 thp1_labels.append(kk)
                 fp = fp + len([e for e in vals if e != onevsall])
@@ -3318,10 +3508,8 @@ def run_palantir_func_human34(ad, ncomps, knn, tsne, revised_clus, start_cell='c
     plt.show()
 
 
-
-
-
-def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
+def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
+    import scvelo as scv
     dict_abb = {'Basophils': 'BASO1', 'CD4+ Effector Memory': 'TCEL7', 'Colony Forming Unit-Granulocytes': 'GRAN1',
                 'Colony Forming Unit-Megakaryocytic': 'MEGA1', 'Colony Forming Unit-Monocytes': 'MONO1',
                 'Common myeloid progenitors': "CMP", 'Early B cells': "PRE_B2", 'Eosinophils': "EOS2",
@@ -3334,9 +3522,53 @@ def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
                 'Megakaryocyte/erythroid progenitors': "MEP", 'Myeloid Dendritic Cells': 'mDC', 'Naïve B cells': "B_a1",
                 'Plasmacytoid Dendritic Cells': "pDC", 'Pro B cells': 'PRE_B3'}
 
-    p0_random_seed = p0_random_seed
-    string_ = 'ncomp =' + str(ncomps) + ' knn=' + str(knn) + ' randseed=' + str(p0_random_seed)
-    # print('ncomp =', ncomps, ' knn=', knn, ' randseed=', p0_random_seed)
+    string_ = 'ncomp =' + str(ncomps) + ' knn=' + str(knn) + ' randseed=' + str(v0_random_seed)
+    # print('ncomp =', ncomps, ' knn=', knn, ' randseed=', v0_random_seed)
+    print(colored(string_, 'blue'))
+    nover_labels = pd.read_csv('/home/shobi/Trajectory/Datasets/HumanCD34/Nover_Cor_PredFine_notLogNorm.csv')[
+        'x'].values.tolist()
+    nover_labels = [dict_abb[i] for i in nover_labels]
+
+    for i in list(set(nover_labels)):
+        print('the population of ', i, 'is ', nover_labels.count(i))
+
+    ad = scv.read_loom('/home/shobi/Downloads/Human Hematopoietic Profiling homo_sapiens 2019-11-08 16.12.loom')
+    print(ad)
+    # ad = sc.read('/home/shobi/Trajectory/Datasets/HumanCD34/human_cd34_bm_rep1.h5ad')
+    # ad.obs['nover_label'] = nover_labels
+    print('start cellrank pipeline', time.ctime())
+
+    # scv.utils.show_proportions(ad)
+    scv.pl.proportions(ad)
+    scv.pp.filter_and_normalize(ad, min_shared_counts=20, n_top_genes=2000)
+    sc.tl.pca(ad, n_comps=ncomps)
+    n_pcs = ncomps
+
+    print('npcs', n_pcs, 'knn', knn)
+    sc.pp.neighbors(ad, n_pcs=n_pcs, n_neighbors=knn)
+    sc.tl.louvain(ad, key_added='clusters', resolution=1)
+
+    scv.pp.moments(ad, n_pcs=n_pcs, n_neighbors=knn)
+    scv.tl.velocity(ad)
+    scv.tl.velocity_graph(ad)
+    scv.pl.velocity_embedding_stream(ad, basis='umap', color='nover_label')
+
+
+def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
+    dict_abb = {'Basophils': 'BASO1', 'CD4+ Effector Memory': 'TCEL7', 'Colony Forming Unit-Granulocytes': 'GRAN1',
+                'Colony Forming Unit-Megakaryocytic': 'MEGA1', 'Colony Forming Unit-Monocytes': 'MONO1',
+                'Common myeloid progenitors': "CMP", 'Early B cells': "PRE_B2", 'Eosinophils': "EOS2",
+                'Erythroid_CD34- CD71+ GlyA-': "ERY2", 'Erythroid_CD34- CD71+ GlyA+': "ERY3",
+                'Erythroid_CD34+ CD71+ GlyA-': "ERY1", 'Erythroid_CD34- CD71lo GlyA+': 'ERY4',
+                'Granulocyte/monocyte progenitors': "GMP", 'Hematopoietic stem cells_CD133+ CD34dim': "HSC1",
+                'Hematopoietic stem cells_CD38- CD34+': "HSC2",
+                'Mature B cells class able to switch': "B_a2", 'Mature B cells class switched': "B_a4",
+                'Mature NK cells_CD56- CD16- CD3-': "Nka3", 'Monocytes': "MONO2",
+                'Megakaryocyte/erythroid progenitors': "MEP", 'Myeloid Dendritic Cells': 'mDC', 'Naïve B cells': "B_a1",
+                'Plasmacytoid Dendritic Cells': "pDC", 'Pro B cells': 'PRE_B3'}
+
+    string_ = 'ncomp =' + str(ncomps) + ' knn=' + str(knn) + ' randseed=' + str(v0_random_seed)
+    # print('ncomp =', ncomps, ' knn=', knn, ' randseed=', v0_random_seed)
     print(colored(string_, 'blue'))
     nover_labels = pd.read_csv('/home/shobi/Trajectory/Datasets/HumanCD34/Nover_Cor_PredFine_notLogNorm.csv')[
         'x'].values.tolist()
@@ -3369,7 +3601,7 @@ def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
     tsne = pd.DataFrame(ad.obsm['tsne'], index=ad.obs_names, columns=['x', 'y'])
     tsnem = ad.obsm['tsne']
     palantir_tsne_df = pd.DataFrame(tsnem)
-    palantir_tsne_df.to_csv('/home/shobi/Trajectory/Datasets/HumanCD34/palantir_tsne.csv')
+    # palantir_tsne_df.to_csv('/home/shobi/Trajectory/Datasets/HumanCD34/palantir_tsne.csv')
     revised_clus = ad.obs['clusters'].values.tolist().copy()
     loc_DCs = [i for i in range(5780) if ad.obs['clusters'].values.tolist()[i] == '7']
     for loc_i in loc_DCs:
@@ -3385,7 +3617,7 @@ def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
     # sc.pp.filter_genes(ad, min_cells=10)
     # print('after extra filtering', ad.shape)
     adata_counts = sc.AnnData(
-        ad.X)  # slalom_human())#(ad.X)  # ad.X is filtered, lognormalized,scaled// ad.raw.X is the filtered but not pre-processed
+        ad.X)  # (ad.X)  # ad.X is filtered, lognormalized,scaled// ad.raw.X is the filtered but not pre-processed
     adata_counts.obs_names = ad.obs_names
     adata_counts.var_names = ad.var_names
     print('starting to save selected genes')
@@ -3394,8 +3626,8 @@ def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
                   'CD27', 'CD14', 'CD22', 'ITGAM', 'CLC', 'MS4A3', 'FCGR3A', 'CSF1R']
     df_selected_genes = pd.DataFrame(adata_counts.X, columns=[cc for cc in adata_counts.var_names])
     df_selected_genes = df_selected_genes[genes_save]
-    df_selected_genes.to_csv("/home/shobi/Trajectory/Datasets/HumanCD34/selected_genes.csv")
-    # sc.pp.recipe_zheng17(adata_counts, n_top_genes=1000, log=True) #using this or the .X scaled version is pretty much the same.
+    # df_selected_genes.to_csv("/home/shobi/Trajectory/Datasets/HumanCD34/selected_genes.csv")
+
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
     marker = ['x', '+', (5, 0), '>', 'o', (5, 2)]
     import colorcet as cc
@@ -3463,23 +3695,28 @@ def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
     # print('xpca',norm_df['X_pca'])
     true_label = nover_labels  # revised_clus
 
-    print('p0 random seed', p0_random_seed)
+    print('v0 random seed', v0_random_seed)
     # df_temp_write  = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:200])
     # df_temp_write.to_csv("/home/shobi/Trajectory/Datasets/HumanCD34/Human_CD34_200PCA.csv")
-    p0 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
-              too_big_factor=0.3,
-              pseudotime=True, path="/home/shobi/Trajectory/Datasets/HumanCD34/",
-              root_user=4823, dataset='humanCD34', preserve_disconnected=True, random_seed=p0_random_seed,
-              do_magic_bool=True, is_coarse=True)  # *.4 root=1,
-    p0.run_VIA()
-    super_labels = p0.labels
+    v0 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=0.3,
+             root_user=4823, dataset='humanCD34', preserve_disconnected=True, random_seed=v0_random_seed,
+             do_magic_bool=True, is_coarse=True)  # *.4 root=1,
+    v0.run_VIA()
+    super_labels = v0.labels
     df_ = pd.DataFrame(ad.X)
     df_.columns = [i for i in ad.var_names]
     print('start magic')
     gene_list_magic = ['IL3RA', 'IRF8', 'GATA1', 'GATA2', 'ITGA2B', 'MPO', 'CD79B', 'SPI1', 'CD34', 'CSF1R', 'ITGAX']
-    df_magic = p0.do_magic(df_, magic_steps=3, gene_list=gene_list_magic)
+    df_magic = v0.do_magic(df_, magic_steps=3, gene_list=gene_list_magic)
+    df_magic_cluster = df_magic.copy()
+    df_magic_cluster['parc'] = v0.labels
+    df_magic_cluster = df_magic_cluster.groupby('parc', as_index=True).mean()
     print('end magic', df_magic.shape)
+    f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True)
+    v0.draw_piechart_graph(ax, ax1, type_pt='gene', gene_exp=df_magic_cluster['GATA1'].values, title='GATA1')
 
+    plt.show()
     print('super labels', set(super_labels))
     ad.obs['parc0_label'] = [str(i) for i in super_labels]
     magic_ad = ad.obsm['MAGIC_imputed_data']
@@ -3499,38 +3736,41 @@ def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
     sc.pl.rank_genes_groups_heatmap(ad, n_genes=10, groupby="parc0_label", show_gene_labels=True, use_raw=False)
     sc.pl.rank_genes_groups_tracksplot(ad, groupby='parc0_label', n_genes = 3)  # plot the result
     '''
-    super_edges = p0.edgelist_maxout  # p0.edgelist
+    super_edges = v0.edgelist_maxout  # v0.edgelist
 
+    tsi_list = get_loc_terminal_states(v0, adata_counts.obsm['X_pca'][:, 0:ncomps])
+    v1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=0.05, super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=4823,
+             x_lazy=0.95, alpha_teleport=0.99, dataset='humanCD34', preserve_disconnected=True,
+             super_terminal_clusters=v0.terminal_clusters, is_coarse=False, full_neighbor_array=v0.full_neighbor_array,
+             ig_full_graph=v0.ig_full_graph, full_distance_array=v0.full_distance_array,
+             csr_array_locally_pruned=v0.csr_array_locally_pruned,
+             random_seed=v0_random_seed)  # *.4super_terminal_cells = tsi_list #3root=1,
+    v1.run_VIA()
+    labels = v1.labels
 
-    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster
-    for tsi in p0.terminal_clusters:
-        loc_i = np.where(super_labels == tsi)[0]
-        temp = np.mean(adata_counts.obsm['X_pca'][:, 0:ncomps][loc_i], axis=0)
-        labelsq, distances = p0.knn_struct.knn_query(temp, k=1)
-        tsi_list.append(labelsq[0][0])
-
-    p1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
-              too_big_factor=0.05,
-              path="/home/shobi/Trajectory/Datasets/HumanCD34/", pseudotime=True,
-              super_cluster_labels=super_labels, super_node_degree_list=p0.node_degree_list,
-              super_terminal_cells=tsi_list, root_user=4823,
-              x_lazy=0.99, alpha_teleport=0.99, dataset='humanCD34', preserve_disconnected=True,
-              super_terminal_clusters=p0.terminal_clusters, is_coarse=False, full_neighbor_array=p0.full_neighbor_array,
-              ig_full_graph=p0.ig_full_graph,
-              csr_array_pruned=p0.csr_array_pruned)  # *.4super_terminal_cells = tsi_list #3root=1,
-    p1.run_VIA()
-    labels = p1.labels
-
-    ad.obs['parc1_label'] = [str(i) for i in labels]
-
-    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster
-    for tsi in p1.revised_super_terminal_clusters:
-        loc_i = np.where(super_labels == tsi)[0]
-        temp = np.mean(adata_counts.obsm['X_pca'][:, 0:ncomps][loc_i], axis=0)
-        labelsq, distances = p0.knn_struct.knn_query(temp, k=1)
-        tsi_list.append(labelsq[0][0])
-
+    df_magic_cluster = df_magic.copy()
+    df_magic_cluster['via1'] = v1.labels
+    df_magic_cluster = df_magic_cluster.groupby('via1', as_index=True).mean()
+    print('df_magic_cluster', df_magic_cluster)
     '''
+    #Get the clustsergraph gene expression on topology
+    for gene_i in gene_list_magic:
+        f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True)
+        v1.draw_piechart_graph(ax,ax1,type_pt='gene', gene_exp = df_magic_cluster[gene_i].values, title = gene_i)
+        plt.show()
+    '''
+    ad.obs['parc1_label'] = [str(i) for i in labels]
+    '''
+    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster
+    for tsi in v1.revised_super_terminal_clusters:
+        loc_i = np.where(super_labels == tsi)[0]
+        temp = np.mean(adata_counts.obsm['X_pca'][:, 0:ncomps][loc_i], axis=0)
+        labelsq, distances = v0.knn_struct.knn_query(temp, k=1)
+        tsi_list.append(labelsq[0][0])
+
+
     sc.tl.rank_genes_groups(ad, groupby='parc1_label', use_raw=True,
                             method='wilcoxon', n_genes=10)  # compute differential expression
 
@@ -3544,7 +3784,7 @@ def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
     obs = ad.raw.X.toarray()
     print('shape obs', obs.shape)
     obs = pd.DataFrame(obs, columns=gene_ids)
-    #    obs['parc']=p1.labels
+    #    obs['parc']=v1.labels
     obs['louvain'] = revised_clus
 
     # obs_average = obs.groupby('parc', as_index=True).mean()
@@ -3553,14 +3793,16 @@ def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
     # obs_average.to_csv('/home/shobi/Trajectory/Datasets/HumanCD34/louvain_palantir_average.csv', index=False)
     ad_obs = sc.AnnData(obs_average)
     ad_obs.var_names = gene_ids
-    ad_obs.obs['parc'] = [i for i in range(len(set(revised_clus)))]  # p1.labels instaed of revised_clus
+    ad_obs.obs['parc'] = [i for i in range(len(set(revised_clus)))]  # v1.labels instaed of revised_clus
 
     # sc.write('/home/shobi/Trajectory/Datasets/HumanCD34/louvain_palantir_average.h5ad',ad_obs)
     # fig_0, ax_0 = plt.subplots()
     loaded_magic_df = pd.read_csv('/home/shobi/Trajectory/Datasets/HumanCD34/MAGIC_palantir_knn30ncomp100_subset.csv')
     # loaded_magic_df.head()
-    for gene_name in ['ITGA2B', 'IL3RA', 'ITGAX',
-                      'IRF8','MPO']:  # ['GATA1', 'GATA2', 'ITGA2B', 'MPO', 'CD79B','IRF8','SPI1', 'CD34','CSF1R','IL3RA','IRF4', 'CSF2RA','ITGAX']:
+
+    for gene_name in ['ITGA2B', 'IL3RA',
+                      'IRF8',
+                      'MPO']:  # ['GATA1', 'GATA2', 'ITGA2B', 'MPO', 'CD79B','IRF8','SPI1', 'CD34','CSF1R','IL3RA','IRF4', 'CSF2RA','ITGAX']:
         print('gene name', gene_name)
         # DC markers https://www.cell.com/pb-assets/products/nucleus/nucleus-phagocytes/rnd-systems-dendritic-cells-br.pdf
         gene_name_dict = {'GATA1': 'GATA1', 'GATA2': 'GATA2', 'ITGA2B': 'CD41 (Mega)', 'MPO': 'MPO (Mono)',
@@ -3568,14 +3810,16 @@ def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
                           'CSF1R': 'CSF1R (pDC. Up then Down in cDC)', 'IL3RA': 'CD123 (pDC)', 'IRF4': 'IRF4 (pDC)',
                           'ITGAX': 'ITGAX (cDCs)', 'CSF2RA': 'CSF2RA (cDC)'}
 
-        # loc_gata = np.where(np.asarray(ad.var_names) == gene_name)[0][0]
-        # magic_ad = ad.obsm['MAGIC_imputed_data'][:, loc_gata]
-        # magic_ad=loaded_magic_df[gene_name]
+        loc_gata = np.where(np.asarray(ad.var_names) == gene_name)[0][0]
+        magic_ad = ad.obsm['MAGIC_imputed_data'][:, loc_gata]
+        magic_ad = loaded_magic_df[gene_name]
+        # subset_ = magic_ad
         subset_ = df_magic[gene_name].values
         print(subset_.shape)
         # print('shapes of magic_ad 1 and 2', magic_ad.shape,subset_.shape)
-        # p1.get_gene_expression(magic_ad,title_gene = gene_name_dict[gene_name])
-        p1.get_gene_expression(subset_, title_gene=gene_name_dict[gene_name] + 'VIA MAGIC')
+        # v1.get_gene_expression(magic_ad,title_gene = gene_name_dict[gene_name])
+        v1.get_gene_expression(subset_, title_gene=gene_name_dict[gene_name] + 'VIA MAGIC')
+        # v0.get_gene_expression(subset_, title_gene=gene_name_dict[gene_name] + 'VIA MAGIC')
 
     print('start tsne')
     n_downsample = 4000
@@ -3587,13 +3831,13 @@ def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
         labels = list(np.asarray(labels)[idx])
         print('labels p1', len(labels), set(labels))
         true_label = list(np.asarray(true_label)[idx])
-        sc_pt_markov = list(np.asarray(p1.single_cell_pt_markov)[idx])
-        # graph_hnsw = p0.knngraph_visual()
+        sc_pt_markov = list(np.asarray(v1.single_cell_pt_markov)[idx])
+        # graph_hnsw = v0.knngraph_visual()
         embedding = tsnem[idx, :]  # TSNE().fit_transform(adata_counts.obsm['X_pca'][idx, :])
         import phate
-        #phate_op = phate.PHATE()
-        #embedding = phate_op.fit_transform(adata_counts.obsm['X_pca'][:, 0:20])
-        #embedding = embedding[idx, :]
+        # phate_op = phate.PHATE()
+        # embedding = phate_op.fit_transform(adata_counts.obsm['X_pca'][:, 0:20])
+        # embedding = embedding[idx, :]
 
         # embedding = umap.UMAP().fit_transform(adata_counts.obsm['X_pca'][idx, 0:20])
         print('size of downsampled embedding', embedding.shape)
@@ -3603,144 +3847,68 @@ def main_Human(ncomps=100, knn=30, p0_random_seed=4, run_palantir_func=False):
         idx = np.random.randint(len(labels), size=len(labels))
     print('end tsne')
 
-    knn_hnsw, ci_list = sc_loc_ofsuperCluster_embeddedspace(embedding, p0, p1, idx)
-    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(p0, p1, idx)
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, idx)
     draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, labels, super_labels, super_edges,
-                         p1.x_lazy, p1.alpha_teleport, sc_pt_markov, true_label, knn=p0.knn,
-                         final_super_terminal=p1.revised_super_terminal_clusters,
-                         sub_terminal_clusters=p1.terminal_clusters,
+                         v1.x_lazy, v1.alpha_teleport, sc_pt_markov, true_label, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
                          title_str='Hitting times: Markov Simulation on biased edges', ncomp=ncomps)
-
-
-
+    plt.show()
     # DRAW EVOLUTION PATHS
-
-    #draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, p0.full_graph_shortpath, idx,  adata_counts.obsm['X_pca'][:, 0:ncomps])
-
+    knn_hnsw = make_knn_embeddedspace(embedding)
+    draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath, idx)
     plt.show()
 
 
-def main_Toy(ncomps=100, knn=30, random_seed=41):
-    dataset = "Toy4"  # "ToyCyclic"#"Toy4"#"Toy3"  # ""Toy1" # GermlineLi #Toy1
+def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root_user='M1',
+                         foldername="/home/shobi/Trajectory/Datasets/Toy3/"):
     print('dataset, ncomps, knn, seed', dataset, ncomps, knn, random_seed)
-    ## Dataset Germline Li https://zenodo.org/record/1443566#.XZlhEkEzZ5y
-    if dataset == "GermlineLine":
-        df_expression_ids = pd.read_csv("/home/shobi/Trajectory/Code/Rcode/germline_human_female_weeks_li.csv", 'rt',
-                                        delimiter=",")
-        print(df_expression_ids.shape)
-        # print(df_expression_ids[['cell_id',"week","ACTG2","STK31"]])[10:12]
-        df_counts = pd.read_csv("/home/shobi/Trajectory/Code/Rcode/germline_human_female_weeks_li_filteredcounts.csv",
-                                'rt', delimiter=",")
-        df_ids = pd.read_csv("/home/shobi/Trajectory/Code/Rcode/germline_human_female_weeks_li_labels.csv", 'rt',
+
+    # root_user = ["T1_M1", "T2_M1"]  # "M1"  # #'M1'  # "T1_M1", "T2_M1"] #"T1_M1"
+
+    if dataset == "Toy3":
+        df_counts = pd.read_csv(foldername + "Toy3/toy_multifurcating_M8_n1000d1000.csv", 'rt',
+                                delimiter=",")
+        df_ids = pd.read_csv(foldername + "Toy3/toy_multifurcating_M8_n1000d1000_ids.csv", 'rt',
                              delimiter=",")
-        # print(df_counts.shape, df_counts.head() ,df_ids.shape)
-        # X_counts = df_counts.values
-        # print(X_counts.shape)
-        # varnames = pd.Categorical(list(df_counts.columns))
 
-        adata_counts = sc.AnnData(df_counts, obs=df_ids)
-        print(adata_counts.obs)
-        sc.pp.filter_cells(adata_counts, min_counts=1)
-        print(adata_counts.n_obs)
-        sc.pp.filter_genes(adata_counts, min_counts=1)  # only consider genes with more than 1 count
-        print(adata_counts.X.shape)
-        sc.pp.normalize_per_cell(  # normalize with total UMI count per cell
-            adata_counts, key_n_counts='n_counts_all')
-        print(adata_counts.X.shape, len(list(adata_counts.var_names)))
+        root_user = 'M1'
+        paga_root = "M1"
+    if dataset == "Toy4":  # 2 disconnected components
+        df_counts = pd.read_csv(foldername + "Toy4/toy_disconnected_M9_n1000d1000.csv", 'rt',
+                                delimiter=",")
+        df_ids = pd.read_csv(foldername + "Toy4/toy_disconnected_M9_n1000d1000_ids.csv", 'rt', delimiter=",")
+        root_user = ['T1_M1', 'T2_M1']  # 'T1_M1'
+        paga_root = 'T1_M1'
 
-        filter_result = sc.pp.filter_genes_dispersion(  # select highly-variable genes
-            adata_counts.X, flavor='cell_ranger', n_top_genes=1000, log=False)
-        print(adata_counts.X.shape, len(list(adata_counts.var_names)))  # , list(adata_counts.var_names))
-
-        adata_counts = adata_counts[:, filter_result.gene_subset]
-        print(adata_counts.X.shape, len(list(adata_counts.var_names)))  # ,list(adata_counts.var_names))
-        # subset the genes
-        sc.pp.normalize_per_cell(adata_counts)  # renormalize after filtering
-        sc.pp.log1p(adata_counts)  # log transform: adata_counts.X = log(adata_counts.X + 1)
-        sc.pp.scale(adata_counts)  # scale to unit variance and shift to zero mean
-        sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=20)
-
-        true_label = list(adata_counts.obs['week'])
-        sc.pp.neighbors(adata_counts, n_neighbors=10, n_pcs=20)
-        sc.tl.draw_graph(adata_counts)
-        sc.pl.draw_graph(adata_counts, color='gender_week', legend_loc='right margin', palette='jet')
-
-    ## Dataset Paul15 https://scanpy-tutorials.readthedocs.io/en/latest/paga-paul15.html
-    if dataset == 'Paul15':
-        root_user = "8Mk"
-        adata_counts = sc.datasets.paul15()
-        sc.pp.recipe_zheng17(adata_counts)
-        sc.tl.pca(adata_counts, svd_solver='arpack')
-        true_label = list(adata_counts.obs['paul15_clusters'])  # PAUL
-        adata_counts.obs['group_id'] = true_label
-        # sc.pp.neighbors(adata_counts, n_neighbors=10)
-        # sc.tl.draw_graph(adata_counts)
-        # sc.pl.draw_graph(adata_counts, color=['paul15_clusters', 'Cma1'], legend_loc='on data')
-
-    if dataset.startswith('Toy'):
-        root_user = ["T1_M1", "T2_M1"]  # "M1"  # #'M1'  # "T1_M1", "T2_M1"] #"T1_M1"
-        if dataset == "Toy1":
-            df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy1/toy_bifurcating_M4_n2000d1000.csv",
-                                    'rt', delimiter=",")
-            df_ids = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy1/toy_bifurcating_M4_n2000d1000_ids.csv",
-                                 'rt', delimiter=",")
-        if dataset == "Toy2":
-            df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy2/toy_multifurcating_n1000.csv", 'rt',
-                                    delimiter=",")
-            df_ids = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy2/toy_multifurcating_n1000_ids.csv", 'rt',
-                                 delimiter=",")
-        if dataset == "Toy3":
-            df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy3/toy_multifurcating_M8_n1000d1000.csv", 'rt',
-                                    delimiter=",")
-            df_ids = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy3/toy_multifurcating_M8_n1000d1000_ids.csv", 'rt',
-                                 delimiter=",")
-            start_cell = 'C107'
-        if dataset == "ToyCyclic":
-            df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/ToyCyclic/ToyCyclic_M4_n1000d1000.csv", 'rt',
-                                    delimiter=",")
-            df_ids = pd.read_csv("/home/shobi/Trajectory/Datasets/ToyCyclic/ToyCyclic_M4_n1000d1000_ids.csv", 'rt',
-                                 delimiter=",")
-            start_cell = 'C1'  # 'C1004'
-        if dataset == "Toy4":
-            df_counts = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy4/toy_disconnected_M9_n1000d1000.csv", 'rt',
-                                    delimiter=",")
-            df_ids = pd.read_csv("/home/shobi/Trajectory/Datasets/Toy4/toy_disconnected_M9_n1000d1000_ids.csv", 'rt',
-                                 delimiter=",")
-            start_cell = 'C139'
-        df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
-        print("shape", df_counts.shape, df_ids.shape)
-        df_counts = df_counts.drop('Unnamed: 0', 1)
-        df_ids = df_ids.sort_values(by=['cell_id_num'])
-        df_ids = df_ids.reset_index(drop=True)
-        # df_ids.to_csv("/home/shobi/Trajectory/Datasets/ToyCyclic/ToyCyclic_M4_n3000d1000_sorted.csv")
-        # df_ids.to_csv("/home/shobi/Trajectory/Datasets/Toy4/toy_disconnected_M9_n1000d1000_ids_sorted.csv")
-
-        true_label = df_ids['group_id']
-        adata_counts = sc.AnnData(df_counts, obs=df_ids)
-        # sc.pp.recipe_zheng17(adata_counts, n_top_genes=20) not helpful for toy data
-
+    df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
+    print("shape", df_counts.shape, df_ids.shape)
+    df_counts = df_counts.drop('Unnamed: 0', 1)
+    df_ids = df_ids.sort_values(by=['cell_id_num'])
+    df_ids = df_ids.reset_index(drop=True)
+    true_label = df_ids['group_id']
+    adata_counts = sc.AnnData(df_counts, obs=df_ids)
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
 
-    print(np.flatnonzero(adata_counts.obs['group_id'] == 'T1_M1')[0])  # 'M1'T1_M1'
-    adata_counts.uns['iroot'] = np.flatnonzero(adata_counts.obs['group_id'] == 'T1_M1')[0]  # 'M1'
+    adata_counts.uns['iroot'] = np.flatnonzero(adata_counts.obs['group_id'] == paga_root)[0]  # 'T1_M1'#'M1'
 
+    # comparisons
     sc.pp.neighbors(adata_counts, n_neighbors=knn, n_pcs=ncomps)  # 4
     sc.tl.draw_graph(adata_counts)
-    sc.pl.draw_graph(adata_counts, color='group_id', legend_loc='on data')  # force-directed layout
+    # sc.pl.draw_graph(adata_counts, color='group_id', legend_loc='on data')  # force-directed layout
     start_dfmap = time.time()
     sc.tl.diffmap(adata_counts, n_comps=ncomps)
     print('time taken to get diffmap given knn', time.time() - start_dfmap)
     sc.pp.neighbors(adata_counts, n_neighbors=knn, use_rep='X_diffmap')  # 4
     sc.tl.draw_graph(adata_counts)
-    sc.pl.draw_graph(adata_counts, color='group_id', legend_loc='on data')
+    # sc.pl.draw_graph(adata_counts, color='group_id', legend_loc='on data')
+
     sc.tl.leiden(adata_counts, resolution=1.0, random_state=10)
     sc.tl.paga(adata_counts, groups='leiden')
     # sc.pl.paga(adata_counts, color=['louvain','group_id'])
 
     sc.tl.dpt(adata_counts, n_dcs=ncomps)
-    sc.pl.paga(adata_counts, color=['leiden', 'group_id', 'dpt_pseudotime'],
-               title=['leiden (knn:' + str(knn) + ' ncomps:' + str(ncomps) + ')',
-                      'group_id (ncomps:' + str(ncomps) + ')', 'pseudotime (ncomps:' + str(ncomps) + ')'])
+    # sc.pl.paga(adata_counts, color=['leiden', 'group_id', 'dpt_pseudotime'],             title=['leiden (knn:' + str(knn) + ' ncomps:' + str(ncomps) + ')',                   'group_id (ncomps:' + str(ncomps) + ')', 'pseudotime (ncomps:' + str(ncomps) + ')'])
     # X = df_counts.values
 
     print(palantir.__file__)  # location of palantir source code
@@ -3753,6 +3921,8 @@ def main_Toy(ncomps=100, knn=30, random_seed=41):
 
     str_true_label = pd.Series(str_true_label, index=counts.index)
     norm_df = counts  # palantir.preprocess.normalize_counts(counts)
+    # palantir
+    '''
     pca_projections, _ = palantir.utils.run_pca(norm_df, n_components=ncomps)
     dm_res = palantir.utils.run_diffusion_maps(pca_projections, n_components=ncomps, knn=knn)
 
@@ -3761,27 +3931,28 @@ def main_Toy(ncomps=100, knn=30, random_seed=41):
     tsne = palantir.utils.run_tsne(ms_data)
 
     palantir.plot.plot_cell_clusters(tsne, str_true_label)
+
     # C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
-    print('ms data', ms_data)
+
     pr_res = palantir.core.run_palantir(ms_data, start_cell, num_waypoints=500, knn=knn)
     palantir.plot.plot_palantir_results(pr_res, tsne, n_knn=knn, n_comps=ncomps)
     plt.show()
-
+    '''
     # clusters = palantir.utils.determine_cell_clusters(pca_projections)
 
     from sklearn.decomposition import PCA
     pca = PCA(n_components=ncomps)
     pc = pca.fit_transform(df_counts)
 
-    p0 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
-              too_big_factor=0.3,
-              pseudotime=True, path="/home/shobi/Trajectory/Datasets/" + dataset + "/",
-              root_user=root_user, preserve_disconnected=True, dataset='toy', random_seed=random_seed)  # *.4 root=2,
-    p0.run_VIA()
-    super_labels = p0.labels
+    v0 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=0.3,
 
-    super_edges = p0.edgelist
-    super_pt = p0.scaled_hitting_times  # pseudotime pt
+             root_user=root_user, preserve_disconnected=True, dataset='toy', random_seed=random_seed)  # *.4 root=2,
+    v0.run_VIA()
+    super_labels = v0.labels
+
+    super_edges = v0.edgelist
+    super_pt = v0.scaled_hitting_times  # pseudotime pt
     # 0.05 for p1 toobig
 
     p = hnswlib.Index(space='l2', dim=adata_counts.obsm['X_pca'][:, 0:ncomps].shape[1])
@@ -3789,9 +3960,9 @@ def main_Toy(ncomps=100, knn=30, random_seed=41):
     p.add_items(adata_counts.obsm['X_pca'][:, 0:ncomps])
     p.set_ef(50)
     tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster in PCA space (
-    for tsi in p0.terminal_clusters:
-        loc_i = np.where(np.asarray(p0.labels) == tsi)[0]
-        val_pt = [p0.single_cell_pt_markov[i] for i in loc_i]
+    for tsi in v0.terminal_clusters:
+        loc_i = np.where(np.asarray(v0.labels) == tsi)[0]
+        val_pt = [v0.single_cell_pt_markov[i] for i in loc_i]
         th_pt = np.percentile(val_pt, 50)  # 50
         loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
         temp = np.mean(adata_counts.obsm['X_pca'][:, 0:ncomps][loc_i], axis=0)
@@ -3799,58 +3970,57 @@ def main_Toy(ncomps=100, knn=30, random_seed=41):
         print(labelsq[0])
         tsi_list.append(labelsq[0][0])
 
-    p1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=.15, dist_std_local=1, knn=knn,
-              too_big_factor=0.1,
-              path="/home/shobi/Trajectory/Datasets/" + dataset + "/", pseudotime=True,
-              super_cluster_labels=super_labels, super_node_degree_list=p0.node_degree_list,
-              super_terminal_cells=tsi_list, root_user=root_user,
-              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='toy',
-              super_terminal_clusters=p0.terminal_clusters, random_seed=random_seed)  # root=1,
+    v1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=.15, dist_std_local=1, knn=knn,
+             too_big_factor=0.1,
+             super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=root_user,
+             x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='toy', is_coarse=False,
+             super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed)  # root=1,
     # in the case of TOY DATA: P1 WORKS MUCH BETTER WHEN ONLY USING SUPER_TERMINAL_CLUS... O/W need to omit pruning
 
-    p1.run_VIA()
-    labels = p1.labels
+    v1.run_VIA()
+    labels = v1.labels
 
-    # p1 = PARC(adata_counts.obsm['X_pca'], true_label, jac_std_global=1, knn=5, too_big_factor=0.05, anndata= adata_counts, small_pop=2)
-    # p1.run_VIA()
-    # labels = p1.labels
+    # v1 = PARC(adata_counts.obsm['X_pca'], true_label, jac_std_global=1, knn=5, too_big_factor=0.05, anndata= adata_counts, small_pop=2)
+    # v1.run_VIA()
+    # labels = v1.labels
     print('start tsne')
     n_downsample = 500
     if len(labels) > n_downsample:
         # idx = np.random.randint(len(labels), size=900)
         np.random.seed(2357)
-        idx = np.random.choice(a=np.arange(0, len(labels)), size=1000, replace=False, p=None)
+        idx = np.random.choice(a=np.arange(0, len(labels)), size=len(labels), replace=False, p=None)
         print('len idx', len(idx))
         super_labels = np.asarray(super_labels)[idx]
         labels = list(np.asarray(labels)[idx])
         true_label = list(np.asarray(true_label[idx]))
-        sc_pt_markov = list(np.asarray(p1.single_cell_pt_markov[idx]))
-        graph = p0.knngraph_visual(adata_counts.obsm['X_pca'][idx, :], downsampled=True)
-        # embedding = p0.run_umap_hnsw(adata_counts.obsm['X_pca'][idx, :], graph)
+        sc_pt_markov = list(np.asarray(v1.single_cell_pt_markov[idx]))
+
+        # embedding = v0.run_umap_hnsw(adata_counts.obsm['X_pca'][idx, :], graph)
         embedding = adata_counts.obsm['X_pca'][idx,
                     0:2]  # umap.UMAP().fit_transform(adata_counts.obsm['X_pca'][idx, 0:5])
         # embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'][idx, :])
         print('tsne downsampled size', embedding.shape)
     else:
-        embedding = TSNE().fit_transform(pc)  # (adata_counts.obsm['X_pca'])
+        embedding = umap.UMAP().fit_transform(pc)  # (adata_counts.obsm['X_pca'])
         print('tsne input size', adata_counts.obsm['X_pca'].shape)
         # embedding = umap.UMAP().fit_transform(adata_counts.obsm['X_pca'])
         idx = np.random.randint(len(labels), size=len(labels))
     print('end tsne')
 
-    #knn_hnsw, ci_list = sc_loc_ofsuperCluster_embeddedspace(embedding, p0, p1, idx)
-    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(p0, p1, idx)
-    print('super terminal and sub terminal', p0.super_terminal_cells, p1.terminal_clusters)
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, idx)
+    print('super terminal and sub terminal', v0.super_terminal_cells, v1.terminal_clusters)
+    knn_hnsw, ci_list = sc_loc_ofsuperCluster_embeddedspace1(embedding, v0, v1, idx)
     draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, labels, super_labels, super_edges,
-                         p1.x_lazy, p1.alpha_teleport, sc_pt_markov, true_label, knn=p0.knn,
-                         final_super_terminal=p1.revised_super_terminal_clusters,
-                         sub_terminal_clusters=p1.terminal_clusters,
+                         v1.x_lazy, v1.alpha_teleport, sc_pt_markov, true_label, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
                          title_str='Hitting times: Markov Simulation on biased edges', ncomp=ncomps)
     plt.show()
     '''
     draw_trajectory_dimred(embedding, ci_list, labels, super_labels, super_edges,
-                           p1.x_lazy, p1.alpha_teleport, sc_pt_markov, true_label, knn=p0.knn,
-                           final_super_terminal=p0.terminal_clusters,
+                           v1.x_lazy, v1.alpha_teleport, sc_pt_markov, true_label, knn=v0.knn,
+                           final_super_terminal=v0.terminal_clusters,
                            title_str='Hitting times: Markov Simulation on biased edges', ncomp=ncomps)
     '''
     plt.show()
@@ -3876,20 +4046,138 @@ def main_Toy(ncomps=100, knn=30, random_seed=41):
         subset_ = df_subset[gene_i].values
         print(subset_.shape)
         # print('shapes of magic_ad 1 and 2', magic_ad.shape,subset_.shape)
-        # p1.get_gene_expression(magic_ad,title_gene = gene_name_dict[gene_name])
-        p1.get_gene_expression(subset_, title_gene=gene_i + 'VIA MAGIC')
+        # v1.get_gene_expression(magic_ad,title_gene = gene_name_dict[gene_name])
+        v1.get_gene_expression(subset_, title_gene=gene_i + 'VIA MAGIC')
 
-    draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, p0.full_graph_shortpath, idx,
+    # knn_hnsw = make_knn_embeddedspace(embedding)
+
+    draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath, idx,
                                           adata_counts.obsm['X_pca'][:, 0:ncomps])
 
     plt.show()
 
 
-def main_Bcell(ncomps, knn, random_seed):
-    print('ncomp, knn, random seed', ncomps, knn, random_seed)
+def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user='M1',
+             foldername="/home/shobi/Trajectory/Datasets/"):
+    print('dataset, ncomps, knn, seed', dataset, ncomps, knn, random_seed)
+
+    if dataset == "Toy3":
+        df_counts = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000.csv", 'rt',
+                                delimiter=",")
+        df_ids = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000_ids.csv", 'rt',
+                             delimiter=",")
+
+        root_user = 'M1'
+        paga_root = "M1"
+    if dataset == "Toy4":  # 2 disconnected components
+        df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv", 'rt',
+                                delimiter=",")
+        df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids.csv", 'rt', delimiter=",")
+        root_user = ['T1_M1', 'T2_M1']  # 'T1_M1'
+        paga_root = 'T1_M1'
+
+    df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
+    print("shape", df_counts.shape, df_ids.shape)
+    df_counts = df_counts.drop('Unnamed: 0', 1)
+    df_ids = df_ids.sort_values(by=['cell_id_num'])
+    df_ids = df_ids.reset_index(drop=True)
+    true_label = df_ids['group_id']
+    adata_counts = sc.AnnData(df_counts, obs=df_ids)
+    sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
+
+    adata_counts.uns['iroot'] = np.flatnonzero(adata_counts.obs['group_id'] == paga_root)[0]  # 'T1_M1'#'M1'
+
+    v0 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset='toy',
+             random_seed=random_seed)  # *.4 root=2,
+    v0.run_VIA()
+    super_labels = v0.labels
+
+    super_edges = v0.edgelist
+    p = hnswlib.Index(space='l2', dim=adata_counts.obsm['X_pca'][:, 0:ncomps].shape[1])
+    p.init_index(max_elements=adata_counts.obsm['X_pca'][:, 0:ncomps].shape[0], ef_construction=200, M=16)
+    p.add_items(adata_counts.obsm['X_pca'][:, 0:ncomps])
+    p.set_ef(50)
+    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster in PCA space (
+    for tsi in v0.terminal_clusters:
+        loc_i = np.where(np.asarray(v0.labels) == tsi)[0]
+        val_pt = [v0.single_cell_pt_markov[i] for i in loc_i]
+        th_pt = np.percentile(val_pt, 50)  # 50
+        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
+        temp = np.mean(adata_counts.obsm['X_pca'][:, 0:ncomps][loc_i], axis=0)
+        labelsq, distances = p.knn_query(temp, k=1)
+        print(labelsq[0])
+        tsi_list.append(labelsq[0][0])
+
+    v1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=.15, dist_std_local=1, knn=knn,
+             too_big_factor=0.1,
+             super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=root_user, is_coarse=False,
+             x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='toy',
+             super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed)  # root=1,
+
+    v1.run_VIA()
+    labels = v1.labels
+
+    n_downsample = 50
+    if len(labels) > n_downsample:  # just testing the downsampling and indices. Not actually downsampling
+        # idx = np.random.randint(len(labels), size=900)
+        np.random.seed(2357)
+        idx = np.random.choice(a=np.arange(0, len(labels)), size=len(labels), replace=False, p=None)
+        print('len idx', len(idx))
+        super_labels = np.asarray(super_labels)[idx]
+        labels = list(np.asarray(labels)[idx])
+        true_label = list(np.asarray(true_label[idx]))
+        sc_pt_markov = list(np.asarray(v1.single_cell_pt_markov[idx]))
+
+        # embedding = v0.run_umap_hnsw(adata_counts.obsm['X_pca'][idx, :], graph)
+        embedding = adata_counts.obsm['X_pca'][idx,
+                    0:2]  # umap.UMAP().fit_transform(adata_counts.obsm['X_pca'][idx, 0:5])
+
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, idx)
+    print('super terminal and sub terminal', v0.super_terminal_cells, v1.terminal_clusters)
+
+    draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, labels, super_labels, super_edges,
+                         v1.x_lazy, v1.alpha_teleport, sc_pt_markov, true_label, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
+                         title_str='Hitting times: Markov Simulation on biased edges', ncomp=ncomps)
+    plt.show()
+
+    num_group = len(set(true_label))
+    line = np.linspace(0, 1, num_group)
+
+    f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
+
+    for color, group in zip(line, set(true_label)):
+        where = np.where(np.asarray(true_label) == group)[0]
+
+        ax1.scatter(embedding[where, 0], embedding[where, 1], label=group,
+                    c=np.asarray(plt.cm.jet(color)).reshape(-1, 4))
+    ax1.legend(fontsize=6)
+    ax1.set_title('true labels')
+
+    ax2.set_title("Markov Sim PT ncomps:" + str(ncomps) + '. knn:' + str(knn))
+    ax2.scatter(embedding[:, 0], embedding[:, 1], c=sc_pt_markov, cmap='viridis_r')
+    plt.show()
+    df_subset = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:3], columns=['Gene0', 'Gene1', 'Gene2'])
+    for gene_i in ['Gene0', 'Gene1', 'Gene2']:
+        subset_ = df_subset[gene_i].values
+        v1.get_gene_expression(subset_, title_gene=gene_i + 'VIA MAGIC')
+
+    knn_hnsw = make_knn_embeddedspace(embedding)
+
+    draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath, idx,
+                                          adata_counts.obsm['X_pca'][:, 0:ncomps])
+
+    plt.show()
+
+
+def main_Bcell(ncomps=50, knn=20, random_seed=0, path='/home/shobi/Trajectory/Datasets/Bcell/'):
+    print('Input params: ncomp, knn, random seed', ncomps, knn, random_seed)
 
     # https://github.com/STATegraData/STATegraData
-    def run_zheng(adata, min_counts=3, n_top_genes=500, do_HVG=True):
+    def run_zheng_Bcell(adata, min_counts=3, n_top_genes=500, do_HVG=True):
         sc.pp.filter_genes(adata, min_counts=min_counts)
         # sc.pp.filter_genes(adata, min_cells=3)# only consider genes with more than 1 count
         '''
@@ -3976,26 +4264,18 @@ def main_Bcell(ncomps, knn, random_seed):
         palantir.plot.plot_gene_trends(gene_trends)
         plt.show()
 
-    def find_time(s):
+    def find_time_Bcell(s):
         start = s.find("Ik") + len("Ik")
         end = s.find("h")
         return int(s[start:end])
 
-    def find_cellID(s):
+    def find_cellID_Bcell(s):
         start = s.find("h") + len("h")
         end = s.find("_")
         return s[start:end]
 
-    # diff = pd.read_excel('/home/shobi/Downloads/journal_bgenes.xlsx', sep='\t')
-    # is_diff = diff['CONSENSUS_DE']==1
-    # diff = diff[is_diff]
-
-    # print('shape dff', diff.shape)
-    # diff_list = diff['MGI_Symbol'].values.tolist()
-    # diff_list = [i for i in diff_list if isinstance(i, str) ]
-
-    Bcell = pd.read_csv('/home/shobi/Trajectory/Datasets/Bcell/genes_count_table.txt', sep='\t')
-    gene_name = pd.read_csv('/home/shobi/Trajectory/Datasets/Bcell/genes_attr_table.txt', sep='\t')
+    Bcell = pd.read_csv(path + 'genes_count_table.txt', sep='\t')
+    gene_name = pd.read_csv(path + 'genes_attr_table.txt', sep='\t')
 
     Bcell_columns = [i for i in Bcell.columns]
     adata_counts = sc.AnnData(Bcell.values[:, 1:].T)
@@ -4006,16 +4286,12 @@ def main_Bcell(ncomps, knn, random_seed):
     adata_counts.var_names = gene_name['gene_short_name']
     adata_counts.obs['TimeCellID'] = Bcell_columns
 
-    time_list = [find_time(s) for s in Bcell_columns]
-    # for ii, jj in enumerate(time_list):
-    # print(ii, jj)
+    time_list = [find_time_Bcell(s) for s in Bcell_columns]
+
     print('time list set', set(time_list))
     adata_counts.obs['TimeStamp'] = [str(tt) for tt in time_list]
-    # for i in Bcell_columns:
-    #    print(i)
-    # adata_counts.var_names_make_unique()
 
-    ID_list = [find_cellID(s) for s in Bcell_columns]
+    ID_list = [find_cellID_Bcell(s) for s in Bcell_columns]
     adata_counts.obs['group_id'] = [str(i) for i in time_list]
     ID_dict = {}
     color_dict = {}
@@ -4023,11 +4299,10 @@ def main_Bcell(ncomps, knn, random_seed):
         ID_dict.update({i: j})
     print('timelist', list(set(time_list)))
     for j, i in enumerate(list(set(time_list))):
-
         color_dict.update({i: j})
     print(color_dict)
     print('shape of raw data', adata_counts.shape)
-    # sc.pp.filter_genes(adata_counts, min_counts=3)
+
     adata_counts_unfiltered = adata_counts.copy()
 
     Bcell_marker_gene_list = ['Myc', 'Igll1', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4']
@@ -4047,7 +4322,8 @@ def main_Bcell(ncomps, knn, random_seed):
     # diff_list = [i for i in diff_list if i in list_var_names] #based on paper STable1 https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.2006506#pbio.2006506.s007
     # adata_counts = adata_counts[:,diff_list] #if using these, then set do-HVG to False
     print('adata counts difflisted', adata_counts.shape)
-    adata_counts = run_zheng(adata_counts, n_top_genes=5000, min_counts=30, do_HVG=True)  # 5000 for better ordering
+    adata_counts = run_zheng_Bcell(adata_counts, n_top_genes=5000, min_counts=30,
+                                   do_HVG=True)  # 5000 for better ordering
     print('adata counts shape', adata_counts.shape)
     # sc.pp.recipe_zheng17(adata_counts)
 
@@ -4058,9 +4334,9 @@ def main_Bcell(ncomps, knn, random_seed):
                     "large": ['Ighm', 'Kit', 'Ptprc', 'Cd19', 'Il2ra', 'Vpreb1', 'Cd24a', 'Igll1', 'Cd79a', 'Cd79b'],
                     "Pre-B2": ['Mme', 'Spn']}  # 'Cd19','Cxcl13',,'Kit'
 
-    print('make the p0 matrix plot')
+    print('make the v0 matrix plot')
     mplot_adata = adata_counts_unfiltered.copy()
-    mplot_adata = run_zheng(mplot_adata, n_top_genes=25000, min_counts=1, do_HVG=False)
+    mplot_adata = run_zheng_Bcell(mplot_adata, n_top_genes=25000, min_counts=1, do_HVG=False)
     # mplot_adata.X[mplot_adata.X>10] =10
     # mplot_adata.X[mplot_adata.X< -1] = -1
     sc.pl.matrixplot(mplot_adata, marker_genes, groupby='TimeStamp', dendrogram=True)
@@ -4079,7 +4355,7 @@ def main_Bcell(ncomps, knn, random_seed):
     embedding = umap.UMAP(random_state=42, n_neighbors=15, init='random').fit_transform(
         adata_counts.obsm['X_pca'][:, 0:5])
     df_umap = pd.DataFrame(embedding)
-    df_umap.to_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_umap.csv')
+    # df_umap.to_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_umap.csv')
 
     f, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, sharey=True)
     for i in list(set(time_list)):
@@ -4120,66 +4396,44 @@ def main_Bcell(ncomps, knn, random_seed):
 
     df_input = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:200])
     df_annot = pd.DataFrame(['t' + str(i) for i in true_label])
-    df_input.to_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_200PC_5000HVG.csv')
-    df_annot.to_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_annots.csv')
+    # df_input.to_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_200PC_5000HVG.csv')
+    # df_annot.to_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_annots.csv')
 
-    p0 = VIA(input_via, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
-              too_big_factor=0.3, dataset='bcell',
-              pseudotime=True, path="/home/shobi/Trajectory/Datasets/" + 'bcell' + "/",
-              root_user=42, preserve_disconnected=True, random_seed=random_seed,
-              do_magic_bool=True)  # *.4#root_user = 34
-    p0.run_VIA()
-    super_labels = p0.labels
+    v0 = VIA(input_via, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=0.3, dataset='bcell',
 
-    '''
-    umap_init_ = p0.graph_node_pos
-    umap_init_ = np.asarray(umap_init_)
-    umap_init = np.random.rand(len(super_labels),2)
-    for clus_i in range(umap_init_.shape[0]):
-        loc_clus_i = np.where(np.asarray(super_labels) == clus_i)[0]
-        umap_init[loc_clus_i,0]=umap_init_[clus_i,0]
-        umap_init[loc_clus_i, 1] = umap_init_[clus_i, 1]
-    '''
-    p = hnswlib.Index(space='l2', dim=adata_counts.obsm['X_pca'][:, 0:ncomps].shape[1])
-    p.init_index(max_elements=adata_counts.obsm['X_pca'][:, 0:ncomps].shape[0], ef_construction=100, M=16)
-    p.add_items(adata_counts.obsm['X_pca'][:, 0:ncomps])
-    p.set_ef(30)
-    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster in PCA space (
-    for tsi in p0.terminal_clusters:
-        loc_i = np.where(np.asarray(p0.labels) == tsi)[0]
-        val_pt = [p0.single_cell_pt_markov[i] for i in loc_i]
-        th_pt = np.percentile(val_pt, 50)  # 50
-        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-        temp = np.mean(adata_counts.obsm['X_pca'][:, 0:ncomps][loc_i], axis=0)
-        labelsq, distances = p.knn_query(temp, k=1)
-        print(labelsq[0])
-        tsi_list.append(labelsq[0][0])
+             root_user=42, preserve_disconnected=True, random_seed=random_seed,
+             do_magic_bool=True)  # *.4#root_user = 34
+    v0.run_VIA()
 
-    p1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
-              too_big_factor=0.05,
-              path="/home/shobi/Trajectory/Datasets/" + "bcell/", pseudotime=True,
-              super_cluster_labels=super_labels, super_node_degree_list=p0.node_degree_list,
-              super_terminal_cells=tsi_list, root_user=42,
-              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='bcell',
-              super_terminal_clusters=p0.terminal_clusters, random_seed=random_seed)
+    super_labels = v0.labels
 
-    p1.run_VIA()
-    labels = p1.labels
-    super_edges = p0.edgelist
+    tsi_list = get_loc_terminal_states(via0=v0, X_input=adata_counts.obsm['X_pca'][:, 0:ncomps])
+    v1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=0.05, is_coarse=False,
+
+             super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=42,
+             x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='bcell',
+             super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed)
+
+    v1.run_VIA()
+    labels = v1.labels
+    super_edges = v0.edgelist
 
     # plot gene expression vs. pseudotime
     Bcell_marker_gene_list = ['Igll1']  # , 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4','Sp7','Zfp629'] #irf4 down-up
     df_ = pd.DataFrame(adata_counts_unfiltered.X)
     df_.columns = [i for i in adata_counts_unfiltered.var_names]
-    df_magic = p0.do_magic(df_, magic_steps=3, gene_list=Bcell_marker_gene_list)
+    df_magic = v0.do_magic(df_, magic_steps=3, gene_list=Bcell_marker_gene_list)
     for gene_name in Bcell_marker_gene_list:
         # loc_gata = np.where(np.asarray(adata_counts_unfiltered.var_names) == gene_name)[0][0]
         subset_ = df_magic[gene_name].values
 
-        p1.get_gene_expression(subset_, title_gene=gene_name + ' (VIA MAGIC)')
+        v1.get_gene_expression(subset_, title_gene=gene_name + ' (VIA MAGIC)')
 
         # magic_ad = adata_counts_unfiltered.X[:, loc_gata]
-        # p1.get_gene_expression(magic_ad, gene_name)
+        # v1.get_gene_expression(magic_ad, gene_name)
 
     n_downsample = 100
     if len(labels) > n_downsample:
@@ -4190,49 +4444,48 @@ def main_Bcell(ncomps, knn, random_seed):
         super_labels = np.asarray(super_labels)[idx]
         labels = list(np.asarray(labels)[idx])
         true_label = list((np.asarray(true_label)[idx]))
-        sc_pt_markov = list(np.asarray(p1.single_cell_pt_markov[idx]))
+        sc_pt_markov = list(np.asarray(v1.single_cell_pt_markov[idx]))
         # embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'][idx, :])
-        graph_embedding = p0.knngraph_visual(input_via[idx, 0:5], knn_umap=10, downsampled=True)
-        embedding_hnsw = p0.run_umap_hnsw(input_via[idx, 0:5], graph_embedding)
+        graph_embedding = v0.knngraph_visual(input_via[idx, 0:5], knn_umap=10, downsampled=True)
+        embedding_hnsw = v0.run_umap_hnsw(input_via[idx, 0:5], graph_embedding)
         # embedding = embedding_hnsw
         # loc0 = np.where(np.asarray(true_label)==0)[0]
         # for item in loc0:
         # print(item, 'at', embedding[item,:])
-        embedding = embedding[idx,:]
+        embedding = embedding[idx, :]
         print('tsne downsampled size', embedding.shape)
     else:
         # embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'][:,0:5])  # (adata_counts.obsm['X_pca'])
         print('tsne input size', adata_counts.obsm['X_pca'].shape)
         # embedding = umap.UMAP().fit_transform(adata_counts.obsm['X_pca'])
         idx = np.arange(0, len(labels))  # np.random.randint(len(labels), size=len(labels))
-        sc_pt_markov = p1.single_cell_pt_markov
+        sc_pt_markov = v1.single_cell_pt_markov
 
     # embedding = umap.UMAP(random_state=42, n_neighbors=15, init=umap_init).fit_transform(  adata_counts.obsm['X_pca'][:, 0:5])
 
-    #knn_hnsw, ci_list = sc_loc_ofsuperCluster_embeddedspace(embedding, p0, p1, idx)
-    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(p0, p1, idx)
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, idx)
     draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, labels, super_labels, super_edges,
-                         p1.x_lazy, p1.alpha_teleport, sc_pt_markov, true_label, knn=p0.knn,
-                         final_super_terminal=p1.revised_super_terminal_clusters,
-                         sub_terminal_clusters=p1.terminal_clusters,
+                         v1.x_lazy, v1.alpha_teleport, sc_pt_markov, true_label, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
                          title_str='Markov Hitting Times (Gams)', ncomp=ncomps)
     plt.show()
     '''
     draw_trajectory_dimred(embedding, ci_list, labels, super_labels, super_edges,
-                           p1.x_lazy, p1.alpha_teleport, sc_pt_markov, true_label, knn=p0.knn,
-                           final_super_terminal=p0.terminal_clusters,
+                           v1.x_lazy, v1.alpha_teleport, sc_pt_markov, true_label, knn=v0.knn,
+                           final_super_terminal=v0.terminal_clusters,
                            title_str='Markov Hitting Times (polyfit)', ncomp=ncomps)
     plt.show()
     '''
-    # draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, p0.full_graph_shortpath, idx,  adata_counts.obsm['X_pca'][:, 0:ncomps])
+    knn_hnsw = make_knn_embeddedspace(embedding)
+    draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath, idx,
+                                          adata_counts.obsm['X_pca'][:, 0:ncomps])
 
     plt.show()
 
 
-
-
-
 def plot_EB():
+    # genes along lineage cluster path
     df_groupby_p1 = pd.read_csv(
         '/home/shobi/Trajectory/Datasets/EB_Phate/df_groupbyParc1_knn20_pc100_seed20_allgenes.csv')
 
@@ -4286,7 +4539,128 @@ def plot_EB():
     # sc.pl.matrixplot(adata, dict_subset, groupby='parc1', vmax=1, vmin=-1, dendrogram=False)
 
 
-def main_EB(ncomps=100, knn=20, p0_random_seed=21):
+def main_EB_clean(ncomps=30, knn=20, v0_random_seed=21, foldername='/home/shobi/Trajectory/Datasets/EB_Phate/'):
+    marker_genes_dict = {'Hermang': ['TAL1', 'HOXB4', 'SOX17', 'CD34', 'PECAM1'],
+                         'NP': ['NES', 'MAP2'],
+                         'NS': ['KLF7', 'ISL1', 'DLX1', 'ONECUT1', 'ONECUT2', 'OLIG1', 'NPAS1', 'LHX2', 'NR2F1',
+                                'NPAS1', 'DMRT3', 'LMX1A',
+                                'NKX2-8', 'EN2', 'SOX1', 'PAX6', 'ZBTB16'], 'NC': ['PAX3', 'FOXD3', 'SOX9', 'SOX10'],
+                         'PostEn': ['CDX2', 'ASCL2', 'KLF5', 'NKX2-1'],
+                         'EN': ['ARID3A', 'GATA3', 'SATB1', 'SOX15', 'SOX17', 'FOXA2'], 'Pre-NE': ['POU5F1', 'OTX2'],
+                         'SMP': ['TBX18', 'SIX2', 'TBX15', 'PDGFRA'],
+                         'Cardiac': ['TNNT2', 'HAND1', 'F3', 'CD82', 'LIFR'],
+                         'EpiCard': ['WT1', 'TBX5', 'HOXD9', 'MYC', 'LOX'],
+                         'PS/ME': ['T', 'EOMES', 'MIXL1', 'CER1', 'SATB1'],
+                         'NE': ['GBX2', 'OLIG3', 'HOXD1', 'ZIC2', 'ZIC5', 'GLI3', 'LHX2', 'LHX5', 'SIX3', 'SIX6',
+                                'HOXA2', 'HOXB2'], 'ESC': ['NANOG', 'POU5F1', 'OTX2'], 'Pre-NE': ['POU5F1', 'OTX2']}
+    marker_genes_list = []
+    for key in marker_genes_dict:
+        for item in marker_genes_dict[key]:
+            marker_genes_list.append(item)
+
+    v0_too_big = 0.3
+    v1_too_big = 0.05
+
+    n_var_genes = 'no filtering for HVG'  # 15000
+    print('ncomps, knn, n_var_genes, v0big, p1big, randomseed, time', ncomps, knn, n_var_genes, v0_too_big, v1_too_big,
+          v0_random_seed, time.ctime())
+
+    # TI_pcs = pd.read_csv(foldername+'PCA_TI_200_final.csv')
+    # TI_pcs is PCA run on data that has been: filtered (remove cells with too large or small library count - can directly use all cells in EBdata.mat), library normed, sqrt transform, scaled to unit variance/zero mean
+    # TI_pcs = TI_pcs.values[:, 1:]
+
+    from scipy.io import loadmat
+    annots = loadmat(
+        foldername + 'EBdata.mat')  # has been filtered but not yet normed (by library size) nor other subsequent pre-processing steps
+    data = annots['data'].toarray()  # (16825, 17580) (cells and genes have been filtered)
+    print('data min max', np.max(data), np.min(data), data[1, 0:20], data[5, 250:270], data[1000, 15000:15050])
+    loc_ = np.where((data < 1) & (data > 0))
+    temp = data[(data < 1) & (data > 0)]
+    print('temp non int', temp)
+
+    time_labels = annots['cells'].flatten().tolist()
+    # df_timelabels = pd.DataFrame(time_labels, columns=['true_time_labels'])
+    # df_timelabels.to_csv(foldername+'EB_true_time_labels.csv')
+
+    import phate
+
+    gene_names_raw = annots['EBgenes_name']  # (17580, 1) genes
+
+    adata = sc.AnnData(data)
+
+    gene_names = []
+    for i in gene_names_raw:
+        gene_names.append(i[0][0])
+    adata.var_names = gene_names
+    adata.obs['time'] = [str(i) for i in time_labels]
+
+    adata.X = sc.pp.normalize_total(adata, inplace=False)['X']  # normalize by library after filtering
+    adata.X = np.sqrt(adata.X)  # follow Phate paper which doesnt take log1() but instead does sqrt() transformation
+
+    phate_operator = phate.PHATE(n_jobs=-1)
+
+    Y_phate = phate_operator.fit_transform(adata.X)  # before scaling. as done in PHATE
+
+    scale = False  # scaling mostly improves the cluster-graph heatmap of genes vs clusters. doesnt sway VIA performance
+    if scale == True:  # we scale before VIA. scaling not needed for PHATE
+        print('pp scaled')
+        adata.X = (adata.X - np.mean(adata.X, axis=0)) / np.std(adata.X, axis=0)
+        print('data max min after SCALED', np.max(adata.X), np.min(adata.X))
+    else:
+
+        print('not pp scaled')
+    sc.tl.pca(adata, svd_solver='arpack', n_comps=200, random_state=0)
+
+    # adata.obsm['X_pca'] = TI_pcs
+
+    input_data = adata.obsm['X_pca'][:, 0:ncomps]
+
+    print('do v0')
+    v0 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=v0_too_big, root_user=1, dataset='EB', random_seed=v0_random_seed,
+             do_magic_bool=True, is_coarse=True, preserve_disconnected=True)  # *.4 root=1,
+    v0.run_VIA()
+
+    tsi_list = get_loc_terminal_states(v0, input_data)
+
+    v1 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=v1_too_big, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=1, is_coarse=False, full_neighbor_array=v0.full_neighbor_array,
+             full_distance_array=v0.full_distance_array,
+             x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='EB',
+             super_terminal_clusters=v0.terminal_clusters, random_seed=v0_random_seed)
+
+    v1.run_VIA()
+
+    f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
+    ax1.scatter(Y_phate[:, 0], Y_phate[:, 1], c=time_labels, s=5, cmap='viridis', alpha=0.5)
+    ax2.scatter(Y_phate[:, 0], Y_phate[:, 1], c=v1.single_cell_pt_markov, s=5, cmap='viridis', alpha=0.5)
+    ax1.set_title('Embyroid Data: Days')
+    ax2.set_title('Embyroid Data: Randomseed' + str(v0_random_seed))
+    plt.show()
+
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v1.labels)))
+    draw_trajectory_gams(Y_phate, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
+                         v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, time_labels, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
+                         title_str='Markov Hitting Times (Gams)', ncomp=ncomps)
+
+    knn_hnsw = make_knn_embeddedspace(Y_phate)
+    draw_sc_evolution_trajectory_dijkstra(v1, Y_phate, knn_hnsw, v0.full_graph_shortpath,
+                                          idx=np.arange(0, input_data.shape[0]), X_data=input_data)
+
+    plt.show()
+
+    adata.obs['parc0'] = [str(i) for i in v0.labels]
+    adata.obs['parc1'] = [str(i) for i in v1.labels]
+    adata.obs['terminal_state'] = ['True' if i in v1.terminal_clusters else 'False' for i in v1.labels]
+    adata.X = (adata.X - np.mean(adata.X, axis=0)) / np.std(adata.X,
+                                                            axis=0)  # to improve scale of the matrix plot we will scale
+    sc.pl.matrixplot(adata, marker_genes_dict, groupby='parc1', vmax=1, vmin=-1, dendrogram=True)
+
+
+def main_EB(ncomps=30, knn=20, v0_random_seed=21):
     marker_genes_dict0 = {'Hermang': ['TAL1', 'HOXB4', 'SOX17', 'CD34', 'PECAM1'],
                           'NS': ['KLF7', 'ISL1', 'DLX1', 'ONECUT1', 'ONECUT2', 'OLIG1', 'NPAS1', 'LHX2', 'NR2F1',
                                  'NPAS1', 'DMRT3', 'LMX1A', 'NKX2-8', 'EN2', 'SOX1', 'PAX6', 'ZBTB16'],
@@ -4317,19 +4691,18 @@ def main_EB(ncomps=100, knn=20, p0_random_seed=21):
             marker_genes_list.append(item)
 
     # 'GATA5, GATA6',
-    p0_too_big = 0.3
-    p1_too_big = 0.05
+    v0_too_big = 0.3
+    v1_too_big = 0.05
     # 20
 
     n_var_genes = 'no filtering for HVG'  # 15000
-    print('ncomps, knn, n_var_genes, p0big, p1big, randomseed, time', ncomps, knn, n_var_genes, p0_too_big, p1_too_big,
-          p0_random_seed, time.ctime())
-    # data = pd.read_csv('/home/shobi/Trajectory/Datasets/EB_Phate/EBT_counts_nosqrt_noNorm.csv')
+    print('ncomps, knn, n_var_genes, v0big, p1big, randomseed, time', ncomps, knn, n_var_genes, v0_too_big, v1_too_big,
+          v0_random_seed, time.ctime())
 
     # data = data.drop(['Unnamed: 0'], axis=1)
-    # print(data.shape, data)
+
     TI_pcs = pd.read_csv(
-        '/home/shobi/Trajectory/Datasets/EB_Phate/PCA_TI_200_TuesAM.csv')  # filtered, library normed, sqrt transform, scaled to unit variance/zero mean
+        '/home/shobi/Trajectory/Datasets/EB_Phate/PCA_TI_200_final.csv')  # filtered, library normed, sqrt transform, scaled to unit variance/zero mean
     TI_pcs = TI_pcs.values[:, 1:]
 
     umap_pcs = pd.read_csv('/home/shobi/Trajectory/Datasets/EB_Phate/PCA_umap_200_TuesAM.csv')
@@ -4406,8 +4779,6 @@ def main_EB(ncomps=100, knn=20, p0_random_seed=21):
     # g = sc.tl.rank_genes_groups(adata, groupby='time', use_raw=True, n_genes=10)#method='t-test_overestim_var'
     # sc.pl.rank_genes_groups_heatmap(adata, n_genes=3, standard_scale='var')
 
-    print(adata.X)
-
     '''
     pcs = pd.read_csv('/home/shobi/Trajectory/Datasets/EB_Phate/umap_200_matlab.csv')
     pcs = pcs.drop(['Unnamed: 0'], axis=1)
@@ -4417,7 +4788,7 @@ def main_EB(ncomps=100, knn=20, p0_random_seed=21):
     input_data =pcs[:, 0:ncomps]
     '''
 
-    print('p0_toobig, p1_toobig, p0randomseed', p0_too_big, p1_too_big, p0_random_seed)
+    print('v0_toobig, p1_toobig, v0randomseed', v0_too_big, p1_too_big, v0_random_seed)
     print('do pca')
     # sc.tl.pca(adata, svd_solver='arpack', n_comps=200, random_state = 0)
     # sc.tl.pca(adata_umap, svd_solver='arpack', n_comps=200)
@@ -4458,16 +4829,16 @@ def main_EB(ncomps=100, knn=20, p0_random_seed=21):
     # df_U = pd.DataFrame(U)
     # df_U.to_csv('/home/shobi/Trajectory/Datasets/EB_Phate/umap_pc10_knn15.csv')
 
-    print('do p0')
-    p0 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
-              too_big_factor=p0_too_big,
-              pseudotime=True, path="/home/shobi/Trajectory/Datasets/mESC/",
-              root_user=1, dataset='EB', random_seed=p0_random_seed,
-              do_magic_bool=True, is_coarse=True, preserve_disconnected=True)  # *.4 root=1,
-    p0.run_VIA()
-    super_labels = p0.labels
-    p0_labels_df = pd.DataFrame(super_labels, columns=['p0_labels'])
-    p0_labels_df.to_csv('/home/shobi/Trajectory/Datasets/EB_Phate/p0_labels.csv')
+    print('do v0')
+    v0 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=v0_too_big,
+
+             root_user=1, dataset='EB', random_seed=v0_random_seed,
+             do_magic_bool=True, is_coarse=True, preserve_disconnected=True)  # *.4 root=1,
+    v0.run_VIA()
+    super_labels = v0.labels
+    v0_labels_df = pd.DataFrame(super_labels, columns=['v0_labels'])
+    v0_labels_df.to_csv('/home/shobi/Trajectory/Datasets/EB_Phate/p0_labels.csv')
     adata.obs['parc0'] = [str(i) for i in super_labels]
     '''
     df_temp1 = pd.DataFrame(adata.X, columns = [i for i in adata.var_names])
@@ -4488,33 +4859,24 @@ def main_EB(ncomps=100, knn=20, p0_random_seed=21):
     p.init_index(max_elements=input_data.shape[0], ef_construction=100, M=16)
     p.add_items(input_data)
     p.set_ef(30)
-    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster in PCA space (
-    for tsi in p0.terminal_clusters:
-        loc_i = np.where(np.asarray(p0.labels) == tsi)[0]
-        val_pt = [p0.single_cell_pt_markov[i] for i in loc_i]
-        th_pt = np.percentile(val_pt, 50)  # 50
-        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-        temp = np.mean(input_data[loc_i], axis=0)
-        labelsq, distances = p.knn_query(temp, k=1)
-        print(labelsq[0])
-        tsi_list.append(labelsq[0][0])
+    tsi_list = get_loc_terminal_states(v0, input_data)
 
-    p1 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
-              too_big_factor=p1_too_big,
-              path="/home/shobi/Trajectory/Datasets/" + "bcell/", pseudotime=True,
-              super_cluster_labels=super_labels, super_node_degree_list=p0.node_degree_list,
-              super_terminal_cells=tsi_list, root_user=1,
-              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='EB',
-              super_terminal_clusters=p0.terminal_clusters, random_seed=p0_random_seed)
+    v1 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=v1_too_big, is_coarse=False,
 
-    p1.run_VIA()
-    # adata.obs['parc1'] = [str(i) for i in p1.labels]
+             super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=1,
+             x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='EB',
+             super_terminal_clusters=v0.terminal_clusters, random_seed=v0_random_seed)
+
+    v1.run_VIA()
+    # adata.obs['parc1'] = [str(i) for i in v1.labels]
     # sc.pl.matrixplot(adata, marker_genes, groupby='parc1', dendrogram=True)
-    labels = p1.labels
+    labels = v1.labels
     '''
-    df_labels  = pd.DataFrame({'p0_labels':p0.labels,'p1_labels':p1.labels})
-    df_labels['sub_TS'] = [1 if i in p1.terminal_clusters else 0 for i in p1.labels]
-    df_labels['super_TS'] = [1 if i in p0.terminal_clusters else 0 for i in p0.labels]
+    df_labels  = pd.DataFrame({'v0_labels':v0.labels,'p1_labels':v1.labels})
+    df_labels['sub_TS'] = [1 if i in v1.terminal_clusters else 0 for i in v1.labels]
+    df_labels['super_TS'] = [1 if i in v0.terminal_clusters else 0 for i in v0.labels]
     df_labels.to_csv('/home/shobi/Trajectory/Datasets/EB_Phate/df_labels_knn20_pc100_seed20.csv')
     df_temp2 = pd.DataFrame(adata.X, columns=[i for i in adata.var_names])
     df_temp2 = df_temp2[marker_genes_list]
@@ -4527,7 +4889,7 @@ def main_EB(ncomps=100, knn=20, p0_random_seed=21):
     # df_ts = pd.DataFrame(adata.X, columns = [i for i in adata.var_names])
     # df_ts = df_ts[marker_genes_list]
     # df_ts['parc1'] =  [str(i) for i in labels]
-    adata.obs['terminal_state'] = ['True' if i in p1.terminal_clusters else 'False' for i in labels]
+    adata.obs['terminal_state'] = ['True' if i in v1.terminal_clusters else 'False' for i in labels]
     # df_ts = df_ts[df_ts['terminal_state']=='True']
     adata_TS = adata[adata.obs['terminal_state'] == 'True']
     # sns.clustermap(df_temp1, vmin=-1, vmax=1, xticklabels=True, yticklabels=True, row_cluster=False, col_cluster=True)
@@ -4537,31 +4899,31 @@ def main_EB(ncomps=100, knn=20, p0_random_seed=21):
     # U = umap.UMAP(n_neighbors=10, random_state=0, repulsion_strength=repulsion_strength).fit_transform(input_data[:, 0:n_pcs])
     f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
     ax1.scatter(U[:, 0], U[:, 1], c=time_labels, s=5, cmap='viridis', alpha=0.5)
-    ax2.scatter(U[:, 0], U[:, 1], c=p1.single_cell_pt_markov, s=5, cmap='viridis', alpha=0.5)
+    ax2.scatter(U[:, 0], U[:, 1], c=v1.single_cell_pt_markov, s=5, cmap='viridis', alpha=0.5)
     plt.title('repulsion and knn and pcs ' + str(repulsion_strength) + ' ' + str(u_knn) + ' ' + str(
-        n_pcs) + ' randseed' + str(p0_random_seed))
+        n_pcs) + ' randseed' + str(v0_random_seed))
     plt.show()
 
-    knn_hnsw, ci_list = sc_loc_ofsuperCluster_embeddedspace(U, p0, p1, np.arange(0, len(labels)))
-    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(p0, p1, np.arange(0, len(labels)))
-    draw_trajectory_gams(U, super_clus_ds_PCA_loc, labels, super_labels, p0.edgelist_maxout,
-                         p1.x_lazy, p1.alpha_teleport, p1.single_cell_pt_markov, time_labels, knn=p0.knn,
-                         final_super_terminal=p1.revised_super_terminal_clusters,
-                         sub_terminal_clusters=p1.terminal_clusters,
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(labels)))
+    draw_trajectory_gams(U, super_clus_ds_PCA_loc, labels, super_labels, v0.edgelist_maxout,
+                         v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, time_labels, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
                          title_str='Markov Hitting Times (Gams)', ncomp=ncomps)
 
-    draw_sc_evolution_trajectory_dijkstra(p1, U, knn_hnsw, p0.full_graph_shortpath,
+    knn_hnsw = make_knn_embeddedspace(U)
+    draw_sc_evolution_trajectory_dijkstra(v1, U, knn_hnsw, v0.full_graph_shortpath,
                                           idx=np.arange(0, input_data.shape[0]), X_data=input_data)
 
     plt.show()
 
 
-def main_mESC(ncomps=100, knn=30, p0_random_seed=12, run_palantir_func=False):
+def main_mESC(knn=30, v0_random_seed=42, run_palantir_func=False):
     import random
-    rand_str = 950#random.randint(1, 999)
+    rand_str = 950  # random.randint(1, 999)
     print('rand string', rand_str)
-    knn = 20
-    p0_random_seed = 42
+    print('knn', knn)
+
     data_random_seed = 20
     root = '0.0'
     type_germ = 'Meso'
@@ -4571,13 +4933,13 @@ def main_mESC(ncomps=100, knn=30, p0_random_seed=12, run_palantir_func=False):
     # print(data.head())
     print(data.shape)
     n_sub = 7000
-    print('type,', type_germ, 'nelements', n_sub, 'p0 randseed', p0_random_seed)
+    print('type,', type_germ, 'nelements', n_sub, 'v0 randseed', v0_random_seed)
     title_string = 'randstr:' + str(rand_str) + ' Knn' + str(knn) + ' nelements:' + str(n_sub) + ' ' + 'meso'
     # data = data[data['day']!=0]
 
-    p0_too_big = 0.3
-    p1_too_big = 0.15
-    print('p0 and p1 too big', p0_too_big, p1_too_big)
+    v0_too_big = 0.3
+    p1_too_big = 0.3  # .15
+    print('v0 and p1 too big', v0_too_big, p1_too_big)
     data_sub = data[data['day'] == 0.0]
     np.random.seed(data_random_seed)
     idx_sub = np.random.choice(a=np.arange(0, data_sub.shape[0]), size=min(n_sub, data_sub.shape[0]), replace=False,
@@ -4594,9 +4956,9 @@ def main_mESC(ncomps=100, knn=30, p0_random_seed=12, run_palantir_func=False):
         print('size of sub', sub.shape)
         sub = pd.DataFrame(sub, columns=data.columns)
         data_sub = pd.concat([data_sub, sub], axis=0, ignore_index=True, sort=True)
-    # print(data_sub.groupby('day').count())
-    # print(data.columns)
+
     true_label = data_sub['day']
+
     true_type = data_sub['type']
     data = data_sub.drop(['day', 'Unnamed: 0', 'type'], axis=1)
     # print('after subbing', data.head)
@@ -4672,121 +5034,191 @@ def main_mESC(ncomps=100, knn=30, p0_random_seed=12, run_palantir_func=False):
 
     np.random.seed(data_random_seed)
 
-
     udata = adata.X[:, :][0:n_umap]
 
-    #U = umap.UMAP().fit_transform(udata)
-    #U_df = pd.DataFrame(U, columns=['x', 'y'])
-    #U_df.to_csv('/home/shobi/Trajectory/Datasets/mESC/umap_89782cells_meso.csv')
-    idx = np.random.choice(a=np.arange(0, adata.shape[0]), size=adata.shape[0], replace=False, p=None)  # len(true_label)
-    U = pd.read_csv('/home/shobi/Trajectory/Datasets/mESC/umap_89782cells_meso.csv')#umap_89782cells_7000each_Randseed20_meso.csv')
-    U = U.values[:, 1:]
+    # U = umap.UMAP().fit_transform(udata)
+    # U_df = pd.DataFrame(U, columns=['x', 'y'])
+    # U_df.to_csv('/home/shobi/Trajectory/Datasets/mESC/umap_89782cells_meso.csv')
+    idx = np.random.choice(a=np.arange(0, adata.shape[0]), size=adata.shape[0], replace=False,
+                           p=None)  # len(true_label)
+    # idx=np.arange(0, len(true_label_int))
+    U = pd.read_csv(
+        '/home/shobi/Trajectory/Datasets/mESC/umap_89782cells_meso.csv')  # umap_89782cells_7000each_Randseed20_meso.csv')
+    # U = pd.read_csv('/home/shobi/Trajectory/Datasets/mESC/phate_89782cells_mESC.csv')
+    U = U.values[0:len(true_label), 1:]
+    plt.scatter(U[:, 0], U[:, 1], c=true_label, cmap='jet', s=4, alpha=0.7)
+    plt.show()
     print(U.shape)
+    # U_df = pd.read_csv('/home/shobi/Trajectory/Datasets/mESC/phate_89782cells_mESC.csv')
+    # U = U_df.drop('Unnamed: 0', 1)
+    U = U[idx, :]
+    # subsample start
+    n_subsample = len(true_label_int)  # 50000 #palantir wont scale
+    U = U[0:n_subsample, :]
 
-    true_label_int = list(np.asarray(true_label_int)[idx])
-    # slingshot_annots = true_label_int[0:n_umap]
-    # slingshot_annots = [int(i) for i in slingshot_annots]
-    # Slingshot_annots = pd.DataFrame(slingshot_annots,columns = ['label'])
-    # Slingshot_annots.to_csv('/home/shobi/Trajectory/Datasets/mESC/Slingshot_annots_int_10K.csv')
-    true_label_str = list(np.asarray(true_label_str)[idx])
-    true_type = list(np.asarray(true_type)[idx])
-    adata = adata[idx]
-    # Slingshot_data = pd.DataFrame(adata.X[0:n_umap], columns=marker_genes)
-    # Slingshot_data.to_csv('/home/shobi/Trajectory/Datasets/mESC/Slingshot_input_data_10K.csv')
+    import phate
+
+    # phate_operator = phate.PHATE(n_jobs=-1)
+
+    # Y_phate = phate_operator.fit_transform(adata.X)
+    # phate_df = pd.DataFrame(Y_phate)
+    # phate_df.to_csv('/home/shobi/Trajectory/Datasets/mESC/phate_89782cells_mESC.csv')
+    true_label_int0 = list(np.asarray(true_label_int))
+    # Start Slingshot data prep
+    '''
+    slingshot_annots = true_label_int0[0:n_umap]
+    slingshot_annots = [int(i) for i in slingshot_annots]
+    Slingshot_annots = pd.DataFrame(slingshot_annots,columns = ['label'])
+    Slingshot_annots.to_csv('/home/shobi/Trajectory/Datasets/mESC/Slingshot_annots_int_10K_sep.csv')
+
+
+    Slingshot_data = pd.DataFrame(adata.X[0:n_umap], columns=marker_genes)
+    Slingshot_data.to_csv('/home/shobi/Trajectory/Datasets/mESC/Slingshot_input_data_10K_sep.csv')
     # print('head sling shot data', Slingshot_data.head)
     # print('head sling shot annots', Slingshot_annots.head)
 
-    # print('slingshot data shape', Slingshot_data.shape)
+    print('slingshot data shape', Slingshot_data.shape)
     # sling_adata =sc.AnnData(Slingshot_data)
+    '''
+    # end Slingshot data prep
+    adata = adata[idx]
+    true_label_int = list(np.asarray(true_label_int)[idx])
+    true_label_int = true_label_int[0:n_subsample]
 
+    true_label_str = list(np.asarray(true_label_str)[idx])
+    true_label_str = true_label_str[0:n_subsample]
+    true_type = list(np.asarray(true_type)[idx])
+    true_type = list(np.asarray(true_type)[idx])[0:n_subsample]
     sc.tl.pca(adata, svd_solver='arpack', n_comps=20)
     # plt.scatter(sling_adata.obsm['X_pca'][:,0],sling_adata.obsm['X_pca'][:,1], c = Slingshot_annots['label'])
     plt.show()
+    print('time', time.ctime())
+    loc_start = np.where(np.asarray(true_label_int) == 0)[0][0]
+    adata.uns['iroot'] = loc_start
+    print('iroot', loc_start)
+    # Start PAGA
+    '''
+    sc.pp.neighbors(adata, n_neighbors=knn, n_pcs=28)  # 4
+    sc.tl.draw_graph(adata)
+    # sc.pl.draw_graph(adata_counts, color='group_id', legend_loc='on data')  # force-directed layout
+    start_dfmap = time.time()
+    sc.tl.diffmap(adata, n_comps=28)
+    print('time taken to get diffmap given knn', time.time() - start_dfmap)
+    #sc.pp.neighbors(adata, n_neighbors=knn, use_rep='X_diffmap')  # 4
+    #sc.tl.draw_graph(adata)
+    sc.tl.leiden(adata, resolution=1.0, random_state=10)
+    sc.tl.paga(adata, groups='leiden')
+    adata.obs['group_id'] = true_label_int
+    # sc.pl.paga(adata_counts, color=['louvain','group_id'])
+
+    sc.tl.dpt(adata, n_dcs=28)
+    print('time paga end', time.ctime())
+    plt.show()
+
+    df_paga_dpt = pd.DataFrame()
+    df_paga_dpt['paga_dpt'] = adata.obs['dpt_pseudotime'].values
+    df_paga_dpt['days'] = true_label_int
+    df_paga_dpt.to_csv('/home/shobi/Trajectory/Datasets/mESC/paga_dpt_knn' + str(knn) + '.csv')
+
+    sc.pl.paga(adata, color=['leiden', 'group_id', 'dpt_pseudotime'],
+               title=['leiden',  'group_id', 'pseudotime'])
+    plt.show()
     # sc.pl.matrixplot(adata, marker_genes_meso, groupby='day', dendrogram=True)
+    '''
+    # end PAGA
+    '''
     t_pal_start = time.time()
-    # run_palantir_mESC(adata[0:n_umap:], knn=knn, tsne=U, str_true_label = true_label_str[0:n_umap])
+    run_palantir_mESC(adata[0:n_subsample:], knn=knn, tsne=U, str_true_label = true_label_str)
     print('palantir run time', round(time.time() - t_pal_start))
+    df_palantir = pd.read_csv('/home/shobi/Trajectory/Datasets/mESC/palantir_pt.csv')
+    df_palantir['days'] = true_label_int
+    df_palantir.to_csv('/home/shobi/Trajectory/Datasets/mESC/palantir_pt.csv')
+    '''
+    v0 = VIA(adata.X, true_label_int, jac_std_global=0.3, dist_std_local=1, knn=knn,
+             too_big_factor=v0_too_big,
 
-    p0 = VIA(adata.X, true_label_int, jac_std_global=0.3, dist_std_local=1, knn=knn,
-              too_big_factor=p0_too_big,
-              pseudotime=True, path="/home/shobi/Trajectory/Datasets/mESC/",
-              root_user=root, dataset='mESC', random_seed=p0_random_seed,
-              do_magic_bool=True, is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
-    p0.run_VIA()
+             root_user=root, dataset='mESC', random_seed=v0_random_seed,
+             do_magic_bool=True, is_coarse=True, preserve_disconnected=False, pseudotime_threshold_TS=40)  # *.4 root=1,
+    v0.run_VIA()
+    df_pt = v0.single_cell_pt_markov
+    f, (ax1, ax2,) = plt.subplots(1, 2, sharey=True)
+    s_genes = ''
+    for s in marker_genes:
+        s_genes = s_genes + ' ' + s
+    plt.title(str(len(true_label)) + 'cells ' + str(title_string) + '\n marker genes:' + s_genes, loc='left')
+    ax1.scatter(U[:, 0], U[:, 1], c=true_label_int, cmap='jet', s=4, alpha=0.7)
+    ax2.scatter(U[:, 0], U[:, 1], c=df_pt, cmap='jet', s=4, alpha=0.7)
 
-    adata.obs['parc0'] = [str(i) for i in p0.labels]
+    print('SAVED TRUE')
+    df_pt = pd.DataFrame()
+    df_pt['via_knn'] = v0.single_cell_pt_markov
+    df_pt['days'] = true_label_int
+    df_pt.to_csv('/home/shobi/Trajectory/Datasets/mESC/via_pt_knn' + str(knn) + '.csv')
+    adata.obs['parc0'] = [str(i) for i in v0.labels]
     sc.pl.matrixplot(adata, marker_genes, groupby='parc0', dendrogram=True)
 
-    p = hnswlib.Index(space='l2', dim=adata.X.shape[1])
-    p.init_index(max_elements=adata.X.shape[0], ef_construction=100, M=16)
-    p.add_items(adata.X)
-    p.set_ef(30)
-    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster in PCA space (
-    for tsi in p0.terminal_clusters:
-        loc_i = np.where(np.asarray(p0.labels) == tsi)[0]
-        val_pt = [p0.single_cell_pt_markov[i] for i in loc_i]
-        th_pt = np.percentile(val_pt, 50)  # 50
-        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-        temp = np.mean(adata.X[loc_i], axis=0)
-        labelsq, distances = p.knn_query(temp, k=1)
-        print(labelsq[0])
-        tsi_list.append(labelsq[0][0])
-    super_labels = p0.labels
+    super_labels = v0.labels
 
-    p1 = VIA(adata.X, true_label_int, jac_std_global=0.15, dist_std_local=1, knn=knn,
-              too_big_factor=p1_too_big,
-              path="/home/shobi/Trajectory/Datasets/" + "bcell/", pseudotime=True,
-              super_cluster_labels=super_labels, super_node_degree_list=p0.node_degree_list,
-              super_terminal_cells=tsi_list, root_user=root,
-              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='mESC',
-              super_terminal_clusters=p0.terminal_clusters, random_seed=p0_random_seed)
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v0, np.arange(0, len(true_label)))
+    c_pt = v0.single_cell_pt_markov[0:n_umap]
+    draw_trajectory_gams(U, super_clus_ds_PCA_loc, super_labels, super_labels, v0.edgelist_maxout,
+                         v0.x_lazy, v0.alpha_teleport, c_pt, true_label_int, knn=v0.knn,
+                         final_super_terminal=v0.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v0.terminal_clusters,
+                         title_str='Markov Hitting Times (Gams)', ncomp=28)
 
-    p1.run_VIA()
-    adata.obs['parc1'] = [str(i) for i in p1.labels]
+    tsi_list = get_loc_terminal_states(v0, adata.X)
+    v1 = VIA(adata.X, true_label_int, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=p1_too_big,
+
+             super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
+             x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='mESC',
+             super_terminal_clusters=v0.terminal_clusters, random_seed=v0_random_seed,
+             full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
+             ig_full_graph=v0.ig_full_graph, csr_array_locally_pruned=v0.csr_array_locally_pruned,
+             pseudotime_threshold_TS=30)
+
+    v1.run_VIA()
+    df_pt['via_v1'] = v1.single_cell_pt_markov
+    df_pt.to_csv('/home/shobi/Trajectory/Datasets/mESC/via_pt_knn' + str(knn) + '.csv')
+    adata.obs['parc1'] = [str(i) for i in v1.labels]
     sc.pl.matrixplot(adata, marker_genes, groupby='parc1', dendrogram=True)
-    labels = p1.labels
+    labels = v1.labels
 
     # X = adata.obsm['X_pca'][:,0:2]
     # print(X.shape)
 
-    c_pt = p1.single_cell_pt_markov[0:n_umap]
+    c_pt = v1.single_cell_pt_markov[0:n_umap]
     c_type = true_type[0:n_umap]
     dict_type = {'EB': 0, 'Endo': 5, "Meso": 10, 'Ecto': 15}
     c_type = [dict_type[i] for i in c_type]
     u_truelabel = true_label_int[0:n_umap]
-    #import phate
-
-    #phate_operator = phate.PHATE(n_jobs=-1)
-
-    #Y_phate = phate_operator.fit_transform(adata.X)
-    #phate_df = pd.DataFrame(Y_phate)
-    #phate_df.to_csv('/home/shobi/Trajectory/Datasets/mESC/phate_89782cells_meso_sep9.csv')
 
     # U = umap.UMAP().fit_transform(adata.obsm['X_pca'][idx, 0:ncomps])
-    #U = Y_phate[idx,:]
-    #U_df = pd.read_csv('/home/shobi/Trajectory/Datasets/mESC/phate_89782cells_meso_sep9.csv')
-    #U = U_df.drop('Unnamed: 0', 1)
-    U = U[idx,:]
+    # U = Y_phate[idx,:]
+
     print('umap done', rand_str, time.ctime())
     f, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
     s_genes = ''
     for s in marker_genes:
         s_genes = s_genes + ' ' + s
     plt.title(str(len(true_label)) + 'cells ' + str(title_string) + '\n marker genes:' + s_genes, loc='left')
-    ax1.scatter(U[:, 0], U[:, 1], c=u_truelabel, cmap='jet', s=4, alpha=0.7)
+    ax1.scatter(U[:, 0], U[:, 1], c=true_label_int, cmap='jet', s=4, alpha=0.7)
     ax2.scatter(U[:, 0], U[:, 1], c=c_pt, cmap='jet', s=4, alpha=0.7)
     ax3.scatter(U[:, 0], U[:, 1], c=c_type, cmap='jet', s=4, alpha=0.7)
 
     plt.show()
 
-    #knn_hnsw, ci_list = sc_loc_ofsuperCluster_embeddedspace(U, p0, p1, np.arange(0, len(labels)))
-    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(p0, p1, np.arange(0, len(labels)))
+    knn_hnsw = make_knn_embeddedspace(U)
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(labels)))
     true_label_formatted = [int(10 * i) for i in u_truelabel]
-    draw_trajectory_gams(U, super_clus_ds_PCA_loc, labels, super_labels, p0.edgelist_maxout,
-                         p1.x_lazy, p1.alpha_teleport, c_pt, true_label_formatted, knn=p0.knn,
-                         final_super_terminal=p1.revised_super_terminal_clusters,
-                         sub_terminal_clusters=p1.terminal_clusters,
-                         title_str='Markov Hitting Times (Gams)', ncomp=ncomps)
+    draw_trajectory_gams(U, super_clus_ds_PCA_loc, labels, super_labels, v0.edgelist_maxout,
+                         v1.x_lazy, v1.alpha_teleport, c_pt, true_label_int, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
+                         title_str='Markov Hitting Times (Gams)', ncomp=28)
+    # draw_sc_evolution_trajectory_dijkstra(v1, U, knn_hnsw, v0.full_graph_shortpath, np.arange(0, n_umap))
     plt.show()
 
 
@@ -4817,7 +5249,7 @@ def run_palantir_mESC(ad, knn, tsne, str_true_label, start_cell='c4823'):
     palantir.plot.plot_cell_clusters(tsne, str_true_label)
 
     # start_cell = 'c4823'  # '#C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
-    num_waypoints = 5000  # 1200 default
+    num_waypoints = 1200  # 5000 takes 20 mins and not good. 1200 is default and similar accuracy to 5000wp
     pr_res = palantir.core.run_palantir(ms_data, early_cell=start_cell, num_waypoints=num_waypoints, knn=knn)
     print('time end palantir', round(time.time() - t0))
     palantir.plot.plot_palantir_results(pr_res, tsne, knn, ncomps)
@@ -4834,7 +5266,68 @@ def run_palantir_mESC(ad, knn, tsne, str_true_label, start_cell='c4823'):
     plt.show()
 
 
+def paga_faced(ad, knn, embedding, true_label):
+    adata_counts = ad.copy()
+    adata_counts.obs['group_id'] = true_label
+    ncomps = adata_counts.X.shape[1]
+    # sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
+    adata_counts.uns['iroot'] = 2628  # np.where(np.asarray(adata_counts.obs['group_id']) == '0')[0][0]
 
+    sc.pp.neighbors(adata_counts, use_rep='X', n_neighbors=knn)  # , n_pcs=ncomps)  # 4
+    # sc.tl.draw_graph(adata_counts)
+    # sc.pl.draw_graph(adata_counts, color='group_id', legend_loc='on data')  # force-directed layout
+    start_dfmap = time.time()
+    sc.tl.diffmap(adata_counts, n_comps=ncomps)
+    print('time taken to get diffmap given knn', time.time() - start_dfmap)
+    sc.pp.neighbors(adata_counts, n_neighbors=knn, use_rep='X_diffmap')  # 4
+    # sc.tl.draw_graph(adata_counts)
+    # sc.pl.draw_graph(adata_counts, color='group_id', legend_loc='on data')
+    sc.tl.leiden(adata_counts, resolution=1.0)
+    sc.tl.paga(adata_counts, groups='leiden')
+
+    # sc.pl.paga(adata_counts, color=['louvain','group_id'])
+
+    sc.tl.dpt(adata_counts, n_dcs=ncomps)
+
+    sc.pl.paga(adata_counts, color=['leiden', 'group_id', 'dpt_pseudotime'],
+               title=['leiden (knn:' + str(knn) + ' ncomps:' + str(ncomps) + ')',
+                      'group_id (ncomps:' + str(ncomps) + ')', 'pseudotime (ncomps:' + str(ncomps) + ')'])
+    # sc.pl.draw_graph(adata_counts, color='dpt_pseudotime', legend_loc='on data')
+    # print('dpt format', adata_counts.obs['dpt_pseudotime'])
+    plt.scatter(embedding[:, 0], embedding[:, 1], c=adata_counts.obs['dpt_pseudotime'].values, cmap='viridis')
+    plt.title('PAGA DPT')
+    plt.show()
+
+
+def run_palantir_faced(ad, knn, tsne, str_true_label):
+    t0 = time.time()
+    norm_df_pal = pd.DataFrame(ad.X)
+    # print('norm df', norm_df_pal)
+    new = ['c' + str(i) for i in norm_df_pal.index]
+
+    loc_start = np.where(np.asarray(str_true_label) == 'T1_M1')[0][0]
+    start_cell = 'c' + str(loc_start)
+    print('start cell', start_cell)
+    norm_df_pal.index = new
+    norm_df_pal.columns = [i for i in ad.var_names]
+    ncomps = norm_df_pal.values.shape[1]
+    print('palantir ncomps', ncomps)
+    dm_res = palantir.utils.run_diffusion_maps(norm_df_pal, knn=knn, n_components=ncomps)
+
+    ms_data = palantir.utils.determine_multiscale_space(dm_res)  # n_eigs is determined using eigengap
+    print('ms data', ms_data.shape)
+    tsne = pd.DataFrame(tsne, columns=['x', 'y'])  # palantir.utils.run_tsne(ms_data)
+    tsne.index = new
+    # print(type(tsne))
+    tsne = palantir.utils.run_tsne(ms_data)
+    str_true_label = pd.Series(str_true_label, index=norm_df_pal.index)
+    palantir.plot.plot_cell_clusters(tsne, str_true_label)
+
+    # start_cell = 'c4823'  # '#C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
+    num_waypoints = 1200  # 1200 default
+    pr_res = palantir.core.run_palantir(ms_data, early_cell=start_cell, num_waypoints=num_waypoints, knn=knn)
+    print('time end palantir', round(time.time() - t0))
+    palantir.plot.plot_palantir_results(pr_res, tsne, knn, ncomps)
 
 
 def run_palantir_EB(ad, ncomps, knn, tsne, str_true_label):
@@ -4880,22 +5373,815 @@ def run_palantir_EB(ad, ncomps, knn, tsne, str_true_label):
     plt.show()
 
 
+def palantir_scATAC_Hemato(pc_array, knn, tsne, str_true_label):
+    t0 = time.time()
+    norm_df_pal = pd.DataFrame(pc_array)
+    # print('norm df', norm_df_pal)
+
+    new = ['c' + str(i) for i in norm_df_pal.index]
+
+    # loc_start = np.where(np.asarray(str_true_label) == 'T1_M1')[0][0]
+    start_cell = 'c1200'
+    print('start cell', start_cell)
+    norm_df_pal.index = new
+
+    ncomps = norm_df_pal.values.shape[1]
+    print('palantir ncomps', ncomps)
+    dm_res = palantir.utils.run_diffusion_maps(norm_df_pal, knn=knn, n_components=ncomps)
+
+    ms_data = palantir.utils.determine_multiscale_space(dm_res)  # n_eigs is determined using eigengap.
+    ## In this case n_eigs becomes 1. to increase sensitivity then increase n_eigs in this dataset
+    print('ms data', ms_data.shape)
+    tsne = pd.DataFrame(tsne, columns=['x', 'y'])  # palantir.utils.run_tsne(ms_data)
+    tsne.index = new
+    # print(type(tsne))
+
+    str_true_label = pd.Series(str_true_label, index=norm_df_pal.index)
+    print('c1200 in str true label', str_true_label['c1200'])
+    palantir.plot.plot_cell_clusters(tsne, str_true_label)
+
+    # start_cell = 'c4823'  # '#C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
+    num_waypoints = 1200  # 1200  # 1200 default
+    pr_res = palantir.core.run_palantir(ms_data, early_cell=start_cell, num_waypoints=num_waypoints, knn=knn)
+    print('time end palantir', round(time.time() - t0))
+    palantir.plot.plot_palantir_results(pr_res, tsne, knn, ncomps)
+
+
+def main_scATAC_zscores(knn=20, ncomps=30):
+    # datasets can be downloaded from the link below
+    # https://nbviewer.jupyter.org/github/pinellolab/STREAM/blob/master/tutorial/archives/v0.4.1_and_earlier_versions/4.STREAM_scATAC-seq_k-mers.ipynb?flush_cache=true
+
+    # these are the kmers based feature matrix
+    # https://www.dropbox.com/sh/zv6z7f3kzrafwmq/AACAlU8akbO_a-JOeJkiWT1za?dl=0
+    # https://github.com/pinellolab/STREAM_atac
+
+    ##KMER START
+
+    df = pd.read_csv("/home/shobi/Trajectory/Datasets/scATAC_Hemato/zscore_scaled_kmer.tsv",
+                     sep='\t')  # TF Zcores from STREAM NOT the original buenrostro corrected PCs
+    df = df.transpose()
+    print('df kmer size', df.shape)
+    new_header = df.iloc[0]  # grab the first row for the header
+    df = df[1:]  # take the data less the header row
+    df.columns = new_header  # set the header row as the df header
+    df = df.apply(pd.to_numeric)  # CONVERT ALL COLUMNS
+    true_label = pd.read_csv("/home/shobi/Trajectory/Datasets/scATAC_Hemato/cell_label.csv", sep='\t')
+    true_label = true_label['cell_type'].values
+    cell_types = ['GMP', 'HSC', 'MEP', 'CLP', 'CMP', 'LMPP', 'MPP', 'pDC', 'mono']
+    cell_dict = {'pDC': 'purple', 'mono': 'yellow', 'GMP': 'orange', 'MEP': 'red', 'CLP': 'aqua',
+                 'HSC': 'black', 'CMP': 'moccasin', 'MPP': 'darkgreen', 'LMPP': 'limegreen'}
+
+    ### KMER end
+
+    ### for MOTIFS start
+    '''
+    df = pd.read_csv("/home/shobi/Trajectory/Datasets/scATAC_Hemato/pinellolab_chromVAR_buenrostro_motifs_noHSC0828.csv",sep=',')  # TF Zcores from STREAM NOT the original buenrostro corrected PCs
+    cell_annot = df["Unnamed: 0"].values
+    df = df.drop('Unnamed: 0', 1)
+
+    print('nans', np.sum(df.isna().sum()))
+    df = df.interpolate()
+    print('nans', df.isna().sum())
+    #df = pd.read_csv("/home/shobi/Trajectory/Datasets/scATAC_Hemato/zscore_scaled_transpose.csv",sep=',')
+    print(df.head, df.shape)
+
+    cell_types = ['GMP', 'HSC', 'MEP', 'CLP', 'CMP', 'LMuPP', 'MPP', 'pDC', 'mono', 'UNK']
+    cell_dict = {'pDC': 'purple', 'mono': 'yellow', 'GMP': 'orange', 'MEP': 'red', 'CLP': 'aqua',
+                 'HSC': 'black', 'CMP': 'moccasin', 'MPP': 'darkgreen', 'LMuPP': 'limegreen','UNK':'gray'}
+
+    true_label = []
+    found_annot=False
+    count = 0
+    for annot in cell_annot:
+        for cell_type_i in cell_types:
+            if cell_type_i in annot:
+                true_label.append(cell_type_i)
+                if found_annot== True: print('double count', annot)
+                found_annot = True
+
+        if found_annot ==False:
+            true_label.append('unknown')
+            print('annot is unknown', annot)
+            count = count+1
+        found_annot=False
+    '''
+    ## FOR MOTIFS end
+
+    print('true label', true_label)
+    print('len true label', len(true_label))
+    df_Buen = pd.read_csv('/home/shobi/Trajectory/Datasets/scATAC_Hemato/scATAC_hemato_Buenrostro.csv', sep=',')
+    df = df_Buen
+    # df.to_csv("/home/shobi/Trajectory/Datasets/scATAC_Hemato/zscore_scaled_transpose.csv")
+
+    df = df.reset_index(drop=True)
+    df_num = df.values
+    df_num = pd.DataFrame(df_num, columns=new_header)
+    print('df_num', df_num.head)
+    df_num = df_num.apply(pd.to_numeric)
+    df_num['true'] = true_label
+    print(df_num.groupby('true', as_index=False).mean())
+
+    print('df', df.head(), df.shape)
+    print(df.columns.tolist()[0:10])
+    for i in ['AGATAAG', 'CCTTATC']:
+        if i in df.columns: print(i, ' is here')
+
+    ad = sc.AnnData(df)
+    ad.var_names = df.columns
+    ad.obs['cell_type'] = true_label
+    sc.tl.pca(ad, svd_solver='arpack', n_comps=300)
+    color = []
+    for i in true_label:
+        color.append(cell_dict[i])
+    # PCcol = ['PC1', 'PC2', 'PC3', 'PC4', 'PC5']
+    # embedding = umap.UMAP(n_neighbors=15, random_state=2, repulsion_strength=0.5).fit_transform(ad.obsm['X_pca'][:, 1:5])
+    # embedding = umap.UMAP(n_neighbors=20, random_state=2, repulsion_strength=0.5).fit_transform(df_Buen[PCcol])
+    # df_umap = pd.DataFrame(embedding)
+    # df_umap.to_csv('/home/shobi/Trajectory/Datasets/scATAC_Hemato/embedding_5PC.csv')
+    embedding = pd.read_csv('/home/shobi/Trajectory/Datasets/scATAC_Hemato/embedding_5PC.csv')
+    embedding = embedding.drop('Unnamed: 0', 1)
+    embedding = embedding.values
+    # idx = np.random.choice(a=np.arange(0, len(cell_annot)), size=len(cell_annot), replace=False,p=None)
+    print('end umap')
+    '''
+    fig, ax = plt.subplots()
+    for key in cell_dict:
+        loc = np.where(np.asarray(true_label) == key)[0]
+        if key == 'LMPP':
+            alpha = 0.7
+        else:
+            alpha = 0.55
+        ax.scatter(embedding[loc, 0], embedding[loc, 1], c=cell_dict[key], alpha=alpha, label=key)
+        if key == 'HSC':
+            for loci in loc:
+                if (loci % 10) == 0:
+                    print(loci)
+                    #ax.text(embedding[loci, 0], embedding[loci, 1], 'c' + str(loci))
+    plt.legend()
+    plt.show()
+    '''
+    knn = knn
+    random_seed = 4
+    # df[PCcol]
+    ncomps = ncomps + 1
+    start_ncomp = 1
+    root = 1200  # 1200#500nofresh
+    # df_pinello = pd.DataFrame(ad.obsm['X_pca'][:, 0:200])
+    # df_pinello.to_csv('/home/shobi/Trajectory/Datasets/scATAC_Hemato/pc200_streamTFZscore.csv')
+
+    X_in = ad.obsm['X_pca'][:, start_ncomp:ncomps]
+    # X_in = df.values
+    print('root, pc', root, ncomps)
+    # palantir_scATAC_Hemato(X_in, knn,embedding, true_label)
+    # plt.show(    )
+
+    v0 = VIA(X_in, true_label, jac_std_global=0.3, dist_std_local=1, knn=knn,
+             too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
+             do_magic_bool=True, is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
+    v0.run_VIA()
+    f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True)
+    df['via0'] = v0.labels
+    # df_v0 = pd.DataFrame(v0.labels)
+    # df_v0['truth'] = cell_annot
+    # df_v0.to_csv('/home/shobi/Trajectory/Datasets/scATAC_Hemato/viav0_labels.csv')
+    df_mean = df.groupby('via0', as_index=False).mean()
+    # v0.draw_piechart_graph(ax, ax1, type_pt='gene', gene_exp=df_mean['AGATAAG'].values, title='GATA1')
+    # plt.show()
+    tsi_list = get_loc_terminal_states(v0, ad.obsm['X_pca'][:, start_ncomp:ncomps])
+
+    v1 = VIA(X_in, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=0.05, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
+             preserve_disconnected=True, dataset='scATAC',
+             super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed,
+             full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
+             ig_full_graph=v0.ig_full_graph,
+             csr_array_locally_pruned=v0.csr_array_locally_pruned)
+    v1.run_VIA()
+    df['via1'] = v1.labels
+    df_Buen['via1'] = v1.labels
+    df_mean = df_Buen.groupby('via1', as_index=False).mean()
+    df_mean = df.groupby('via1', as_index=False).mean()
+    gene_dict = {'ENSG00000165702_LINE1058_GFI1B_D': 'GFI1B', 'ENSG00000162676_LINE1033_GFI1_D_N2': 'GFI1',
+                 'ENSG00000114853_LINE833_ZBTB47_I': 'cDC', 'ENSG00000105610_LINE802_KLF1_D': 'KLF1 (MkP)',
+                 'ENSG00000119919_LINE2287_NKX23_I': "NKX32", 'ENSG00000164330_LINE251_EBF1_D_N2': 'EBF1 (Bcell)',
+                 'ENSG00000157554_LINE1903_ERG_D_N3': 'ERG', 'ENSG00000185022_LINE531_MAFF_D_N1': 'MAFF',
+                 'ENSG00000124092_LINE881_CTCFL_D': 'CTCF', 'ENSG00000119866_LINE848_BCL11A_D': 'BCL11A',
+                 'ENSG00000117318_LINE151_ID3_I': 'ID3', 'ENSG00000078399_LINE2184_HOXA9_D_N1': 'HOXA9',
+                 'ENSG00000078399_LINE2186_HOXA9_D_N1': 'HOXA9', 'ENSG00000172216_LINE498_CEBPB_D_N8': 'CEBPB',
+                 'ENSG00000123685_LINE392_BATF3_D': 'BATF3', 'ENSG00000102145_LINE2081_GATA1_D_N7': 'GATA1',
+                 'ENSG00000140968_LINE2752_IRF8_D_N2': "IRF8", "ENSG00000140968_LINE2754_IRF8_D_N1": "IRF8"}
+
+    '''
+    for key in gene_dict:
+        f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True)
+        v1.draw_piechart_graph(ax, ax1, type_pt='gene', gene_exp=df_mean[key].values, title=gene_dict[key])
+        plt.show()
+    '''
+    # get knn-graph and locations of terminal states in the embedded space
+    knn_hnsw = make_knn_embeddedspace(embedding)
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v0.labels)))
+    # draw overall pseudotime and main trajectories
+    draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
+                         v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, true_label, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
+                         title_str='Pseudotime', ncomp=(ncomps - start_ncomp))
+    plt.show()
+    # draw trajectory and evolution probability for each lineage
+    # draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath,    np.arange(0, len(true_label)),    X_in)
+    # plt.show()
+
+
+def main_scATAC_Hemato(knn=20):
+    # buenrostro PCs and TF scores that have been "adjusted" for nice output by Buenrostro
+    # hematopoietic stem cells (HSC) also multipotent progenitors (MPP), lymphoid-primed multipotent progenitors (LMuPP),
+    # common lymphoid progenitors (CLP), and megakaryocyte-erythrocyte progenitors (MEP)
+    # common myeloid progenitors (CMP), granulocyte-monocyte progenitors (GMP), Unknown (UNK)
+    # NOTE in the original "cellname" it was LMPP which overlaped in string detection with MPP. So we changed LMPP to LMuPP
+    # cell_types = ['GMP', 'HSC-frozen','HSC-Frozen','HSC-fresh','HSC-LS','HSC-SIM','MEP','CLP', 'CMP','LMuPP','MPP','pDC','mono','UNK']
+    # cell_dict = {'UNK':'aqua','pDC':'purple','mono':'orange','GMP':'orange','MEP':'red','CLP':'aqua', 'HSC-frozen':'black','HSC-Frozen':'black','HSC-fresh':'black','HSC-LS':'black','HSC-SIM':'black', 'CMP':'moccasin','MPP':'darkgreen','LMuPP':'limegreen'}
+    cell_types = ['GMP', 'HSC', 'MEP', 'CLP', 'CMP', 'LMuPP', 'MPP', 'pDC', 'mono', 'UNK']
+    cell_dict = {'UNK': 'aqua', 'pDC': 'purple', 'mono': 'gold', 'GMP': 'orange', 'MEP': 'red', 'CLP': 'aqua',
+                 'HSC': 'black', 'CMP': 'moccasin', 'MPP': 'darkgreen', 'LMuPP': 'limegreen'}
+    df = pd.read_csv('/home/shobi/Trajectory/Datasets/scATAC_Hemato/scATAC_hemato_Buenrostro.csv', sep=',')
+    print('df', df.shape)
+    cell_annot = df['cellname'].values
+    print('len of cellname', len(cell_annot))
+
+    true_label = []
+    count = 0
+    found_annot = False
+    for annot in cell_annot:
+        for cell_type_i in cell_types:
+            if cell_type_i in annot:
+                true_label.append(cell_type_i)
+                if found_annot == True: print('double count', annot)
+                found_annot = True
+
+        if found_annot == False:
+            true_label.append('unknown')
+            count = count + 1
+        found_annot = False
+    print('abbreviated annot', len(true_label), 'number of unknowns', count)
+
+    df_true = pd.DataFrame(true_label)
+    df_true.to_csv('/home/shobi/Trajectory/Datasets/scATAC_Hemato/scATAC_hemato_Buenrostro_truelabel.csv')
+    PCcol = ['PC1', 'PC2', 'PC3', 'PC4', 'PC5']
+    '''
+    allcols = df.columns.tolist()
+    for i in ['cellname', 'R_color', 'G_color','B_color','PC1','PC2','PC3','PC4','PC5']:
+        allcols.remove(i)
+
+    df_TF=df[allcols]
+    print('df_TF shape', df_TF.shape)
+    ad_TF = sc.AnnData(df_TF)
+    ad_TF.obs['celltype']=true_label
+
+    sc.pp.scale(ad_TF)
+    #sc.pp.normalize_per_cell(ad_TF)
+    sc.tl.pca(ad_TF, svd_solver='arpack', n_comps=300)
+    df_PCA_TF = ad_TF.obsm['X_pca'][:, 0:300]
+    df_PCA_TF=pd.DataFrame(df_PCA_TF)
+    df_PCA_TF.to_csv('/home/shobi/Trajectory/Datasets/scATAC_Hemato/300PC_TF.csv')
+    '''
+    df['celltype'] = true_label
+    print('counts', df.groupby('celltype').count())
+
+    color = []
+    for i in true_label:
+        color.append(cell_dict[i])
+
+    print('start UMAP')
+    # embedding = umap.UMAP(n_neighbors=20, random_state=2, repulsion_strength=0.5).fit_transform(df[PCcol])
+    # df_umap = pd.DataFrame(embedding)
+    # df_umap.to_csv('/home/shobi/Trajectory/Datasets/scATAC_Hemato/embedding_5PC.csv')
+    embedding = pd.read_csv('/home/shobi/Trajectory/Datasets/scATAC_Hemato/embedding_5PC.csv')
+    embedding = embedding.drop('Unnamed: 0', 1)
+    embedding = embedding.values
+    # idx = np.random.choice(a=np.arange(0, len(cell_annot)), size=len(cell_annot), replace=False,p=None)
+    print('end umap')
+
+    fig, ax = plt.subplots()
+    for key in cell_dict:
+        loc = np.where(np.asarray(true_label) == key)[0]
+        if key == 'LMuPP':
+            alpha = 0.8
+        else:
+            alpha = 0.55
+        ax.scatter(embedding[loc, 0], embedding[loc, 1], c=cell_dict[key], alpha=alpha, label=key, s=90)
+        if key == 'HSC':
+            for loci in loc:
+                if (loci % 20) == 0:
+                    print(loci)
+                    # ax.text(embedding[loci, 0], embedding[loci, 1], 'c' + str(loci))
+    plt.legend(fontsize='large', markerscale=1.3)
+    plt.show()
+
+    knn = knn
+    random_seed = 2
+    X_in = df[PCcol].values  # ad_TF.obsm['X_pca'][:, start_ncomp:ncomps]
+
+    start_ncomp = 0
+    root = 1200  # 1200#500nofresh
+
+    # palantir_scATAC_Hemato(X_in, knn, embedding, true_label)
+
+    v0 = VIA(X_in, true_label, jac_std_global=0.5, dist_std_local=1, knn=knn,
+             too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
+             do_magic_bool=True, is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
+    v0.run_VIA()
+
+    df['via0'] = v0.labels
+    df_mean = df.groupby('via0', as_index=False).mean()
+
+    gene_dict = {
+        'ENSG00000092067_LINE336_CEBPE_D_N1': 'CEBPE EOSOPHIL'}  # {'ENSG00000105610_LINE802_KLF1_D':'KLF1 (MkP)','ENSG00000119919_LINE2287_NKX23_I':"NKX32",'ENSG00000164330_LINE251_EBF1_D_N2':'EBF1 (Bcell)','ENSG00000157554_LINE1903_ERG_D_N3':'ERG','ENSG00000185022_LINE531_MAFF_D_N1':'MAFF','ENSG00000124092_LINE881_CTCFL_D':'CTCF','ENSG00000119866_LINE848_BCL11A_D':'BCL11A','ENSG00000117318_LINE151_ID3_I':'ID3','ENSG00000078399_LINE2184_HOXA9_D_N1':'HOXA9', 'ENSG00000078399_LINE2186_HOXA9_D_N1':'HOXA9','ENSG00000172216_LINE498_CEBPB_D_N8':'CEBPB','ENSG00000123685_LINE392_BATF3_D':'BATF3','ENSG00000102145_LINE2081_GATA1_D_N7':'GATA1', 'ENSG00000140968_LINE2752_IRF8_D_N2':"IRF8", "ENSG00000140968_LINE2754_IRF8_D_N1": "IRF8"}
+    '''
+    for key in gene_dict:
+        f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True)
+        v0.draw_piechart_graph(ax, ax1, type_pt='gene', gene_exp=df_mean[key].values, title=gene_dict[key])
+        plt.show()
+    '''
+    tsi_list = get_loc_terminal_states(v0, X_in)
+
+    v1 = VIA(X_in, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=0.1, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
+             preserve_disconnected=True, dataset='scATAC',
+             super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed,
+             full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
+             ig_full_graph=v0.ig_full_graph,
+             csr_array_locally_pruned=v0.csr_array_locally_pruned)
+    v1.run_VIA()
+    df['via1'] = v1.labels
+    df_mean = df.groupby('via1', as_index=False).mean()
+
+    for key in gene_dict:
+        f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True)
+        v1.draw_piechart_graph(ax, ax1, type_pt='gene', gene_exp=df_mean[key].values, title=gene_dict[key])
+        plt.show()
+
+    # get knn-graph and locations of terminal states in the embedded space
+    knn_hnsw = make_knn_embeddedspace(embedding)
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v0.labels)))
+    # draw overall pseudotime and main trajectories
+    draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
+                         v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, true_label, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
+                         title_str='Pseudotime', ncomp=5)
+    # draw trajectory and evolution probability for each lineage
+    # draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath,np.arange(0, len(true_label)), X_in)
+    plt.show()
+    return
+
+
+def wrapper(adata, true_label, embedding, knn=10, jac_std_global=0.15, root=0, dataset='', random_seed=42,
+            v0_toobig=0.3, v1_toobig=0.1, marker_genes=[], ncomps=20):
+    v0 = VIA(adata.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
+             too_big_factor=v0_toobig, root_user=root, dataset=dataset, random_seed=random_seed,
+             do_magic_bool=True, is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
+    v0.run_VIA()
+
+    # plot coarse cluster heatmap
+    if len(marker_genes) > 0:
+        adata.obs['parc0'] = [str(i) for i in v0.labels]
+        sc.pl.matrixplot(adata, marker_genes, groupby='parc0', dendrogram=True)
+        plt.show()
+    # get the terminal states so that we can pass it on to the next iteration of Via to get a fine grained pseudotime
+    tsi_list = get_loc_terminal_states(v0, adata.X)
+
+    v1 = VIA(adata.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
+             too_big_factor=v1_toobig, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
+             preserve_disconnected=True, dataset=dataset,
+             super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed,
+             full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
+             ig_full_graph=v0.ig_full_graph,
+             csr_array_locally_pruned=v0.csr_array_locally_pruned)
+    v1.run_VIA()
+    # plot fine cluster heatmap
+
+    if len(marker_genes) > 0:
+        adata.obs['parc1'] = [str(i) for i in v1.labels]
+        sc.pl.matrixplot(adata, marker_genes, groupby='parc1', dendrogram=True)
+        plt.show()
+
+    # get knn-graph and locations of terminal states in the embedded space
+    knn_hnsw = make_knn_embeddedspace(embedding)
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v0.labels)))
+    # draw overall pseudotime and main trajectories
+    draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
+                         v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, true_label, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
+                         title_str='Pseudotime', ncomp=ncomps)
+    # draw trajectory and evolution probability for each lineage
+    draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath,
+                                          np.arange(0, len(true_label)),
+                                          adata.X)
+    plt.show()
+    return
+
+
+def main_faced():
+    from scipy.io import loadmat
+
+    def make_df(dataset='mcf7', prefix='T1_M', start_g1=700):
+        foldername = '/home/shobi/Trajectory/Datasets/FACED/' + dataset + '.mat'
+        data_mat = loadmat(foldername)
+        # print(data_mat)
+        features = data_mat['label']
+        features = [i[0] for i in features.flatten()]
+        phases = data_mat['phases']
+        loc_1 = np.where(phases == 1)
+        # print(loc_1[0])
+        phases = list(phases.flatten())
+        phases = [prefix + str(i) for i in phases]
+        for i in [1, 2, 3]:
+            count = phases.count(prefix + str(i))
+            print(dataset, ' count of phase initial ', i, 'is', count)
+        phases = phases[start_g1:len(phases)]
+        for i in [1, 2, 3]:
+            count = phases.count(prefix + str(i))
+            print(dataset, ' count of phase final ', i, 'is', count)
+        print('features_mat', features)
+        print('phases_mat', len(phases))
+        data_mat = data_mat['data']
+
+        # cols_keep= ['Area', 'Orientation','Volume', 'Dry Mass']#['Area', 'Volume', 'AspectRatio', 'Orientation', 'Dry Mass', 'Dry Mass Density', 'Dry Mass var', 'Dry Mass Skewness', 'Peak Phase', 'Phase Var', 'Phase Skewness', 'Phase Kurtosis', 'Phase Range', 'Phase Min', 'Phase Centroid Displacement', 'Phase STD Mean', 'Phase STD Variance', 'Phase STD Skewness', 'Phase STD Kurtosis', 'Phase STD Centroid Displacement', 'Phase STD Radial Distribution', 'Phase Entropy Mean', 'Phase Entropy Var', 'Phase Entropy Skewness', 'Phase Entropy Kurtosis', 'Phase Entropy Centroid Displacement', 'Phase Entropy Radial Distribution', 'Phase Fiber Centroid Displacement', 'Phase Fiber Radial Distribution', 'Phase Fiber Pixel >Upper Percentile', 'Phase Fiber Pixel >Median', 'Mean Phase Arrangement', 'Phase Arrangement Var', 'Phase Arrangement Skewness', 'Phase Orientation Var', 'Phase Orientation Kurtosis']#GOOD19['Area', 'Volume','Dry Mass','Orientation','Phase Entropy Radial Distribution','Phase Entropy Var','Phase Entropy Skewness','Dry Mass Skewness','Eccentricity','Phase Entropy Var','Phase Entropy Skewness','Phase Entropy Mean', 'Phase STD Kurtosis',  'Phase STD Radial Distribution', 'Phase Entropy Var', 'Phase Entropy Kurtosis', 'Phase Entropy Centroid Displacement','Phase Fiber Centroid Displacement', 'Phase Fiber Radial Distribution']#['Area', 'Volume','Dry Mass','Orientation','Phase Entropy Radial Distribution','Phase Fiber Radial Distribution']#23['Area', 'Volume','Dry Mass','Orientation','Phase Entropy Radial Distribution','Phase Entropy Var','Phase Entropy Skewness','Dry Mass Skewness','Eccentricity','Phase Entropy Var','Phase Entropy Skewness','Phase Entropy Mean', 'Phase STD Kurtosis',  'Phase STD Radial Distribution', 'Phase Entropy Var', 'Phase Entropy Kurtosis', 'Phase Entropy Centroid Displacement','Phase Fiber Centroid Displacement', 'Phase Fiber Radial Distribution']
+        # cols_keep = ['Dry Mass' ,'Area','Volume','Phase Entropy Mean','Phase Entropy Radial Distribution','Phase Var','Phase Entropy Var','Phase Range','Peak Phase',                     'Phase STD Variance','Mean Phase Arrangement','Phase Arrangement Var', 'Phase Kurtosis','Phase Arrangement Skewness']
+        cols_keep_OR_q2 = ['Dry Mass', 'Area', 'Volume', 'Phase Entropy Mean', 'Phase Entropy Radial Distribution',
+                           'Peak Phase', 'Phase Var', 'Phase Entropy Var', 'Phase Range', 'Phase Kurtosis',
+                           'Phase Arrangement Skewness', 'Phase Arrangement Var', 'Phase STD Variance',
+                           'Mean Phase Arrangement', 'Phase Entropy Kurtosis', 'Phase Entropy Skewness', 'Dry Mass var',
+                           'Phase Fiber Pixel >Median', 'Phase Skewness', 'Phase STD Skewness',
+                           'Phase Fiber Pixel >Upper Percentile', 'Phase Entropy Centroid Displacement',
+                           'Phase STD Mean', 'Eccentricity', 'AspectRatio', 'Phase STD Centroid Displacement',
+                           'Phase STD Radial Distribution', 'Phase Fiber Centroid Displacement']
+        cols_keep_OR_q3 = ['Dry Mass', 'Area', 'Volume', 'Phase Entropy Mean', 'Phase Entropy Radial Distribution',
+                           'Peak Phase', 'Phase Var', 'Phase Entropy Var', 'Phase Range', 'Phase Kurtosis',
+                           'Phase Arrangement Skewness', 'Phase Arrangement Var', 'Phase STD Variance',
+                           'Mean Phase Arrangement', 'Phase Entropy Kurtosis', 'Orientation', ]
+        cols_keep_AND = ['Dry Mass', 'Area', 'Volume', 'Phase Entropy Mean', 'Phase Entropy Radial Distribution',
+                         'Phase Range', 'Peak Phase']  # ,'Orientation']# NEED ORIENTATION FOR CYCLIC LOOP
+        cols_keep = ['Area', 'Volume', 'AspectRatio', 'Orientation', 'Dry Mass', 'Dry Mass Density', 'Dry Mass var',
+                     'Dry Mass Skewness', 'Peak Phase', 'Phase Var', 'Phase Skewness', 'Phase Kurtosis', 'Phase Range',
+                     'Phase Min', 'Phase Centroid Displacement', 'Phase STD Mean', 'Phase STD Variance',
+                     'Phase STD Skewness', 'Phase STD Kurtosis', 'Phase STD Centroid Displacement',
+                     'Phase STD Radial Distribution', 'Phase Entropy Mean', 'Phase Entropy Var',
+                     'Phase Entropy Skewness', 'Phase Entropy Kurtosis', 'Phase Entropy Centroid Displacement',
+                     'Phase Entropy Radial Distribution', 'Phase Fiber Centroid Displacement',
+                     'Phase Fiber Radial Distribution', 'Phase Fiber Pixel >Upper Percentile',
+                     'Phase Fiber Pixel >Median', 'Mean Phase Arrangement', 'Phase Arrangement Var',
+                     'Phase Arrangement Skewness', 'Phase Orientation Var', 'Phase Orientation Kurtosis']
+        cols_keep_test = ['Dry Mass', 'Area', 'Volume', 'Phase Entropy Mean', 'Phase Entropy Radial Distribution',
+                          'Peak Phase', 'Phase Var', 'Phase Entropy Var', 'Phase Range', 'Phase Kurtosis',
+                          'Phase Arrangement Skewness', 'Phase Arrangement Var', 'Phase STD Variance',
+                          'Mean Phase Arrangement', 'Phase Entropy Kurtosis', 'Phase Entropy Skewness', 'Dry Mass var',
+                          'Phase Fiber Pixel >Median', 'Phase Skewness', 'Phase STD Skewness',
+                          'Phase Fiber Pixel >Upper Percentile', 'Phase Entropy Centroid Displacement',
+                          'Phase STD Mean', 'Eccentricity', 'AspectRatio', 'Phase STD Centroid Displacement',
+                          'Phase STD Radial Distribution', 'Phase Fiber Centroid Displacement', 'Circularity']
+        data_mat = data_mat[start_g1:]
+        print('shape of data', data_mat.shape)
+        df = pd.DataFrame(data_mat, columns=features)
+        # df = df[cols_keep_test]
+        df['phases'] = phases
+        df['CellID'] = df.index + start_g1
+
+        '''
+        if dataset=='mcf7':
+            df = df[df['Phase Entropy Radial Distribution']>60]
+            df['Phase Entropy Radial Distribution'] = df['Phase Entropy Radial Distribution']*8#7 and 1 is good too 7#8 is good if mb is 3
+        if dataset =='mb231':
+            df = df[df['Phase Entropy Radial Distribution'] < 80]
+            df['Phase Entropy Radial Distribution'] = df['Phase Entropy Radial Distribution'] *3
+        '''
+        phases = df['phases'].values.tolist()
+        # print('phases final for ', dataset, phases)
+        df = df.drop('phases', 1)
+
+        for i in [1, 2, 3]:
+            count = phases.count(prefix + str(i))
+            print('count of phase', i, 'is', count)
+
+        # df[['Phase Entropy Var','Phase Entropy Skewness','Phase Entropy Radial Distribution', 'Phase Entropy Mean']] =200*df[['Phase Entropy Var','Phase Entropy Skewness','Phase Entropy Radial Distribution', 'Phase Entropy Mean']]
+        # df['Phase Entropy Var'] = np.arcsinh(df['Phase Entropy Var'])
+        # df['Phase Entropy Var'] = 800*df['Phase Entropy Var']
+
+        # df['Volume']= (df['Volume'] - df['Volume'].mean()) / df['Volume'].std()
+        '''
+        df = df[cols_keep]
+        df['Volume'] = df['Volume']
+        for feat in ['Phase Entropy Radial Distribution']:#:,'Phase Entropy Var''Phase Entropy Skewness','Dry Mass Skewness (not so good)','Phase Entropy Radial Distribution']:
+            if feat !='Volume':  ax = df[feat].plot.hist(bins=20, alpha=0.4)
+        plt.show()
+        '''
+        '''
+        if dataset =='mcf7':
+            df['type'] = 500
+        else: df['type']=100
+        '''
+        '''
+        #mitotic cells
+        if dataset =='mcf7':
+            print('cell 2204')
+            print(df.iloc[2203])
+            print('cell 2660')
+            print(df.iloc[2660])
+        '''
+        # df.to_csv('/home/shobi/Trajectory/Datasets/FACED/' + dataset + '.csv')
+
+        return df, phases
+
+    # df = df.drop('Area',1)
+    # df = df.drop('Volume',1)
+    # df = df[cols]
+    # df['Volume']= (df['Volume'] - df['Volume'].mean()) / df['Volume'].std()
+    # df['Area'] = (df['Area'] - df['Area'].mean()) / df['Area'].std()
+
+    df_mb231, phases_mb231 = make_df('mb231', prefix='T2_M', start_g1=0)
+    df_mcf7, phases_mcf7 = make_df('mcf7', prefix='T1_M', start_g1=1000)  # 1000
+
+    # print(len(phases_mb231), len(phases_mcf7))
+    # phases = phases_mb231+phases_mcf7#phases_mcf7#phases_mb231#
+    # print('phases', len(phases))
+
+    # df = pd.concat([df_mb231,df_mcf7],axis=0, ignore_index=True)
+    # print('df.shape', df.shape)
+    # SINGLE CELL LINE START
+
+    # cell_line = 'mb231'
+    cell_line = 'mcf7'
+    if cell_line == 'mb231':
+        phases = phases_mb231  # cf7#b231#mcf7#phases_mb231
+        df = df_mb231  # cf7#cf7#b231#mcf7#df_mb231
+    else:
+        phases = phases_mcf7  # cf7#b231#mcf7#phases_mb231
+        df = df_mcf7  # cf7#cf7#b231#mcf7#df_mb231
+        cell_id = df['CellID']
+        df = df.drop("CellID", 1)
+
+    # SINGLE CELL LINE END
+    cols = df.columns
+    # df[cols] = (df[cols] - df[cols].mean()) / df[cols].std()
+    # df.rename(columns={"Phase Entropy Radial Distribution": 'Phase_Entropy_Radial_Distribution'})
+    # df = np.arcsinh(df)
+
+    df_mean = df.copy()
+    df_mean['type_phase'] = phases
+    # fig, axs = plt.subplots()
+    # df_mean.groupby("type_phase").Phase_Entropy_Radial_Distribution.hist(alpha=0.4, ax=axs)
+    # plt.show()
+    df_mean = df_mean.groupby('type_phase', as_index=False).mean()
+    print('dfmean')
+    df_mean.to_csv('/home/shobi/Trajectory/Datasets/FACED/mixed_mean.csv')
+    ad = sc.AnnData(df)
+    ad.var_names = df.columns
+    # ad.obs['cell_phase'] = phases
+    sc.pp.scale(ad)
+
+    # ad.X = (ad.X - np.mean(ad.X, axis=0)) / np.std(ad.X, axis=0)
+
+    # FEATURE SELECTION
+    '''
+    from sklearn.feature_selection import mutual_info_classif
+    kepler_mutual_information = mutual_info_classif(ad.X, phases)  # cancer_type
+
+    plt.subplots(1, figsize=(26, 1))
+    sns.heatmap(kepler_mutual_information[:, np.newaxis].T, cmap='Blues', cbar=False, linewidths=1, annot=True)
+    plt.yticks([], [])
+    plt.gca().set_xticklabels(df.columns, rotation=45, ha='right', fontsize=12)
+    plt.suptitle("Kepler Variable Importance (mutual_info_classif)", fontsize=18, y=1.2)
+    plt.gcf().subplots_adjust(wspace=0.2)
+    plt.show()
+
+    from sklearn.tree import DecisionTreeClassifier
+    from sklearn.model_selection import train_test_split
+    from sklearn import metrics
+    # Split dataset into training set and test set
+    X_train, X_test, y_train, y_test = train_test_split(ad.X, phases, test_size=0.3, random_state=1)
+    clf = DecisionTreeClassifier(criterion = 'gini', max_depth=3)
+    clf.fit(X_train, y_train)#cancer_type
+
+    pd.Series(clf.feature_importances_, index=df.columns).plot.bar(color='steelblue', figsize=(12, 6))
+    plt.show()
+    y_pred = clf.predict(X_test)
+    print("Accuracy:",metrics.accuracy_score(y_test, y_pred))
+
+    # FEATURE SELECTION END
+    '''
+
+    print('ad', ad)
+    knn = 20  # 20
+    random_seed = 1  # 3
+    jac_std_global = .5  # 0.5#0.15
+
+    sc.tl.pca(ad, svd_solver='arpack')
+    X_in = ad.X  # ad_TF.obsm['X_pca'][:, start_ncomp:ncomps]
+    df_X = pd.DataFrame(X_in)
+    df_X.columns = df.columns
+
+    df_X['Area'] = df_X['Area'] * 3
+    df_X['Dry Mass'] = df_X['Dry Mass'] * 3
+    df_X['Volume'] = df_X['Volume'] * 20
+    # df_X['Orientation'] = df_X['Orientation'] *5 #for loop
+    # df_X['Circularity'] = df_X['Circularity'] * 5
+    # df_X['Phase Skewness'] = df_X['Phase Skewness'] * 3
+    # df_X['Phase Fiber Radial Distribution'] = df_X['Phase Fiber Radial Distribution']*5
+    #     ##df_X['Phase Min'] =df_X['Phase Min']*2
+    ##df_X['Phase Entropy Mean'] = df_X['Phase Entropy Mean']
+    ##df_X['Phase Fiber Radial Distribution'] = df_X['Phase Fiber Radial Distribution']
+    X_in = df_X.values
+    ad = sc.AnnData(df_X)
+    sc.tl.pca(ad, svd_solver='arpack')
+    ad.var_names = df_X.columns
+    df_X.to_csv('/home/shobi/Trajectory/Datasets/FACED/data_in_mb231_topfeat.csv')
+
+    ncomps = df.shape[1]
+
+    start_ncomp = 0
+    root = 1  # 1200#500nofresh
+    root_user = ['T1_M1', 'T2_M1']
+    true_label = phases
+    cancer_type = ['mb' if 'T2' in i else 'mc' for i in phases]
+
+    print('cancer type', cancer_type)
+    print(phases)
+    print('root, pc', root, ncomps)
+
+    # Start embedding
+
+    f, ax = plt.subplots()
+
+    # singlecell: embedding = umap.UMAP(n_neighbors=10).fit_transform(X_in)#ad.obsm['X_pca'][:, 0:10])#(ad.X)
+    # both cells:
+    embedding = umap.UMAP().fit_transform(ad.obsm['X_pca'][:, 0:20])
+    # embedding = umap.UMAP(n_neighbors=10).fit_transform(ad.obsm['X_pca'][:, 0:10])#(ad.X)
+
+    import phate
+    phate_op = phate.PHATE()
+    # embedding = phate_op.fit_transform(X_in)
+    df_embedding = pd.DataFrame(embedding)
+    df_embedding['true_label'] = phases
+    # df_embedding.to_csv('/home/shobi/Trajectory/Datasets/FACED/phate_mb231.csv')
+
+    cell_dict = {'T1_M1': 'red', 'T2_M1': 'yellowgreen', 'T1_M2': 'orange', 'T2_M2': 'darkgreen', 'T1_M3': 'yellow',
+                 'T2_M3': 'blue'}
+    # cell_dict = {'T1_M1': 'red', 'T2_M1': 'blue', 'T1_M2': 'red', 'T2_M2': 'blue', 'T1_M3': 'red',             'T2_M3': 'blue'}
+
+    for key in list(set(true_label)):  # ['T1_M1', 'T2_M1','T1_M2', 'T2_M2','T1_M3', 'T2_M3']:
+        loc = np.where(np.asarray(true_label) == key)[0]
+        if '_M1' in key:
+            alpha = 0.5
+        else:
+            alpha = 0.8
+        ax.scatter(embedding[loc, 0], embedding[loc, 1], c=cell_dict[key], alpha=alpha, label=key)
+    plt.legend()
+    plt.show()
+
+    # END embedding
+    print('ad.shape', ad.shape, 'true label length', len(true_label))
+    # paga_faced(ad, knn, embedding, true_label)
+    embedding_pal = embedding  # ad.obsm['X_pca'][:,0:2]
+    # run_palantir_faced(ad, knn, embedding_pal, true_label )
+    plt.show()
+
+    v0 = VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
+             too_big_factor=0.3, root_user=root_user, dataset='faced', random_seed=random_seed,
+             do_magic_bool=True, is_coarse=True, preserve_disconnected=True, preserve_disconnected_after_pruning=True,
+             pseudotime_threshold_TS=40)  # *.4 root=1,
+    v0.run_VIA()
+
+    all_cols = ['Area', 'Volume', 'Circularity', 'Eccentricity', 'AspectRatio', 'Orientation', 'Dry Mass',
+                'Dry Mass Density', 'Dry Mass var', 'Dry Mass Skewness', 'Peak Phase', 'Phase Var', 'Phase Skewness',
+                'Phase Kurtosis', 'Phase Range', 'Phase Min', 'Phase Centroid Displacement', 'Phase STD Mean',
+                'Phase STD Variance', 'Phase STD Skewness', 'Phase STD Kurtosis', 'Phase STD Centroid Displacement',
+                'Phase STD Radial Distribution', 'Phase Entropy Mean', 'Phase Entropy Var', 'Phase Entropy Skewness',
+                'Phase Entropy Kurtosis', 'Phase Entropy Centroid Displacement', 'Phase Entropy Radial Distribution',
+                'Phase Fiber Centroid Displacement', 'Phase Fiber Radial Distribution',
+                'Phase Fiber Pixel >Upper Percentile', 'Phase Fiber Pixel >Median', 'Mean Phase Arrangement',
+                'Phase Arrangement Var', 'Phase Arrangement Skewness', 'Phase Orientation Var',
+                'Phase Orientation Kurtosis']
+
+    '''
+    for pheno_i in ['Area']:#, 'Volume', 'Circularity', 'Eccentricity', 'AspectRatio', 'Orientation', 'Dry Mass', 'Dry Mass Density', 'Dry Mass var', 'Dry Mass Skewness', 'Peak Phase', 'Phase Var', 'Phase Skewness', 'Phase Kurtosis', 'Phase Range', 'Phase Min', 'Phase Centroid Displacement', 'Phase STD Mean', 'Phase STD Variance', 'Phase STD Skewness', 'Phase STD Kurtosis', 'Phase STD Centroid Displacement', 'Phase STD Radial Distribution', 'Phase Entropy Mean', 'Phase Entropy Var', 'Phase Entropy Skewness', 'Phase Entropy Kurtosis', 'Phase Entropy Centroid Displacement', 'Phase Entropy Radial Distribution', 'Phase Fiber Centroid Displacement', 'Phase Fiber Radial Distribution', 'Phase Fiber Pixel >Upper Percentile', 'Phase Fiber Pixel >Median', 'Mean Phase Arrangement', 'Phase Arrangement Var', 'Phase Arrangement Skewness', 'Phase Orientation Var', 'Phase Orientation Kurtosis']:
+        subset_ = df[pheno_i].values
+        print('subset shape', subset_.shape)
+        v0.get_gene_expression(subset_, title_gene=pheno_i)
+        plt.show()
+    '''
+    df['via_coarse_cluster'] = v0.labels
+    df['phases'] = true_label
+    df['pt_coarse'] = v0.single_cell_pt_markov
+    # df['CellID'] = cell_id
+
+    tsi_list = get_loc_terminal_states(v0, X_in)
+
+    v1 = VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
+             too_big_factor=0.05, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
+             preserve_disconnected=True, dataset='faced',
+             super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed,
+             full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
+             ig_full_graph=v0.ig_full_graph,
+             csr_array_locally_pruned=v0.csr_array_locally_pruned, pseudotime_threshold_TS=40)
+    v1.run_VIA()
+    df['via_fine_cluster'] = v1.labels
+    df['pt_fine'] = v1.single_cell_pt_markov
+    df.to_csv('/home/shobi/Trajectory/Datasets/FACED/' + cell_line + 'pseudotime_gwinky.csv')
+
+    all_cols = ['Area', 'Volume', 'Dry Mass', 'Circularity', 'Orientation', 'Phase Entropy Skewness',
+                'Phase Fiber Radial Distribution', 'Eccentricity', 'AspectRatio', 'Dry Mass Density', 'Dry Mass var',
+                'Dry Mass Skewness', 'Peak Phase', 'Phase Var', 'Phase Skewness', 'Phase Kurtosis', 'Phase Range',
+                'Phase Min', 'Phase Centroid Displacement', 'Phase STD Mean', 'Phase STD Variance',
+                'Phase STD Skewness', 'Phase STD Kurtosis', 'Phase STD Centroid Displacement',
+                'Phase STD Radial Distribution', 'Phase Entropy Mean', 'Phase Entropy Var', 'Phase Entropy Kurtosis',
+                'Phase Entropy Centroid Displacement', 'Phase Entropy Radial Distribution',
+                'Phase Fiber Centroid Displacement', 'Phase Fiber Pixel >Upper Percentile', 'Phase Fiber Pixel >Median',
+                'Mean Phase Arrangement', 'Phase Arrangement Var', 'Phase Arrangement Skewness',
+                'Phase Orientation Var', 'Phase Orientation Kurtosis']
+    plot_n = 7
+    fig, axs = plt.subplots(2, plot_n)  # (2,10)
+    for enum_i, pheno_i in enumerate(all_cols[0:14]):  # [0:14]
+        subset_ = df[pheno_i].values
+        print('subset shape', subset_.shape)
+        if enum_i >= plot_n:
+            row = 1
+            col = enum_i - plot_n
+        else:
+            row = 0
+            col = enum_i
+
+        ax = axs[row, col]
+        v0.get_gene_expression_multi(ax=ax, gene_exp=subset_, title_gene=pheno_i)
+    plt.title(cell_line)
+    plt.show()
+    fig2, axs2 = plt.subplots(2, 10)
+    for enum_i, pheno_i in enumerate(all_cols[20:38]):
+        subset_ = df[pheno_i].values
+        print('subset shape', subset_.shape)
+        if enum_i >= 10:
+            row = 1
+            col = enum_i - 10
+        else:
+            row = 0
+            col = enum_i
+
+        ax2 = axs2[row, col]
+        v0.get_gene_expression_multi(ax=ax2, gene_exp=subset_, title_gene=pheno_i)
+    plt.title(cell_line)
+    plt.show()
+    # plot fine cluster heatmap
+
+    # get knn-graph and locations of terminal states in the embedded space
+    knn_hnsw = make_knn_embeddedspace(embedding)
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v0, np.arange(0, len(v0.labels)))
+    # draw overall pseudotime and main trajectories
+    '''
+    draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, v0.labels, v0.labels, v0.edgelist_maxout,
+                         v0.x_lazy, v0.alpha_teleport, v0.single_cell_pt_markov, true_label, knn=v0.knn,
+                         final_super_terminal=v0.super_terminal_clusters,
+                         sub_terminal_clusters=v0.terminal_clusters,
+                         title_str='Pseudotime', ncomp=ncomps)
+    # draw trajectory and evolution probability for each lineage
+    draw_sc_evolution_trajectory_dijkstra(v0, embedding, knn_hnsw, v0.full_graph_shortpath,      np.arange(0, len(true_label)))
+    '''
+    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v0.labels)))
+    draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
+                         v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, true_label, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
+                         title_str='Hitting times: Markov Simulation on biased edges', ncomp=ncomps)
+    plt.show()
+
+
 def main():
-    dataset = 'Human'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
+    dataset = 'mESC'  #
+    # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
-        main_Human(ncomps=120, knn=70, p0_random_seed=3, run_palantir_func=False)
+        main_Human(ncomps=100, knn=20, v0_random_seed=1, run_palantir_func=False)  # 100 comps, knn30, seed=4 is great
+        # cellrank_Human(ncomps = 20, knn=30)
     elif dataset == 'Bcell':
         main_Bcell(ncomps=30, knn=20, random_seed=4)  # 0 is good
+    elif dataset == 'faced':
+        main_faced()
 
     elif dataset == 'mESC':
-        main_mESC(ncomps=100, knn=30, p0_random_seed=12, run_palantir_func=False)
+        main_mESC(knn=20, v0_random_seed=4, run_palantir_func=False)  # knn=20
+
     elif dataset == 'EB':
-        main_EB(ncomps=30, knn=20, p0_random_seed=24)
+        # main_EB(ncomps=30, knn=20, v0_random_seed=24)
+        main_EB_clean(ncomps=30, knn=20, v0_random_seed=20)
         # plot_EB()
-    else:
-        main_Toy(ncomps=5, knn=10, random_seed=2)
-
-
+    elif dataset == 'scATAC_Hema':
+        main_scATAC_Hemato(knn=20)
+        # main_scATAC_zscores(knn=20, ncomps = 30)
+    elif dataset == 'Toy':
+        main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', foldername="/home/shobi/Trajectory/Datasets/Toy3/")
+   
 if __name__ == '__main__':
     main()
 
