@@ -69,7 +69,7 @@ via.draw_trajectory_gams(Y_phate, super_clus_ds_PCA_loc, p1.labels, v0.labels, v
 2D_knn_hnsw = via.make_knn_embeddedspace(Y_phate)
 #draw the individual lineage paths and cell-fate probabilities at single-cell level 
 via.draw_sc_evolution_trajectory_dijkstra(v1, Y_phate, 2D_knn_hnsw, v0.full_graph_shortpath,
-                                      idx=np.arange(0, input_data.shape[0]), X_data=input_data)
+                                      idx=np.arange(0, input_data.shape[0]))
 
 plt.show()
 ```
