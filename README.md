@@ -37,22 +37,23 @@ import pyVia.core as via
 #root_user is the index of the cell corresponding to a suitable start/root cell
 
 v0 = via.VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,too_big_factor=p0_too_big, 
-root_user=1, dataset='EB', random_seed=p0_random_seed, do_magic_bool=True, is_coarse=True, preserve_disconnected=True) 
+root_user=1, dataset='EB', random_seed=21, do_magic_bool=True, is_coarse=True, preserve_disconnected=True) 
 v0.run_VIA()
 
 tsi_list = get_loc_terminal_states(v0, input_data) #translate the terminal clusters found in v0 to the fine-grained run in v1
 
 v1 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
-             too_big_factor=v1_too_big,super_cluster_labels=p0.labels, super_node_degree_list=v0.node_degree_list,
-             super_terminal_cells=tsi_list, root_user=1,x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='EB',
-             super_terminal_clusters=v0.terminal_clusters, random_seed=p0_random_seed)
+             too_big_factor=v1_too_big,super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=1,is_coarse=False, full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
+             x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='EB',
+             super_terminal_clusters=v0.terminal_clusters,  random_seed=21)
 v1.run_VIA()
 
 #Plot the true and inferred times and pseudotimes
 #Replace Y_phate with UMAP, TSNE embedding
 f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
 ax1.scatter(Y_phate[:, 0], Y_phate[:, 1], c=time_labels, s=5, cmap='viridis', alpha=0.5)
-ax2.scatter(Y_phate[:, 0], Y_phate[:, 1], c=p1.single_cell_pt_markov, s=5, cmap='viridis', alpha=0.5)
+ax2.scatter(Y_phate[:, 0], Y_phate[:, 1], c=v1.single_cell_pt_markov, s=5, cmap='viridis', alpha=0.5)
 ax1.set_title('Embyroid Data: Days')
 ax2.set_title('Embyroid Data: Randomseed' + str(p0_random_seed))
 plt.show()
