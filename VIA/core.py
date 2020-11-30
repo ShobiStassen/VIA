@@ -2329,6 +2329,7 @@ class VIA:
             distance_array = self.full_distance_array
             csr_array_locally_pruned = self.csr_array_locally_pruned
 
+        print('at source, targets')
         sources, targets = csr_array_locally_pruned.nonzero()
 
         edgelist = list(zip(sources, targets))
@@ -3945,9 +3946,8 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
     pc = pca.fit_transform(df_counts)
 
     v0 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
-             too_big_factor=0.3,
-
-             root_user=root_user, preserve_disconnected=True, dataset='toy', random_seed=random_seed)  # *.4 root=2,
+             too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset='toy',
+             random_seed=random_seed, is_coarse=True)  # *.4 root=2,
     v0.run_VIA()
     super_labels = v0.labels
 
@@ -3969,13 +3969,15 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
         labelsq, distances = p.knn_query(temp, k=1)
         print(labelsq[0])
         tsi_list.append(labelsq[0][0])
-
+    print('csr locally', v0.csr_array_locally_pruned)
     v1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=.15, dist_std_local=1, knn=knn,
              too_big_factor=0.1,
              super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root_user,
              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='toy', is_coarse=False,
-             super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed)  # root=1,
+             super_terminal_clusters=v0.terminal_clusters, full_neighbor_array=v0.full_neighbor_array,
+             ig_full_graph=v0.ig_full_graph, full_distance_array=v0.full_distance_array,
+             csr_array_locally_pruned=v0.csr_array_locally_pruned, random_seed=random_seed)  # root=1,
     # in the case of TOY DATA: P1 WORKS MUCH BETTER WHEN ONLY USING SUPER_TERMINAL_CLUS... O/W need to omit pruning
 
     v1.run_VIA()
@@ -4114,7 +4116,10 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user='M1',
              super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root_user, is_coarse=False,
              x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='toy',
-             super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed)  # root=1,
+             super_terminal_clusters=v0.terminal_clusters,
+             full_neighbor_array=v0.full_neighbor_array,
+             ig_full_graph=v0.ig_full_graph, full_distance_array=v0.full_distance_array,
+             csr_array_locally_pruned=v0.csr_array_locally_pruned, random_seed=random_seed)  # root=1,
 
     v1.run_VIA()
     labels = v1.labels
@@ -4167,8 +4172,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user='M1',
 
     knn_hnsw = make_knn_embeddedspace(embedding)
 
-    draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath, idx,
-                                          adata_counts.obsm['X_pca'][:, 0:ncomps])
+    draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath, idx)
 
     plt.show()
 
@@ -4573,10 +4577,10 @@ def main_EB_clean(ncomps=30, knn=20, v0_random_seed=21, foldername='/home/shobi/
     annots = loadmat(
         foldername + 'EBdata.mat')  # has been filtered but not yet normed (by library size) nor other subsequent pre-processing steps
     data = annots['data'].toarray()  # (16825, 17580) (cells and genes have been filtered)
-    print('data min max', np.max(data), np.min(data), data[1, 0:20], data[5, 250:270], data[1000, 15000:15050])
+
     loc_ = np.where((data < 1) & (data > 0))
     temp = data[(data < 1) & (data > 0)]
-    print('temp non int', temp)
+
 
     time_labels = annots['cells'].flatten().tolist()
     # df_timelabels = pd.DataFrame(time_labels, columns=['true_time_labels'])
@@ -4626,9 +4630,10 @@ def main_EB_clean(ncomps=30, knn=20, v0_random_seed=21, foldername='/home/shobi/
     v1 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=v1_too_big, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=1, is_coarse=False, full_neighbor_array=v0.full_neighbor_array,
-             full_distance_array=v0.full_distance_array,
+             full_distance_array=v0.full_distance_array, ig_full_graph=v0.ig_full_graph,
+             csr_array_locally_pruned=v0.csr_array_locally_pruned,
              x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='EB',
-             super_terminal_clusters=v0.terminal_clusters, random_seed=v0_random_seed)
+             super_terminal_clusters=v0.terminal_clusters, random_seed=21)
 
     v1.run_VIA()
 
@@ -4648,7 +4653,7 @@ def main_EB_clean(ncomps=30, knn=20, v0_random_seed=21, foldername='/home/shobi/
 
     knn_hnsw = make_knn_embeddedspace(Y_phate)
     draw_sc_evolution_trajectory_dijkstra(v1, Y_phate, knn_hnsw, v0.full_graph_shortpath,
-                                          idx=np.arange(0, input_data.shape[0]), X_data=input_data)
+                                          idx=np.arange(0, input_data.shape[0]))
 
     plt.show()
 
@@ -4865,7 +4870,9 @@ def main_EB(ncomps=30, knn=20, v0_random_seed=21):
              too_big_factor=v1_too_big, is_coarse=False,
 
              super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
-             super_terminal_cells=tsi_list, root_user=1,
+             super_terminal_cells=tsi_list, root_user=1, ig_full_graph=v0.ig_full_graph,
+             csr_array_locally_pruned=v0.csr_array_locally_pruned, full_distance_array=v0.full_distance_array,
+             full_neighbor_array=v0.full_neighbor_array,
              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='EB',
              super_terminal_clusters=v0.terminal_clusters, random_seed=v0_random_seed)
 
@@ -5169,9 +5176,7 @@ def main_mESC(knn=30, v0_random_seed=42, run_palantir_func=False):
 
     tsi_list = get_loc_terminal_states(v0, adata.X)
     v1 = VIA(adata.X, true_label_int, jac_std_global=0.15, dist_std_local=1, knn=knn,
-             too_big_factor=p1_too_big,
-
-             super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
+             too_big_factor=p1_too_big, super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='mESC',
              super_terminal_clusters=v0.terminal_clusters, random_seed=v0_random_seed,
@@ -6159,7 +6164,7 @@ def main_faced():
 
 
 def main():
-    dataset = 'mESC'  #
+    dataset = 'EB'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
         main_Human(ncomps=100, knn=20, v0_random_seed=1, run_palantir_func=False)  # 100 comps, knn30, seed=4 is great
@@ -6180,8 +6185,9 @@ def main():
         main_scATAC_Hemato(knn=20)
         # main_scATAC_zscores(knn=20, ncomps = 30)
     elif dataset == 'Toy':
-        main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', foldername="/home/shobi/Trajectory/Datasets/Toy3/")
-   
+        main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy4', foldername="/home/shobi/Trajectory/Datasets/Toy4/")
+
+
 if __name__ == '__main__':
     main()
 
