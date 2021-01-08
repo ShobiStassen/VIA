@@ -9,13 +9,13 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 setuptools.setup(
     name='pyVIA',
-    version='0.1.3', #26-Nov-2020
+    version='0.1.4', #22-Dec-2020
     packages=['pyVIA',],
     license='MIT',
     author_email = 'shobana.venkat88@gmail.com',
     url = 'https://github.com/ShobiStassen/VIA',
     setup_requires = ['numpy>=1.17','pybind11'],
-    install_requires=['pybind11','numpy>=1.17','scipy','pandas>=0.25','hnswlib','python-igraph','leidenalg==0.7.0', 'sklearn', 'termcolor','pygam'],
+    install_requires=['pybind11','numpy>=1.17','scipy','pandas>=0.25','hnswlib','python-igraph','leidenalg>=0.7.0', 'sklearn', 'termcolor','pygam'],
     long_description=long_description,
     long_description_content_type='text/markdown'
 )
