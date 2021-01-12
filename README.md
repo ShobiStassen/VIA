@@ -25,7 +25,8 @@ pip install pyVIA
 ### 1.b Human Embryoid Bodies (Configuring VIA)
 ### 2.a Toy Data (multifurcation)
 ### 2.b Toy Data (disconnected)
-### 3.  General input format and wrapper function
+### 3.a General input format and wrapper function
+### 3.b General disconnected trajectories wrapper function
 ------------------------------------------------------
 ### 1.a Human Embryoid Bodies
 save the [Raw data](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9Ew4RHf/view?usp=sharing) matrix as 'EBdata.mat'. The cells in this file have been filtered for too small/large libraries by [Moon et al. 2019](https://nbviewer.jupyter.org/github/KrishnaswamyLab/PHATE/blob/master/Python/tutorial/EmbryoidBody.ipynb) 
@@ -145,5 +146,6 @@ sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
 via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[1, 1], preserve_disconnected=True, knn=30, ncomps=10,cluster_graph_pruning_std = 1)
 #in the case of connected data (i.e. only 1 graph component. e.g. Toy Data Multifurcating) then the wrapper function from example 3.a can be used:
 #via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca'][:,0:2], root=[1,1], knn=30, ncomps=10,cluster_graph_pruning_std = 1)
+```
 
 
