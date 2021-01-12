@@ -1,5 +1,5 @@
 # Via
-VIA is a Trajectory Inference (TI) method that offers topology construction, pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. VIA combines lazy-teleporting random walks and Monte-Carlo Markov Chain simulations to overcome commonly encountered challenges such as 1) accurate terminal state and lineage inference, 2) ability to capture combination of cyclic, disconnected and tree-like structures, 3) scalability in feature and sample space. 
+VIA is a single-cell Trajectory Inference method that offers topology construction, pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. VIA combines lazy-teleporting random walks and Monte-Carlo Markov Chain simulations to overcome common challenges such as 1) accurate terminal state and lineage inference, 2) ability to capture combination of cyclic, disconnected and tree-like structures, 3) scalability in feature and sample space. It is also well-suited for multi-omic analysis. In addition to transcriptomic data, VIA works on scATAC-seq, flow and imaging cytometry data 
 
 ## Getting Started
 ### install using pip
@@ -89,7 +89,11 @@ plt.show()
 Two examples [toy datasets](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing) with annotations are generated using DynToy are provided. 
 ```
 import pyVia.core as via
+#multifurcation
+#the root is automatically set to  root_user = 'M1'
 via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername = ".../Trajectory/Datasets/") #multifurcation
+#disconnected trajectory
+#the root is automatically set as a list root_user = ['T1_M1', 'T2_M1'] # e.g. T2_M3 is a cell belonging to the 3rd Milestone (M3) of the second Trajectory (T2)
 via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Trajectory/Datasets/") #2 disconnected trajectories
 ```
 ## Output of Multifurcating toy dataset
@@ -98,7 +102,8 @@ via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Tra
 ![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png)
 
 ### 3. VIA wrapper for any input (uses example of pre-B cell differentiation) 
-Datasets and labels used in this example are provided in [Datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets)
+Datasets and labels used in this example are provided in [Datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets).
+
 ```
 # Read the two files:
 # 1) the first file contains 200PCs of the Bcell filtered and normalized data for the first 5000 HVG.
