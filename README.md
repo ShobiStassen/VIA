@@ -101,7 +101,7 @@ via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Tra
 ## Output of disconnected toy dataset
 ![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png)
 
-### 3. VIA wrapper for any input (uses example of pre-B cell differentiation) 
+### 3.a VIA wrapper for any input (uses example of pre-B cell differentiation) 
 Datasets and labels used in this example are provided in [Datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets).
 
 ```
@@ -126,4 +126,24 @@ Datasets and labels used in this example are provided in [Datasets](https://gith
         via.via_wrapper(adata, true_label, embedding, knn=20, ncomps=20, jac_std_global=0.15, root=42, dataset='',
                     random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes)
 ```
+### 3.b VIA wrapper for generic disconnected trajectory
+```
+#foldername corresponds to the location where you have saved the Toy Disconnected data (shown in example 2)
+#Read in the data and labels
+df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv", 'rt', delimiter=",")
+df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids.csv", 'rt', delimiter=",")
+        via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[1, 1], preserve_disconnected=True, knn=30, ncomps=10,cluster_graph_pruning_std = 1)
+
+# Make AnnData object for wrapper function to read-in data and do PCA
+df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
+df_counts = df_counts.drop('Unnamed: 0', 1)
+df_ids = df_ids.sort_values(by=['cell_id_num'])
+df_ids = df_ids.reset_index(drop=True)
+true_label = df_ids['group_id']
+adata_counts = sc.AnnData(df_counts, obs=df_ids)
+sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
+via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[1, 1], preserve_disconnected=True, knn=30, ncomps=10,cluster_graph_pruning_std = 1)
+#in the case of connected data (i.e. only 1 graph component. e.g. Toy Data Multifurcating) then the wrapper function from example 3.a can be used:
+#via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca'][:,0:2], root=[1,1], knn=30, ncomps=10,cluster_graph_pruning_std = 1)
+
 
