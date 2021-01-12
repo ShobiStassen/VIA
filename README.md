@@ -123,8 +123,8 @@ Datasets and labels used in this example are provided in [Datasets](https://gith
 
         # list marker genes or genes of interest if known in advance. otherwise marker_genes = []
         marker_genes = ['Igll1', 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4', 'Sp7']  # irf4 down-up
-        # call VIA
-        via.via_wrapper(adata, true_label, embedding, knn=20, ncomps=20, jac_std_global=0.15, root=42, dataset='',
+        # call VIA. We identify an early (suitable) start cell root = [42]. Can also set an arbitrary value
+        via.via_wrapper(adata, true_label, embedding, knn=20, ncomps=20, jac_std_global=0.15, root=[42], dataset='',
                     random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes)
 ```
 ### 3.b VIA wrapper for generic disconnected trajectory
@@ -133,7 +133,6 @@ Datasets and labels used in this example are provided in [Datasets](https://gith
 #Read in the data and labels
 df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv", 'rt', delimiter=",")
 df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids.csv", 'rt', delimiter=",")
-        via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[1, 1], preserve_disconnected=True, knn=30, ncomps=10,cluster_graph_pruning_std = 1)
 
 # Make AnnData object for wrapper function to read-in data and do PCA
 df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
@@ -143,9 +142,10 @@ df_ids = df_ids.reset_index(drop=True)
 true_label = df_ids['group_id']
 adata_counts = sc.AnnData(df_counts, obs=df_ids)
 sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
-via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[1, 1], preserve_disconnected=True, knn=30, ncomps=10,cluster_graph_pruning_std = 1)
+#Since there are 2 disconnected trajectories, we provide 2 arbitrary roots (start cells).If there are more disconnected paths, then VIA arbitrarily selects roots
+via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[1,1], preserve_disconnected=True, knn=30, ncomps=10,cluster_graph_pruning_std = 1)
 #in the case of connected data (i.e. only 1 graph component. e.g. Toy Data Multifurcating) then the wrapper function from example 3.a can be used:
-#via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca'][:,0:2], root=[1,1], knn=30, ncomps=10,cluster_graph_pruning_std = 1)
+#via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca'][:,0:2], root=[1], knn=30, ncomps=10,cluster_graph_pruning_std = 1)
 ```
 
 
