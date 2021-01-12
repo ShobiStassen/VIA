@@ -97,8 +97,8 @@ Datasets and labels used in this example are provided in [Datasets](https://gith
 # 1) the first file contains 200PCs of the Bcell filtered and normalized data for the first 5000 HVG.
 # 2)The second file contains raw count data for marker genes
 
-        data = pd.read_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_200PCs.csv')
-        data_genes = pd.read_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_markergenes.csv')
+        data = pd.read_csv('./Bcell_200PCs.csv')
+        data_genes = pd.read_csv('./Bcell_markergenes.csv')
         data_genes = data_genes.drop(['cell'], axis=1)
         true_label = data['time_hour']
         data = data.drop(['cell', 'time_hour'], axis=1)
@@ -111,7 +111,7 @@ Datasets and labels used in this example are provided in [Datasets](https://gith
         # list marker genes or genes of interest if known in advance. otherwise marker_genes = []
         marker_genes = ['Igll1', 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4', 'Sp7']  # irf4 down-up
         # call VIA
-        via_wrapper(adata, true_label, embedding, knn=20, ncomps=20, jac_std_global=0.15, root=42, dataset='',
+        via.via_wrapper(adata, true_label, embedding, knn=20, ncomps=20, jac_std_global=0.15, root=42, dataset='',
                     random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes)
 ```
 
