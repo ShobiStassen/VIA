@@ -110,22 +110,22 @@ Datasets and labels used in this example are provided in [Datasets](https://gith
 # 1) the first file contains 200PCs of the Bcell filtered and normalized data for the first 5000 HVG.
 # 2)The second file contains raw count data for marker genes
 
-        data = pd.read_csv('./Bcell_200PCs.csv')
-        data_genes = pd.read_csv('./Bcell_markergenes.csv')
-        data_genes = data_genes.drop(['cell'], axis=1)
-        true_label = data['time_hour']
-        data = data.drop(['cell', 'time_hour'], axis=1)
-        adata = sc.AnnData(data_genes)
-        adata.obsm['X_pca'] = data.values
+data = pd.read_csv('./Bcell_200PCs.csv')
+data_genes = pd.read_csv('./Bcell_markergenes.csv')
+data_genes = data_genes.drop(['cell'], axis=1)
+true_label = data['time_hour']
+data = data.drop(['cell', 'time_hour'], axis=1)
+adata = sc.AnnData(data_genes)
+adata.obsm['X_pca'] = data.values
 
-        # use UMAP or PHate to obtain embedding that is used for single-cell level visualization
-        embedding = umap.UMAP(random_state=42, n_neighbors=15, init='random').fit_transform(data.values[:, 0:5])
+# use UMAP or PHate to obtain embedding that is used for single-cell level visualization
+embedding = umap.UMAP(random_state=42, n_neighbors=15, init='random').fit_transform(data.values[:, 0:5])
 
-        # list marker genes or genes of interest if known in advance. otherwise marker_genes = []
-        marker_genes = ['Igll1', 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4', 'Sp7']  # irf4 down-up
-        # call VIA. We identify an early (suitable) start cell root = [42]. Can also set an arbitrary value
-        via.via_wrapper(adata, true_label, embedding, knn=20, ncomps=20, jac_std_global=0.15, root=[42], dataset='',
-                    random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes)
+# list marker genes or genes of interest if known in advance. otherwise marker_genes = []
+marker_genes = ['Igll1', 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4', 'Sp7']  # irf4 down-up
+# call VIA. We identify an early (suitable) start cell root = [42]. Can also set an arbitrary value
+via.via_wrapper(adata, true_label, embedding, knn=20, ncomps=20, jac_std_global=0.15, root=[42], dataset='',
+            random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes)
 ```
 ### 3.b VIA wrapper for generic disconnected trajectory
 ```
@@ -142,8 +142,10 @@ df_ids = df_ids.reset_index(drop=True)
 true_label = df_ids['group_id']
 adata_counts = sc.AnnData(df_counts, obs=df_ids)
 sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
-#Since there are 2 disconnected trajectories, we provide 2 arbitrary roots (start cells).If there are more disconnected paths, then VIA arbitrarily selects roots
+
+#Since there are 2 disconnected trajectories, we provide 2 arbitrary roots (start cells).If there are more disconnected paths, then VIA arbitrarily selects roots. #The root can also just be arbitrarily set as [1] and VIA can detect how many additional roots it must add
 via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[1,1], preserve_disconnected=True, knn=30, ncomps=10,cluster_graph_pruning_std = 1)
+
 #in the case of connected data (i.e. only 1 graph component. e.g. Toy Data Multifurcating) then the wrapper function from example 3.a can be used:
 #via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca'][:,0:2], root=[1], knn=30, ncomps=10,cluster_graph_pruning_std = 1)
 ```
