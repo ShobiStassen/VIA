@@ -35,17 +35,21 @@ import pyVia.core as via
 #pre-process the data as needed and provide to via as a numpy array
 #root_user is the index of the cell corresponding to a suitable start/root cell
 
-v0 = via.VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,too_big_factor=p0_too_big, 
-root_user=1, dataset='EB', random_seed=21, do_magic_bool=True, is_coarse=True, preserve_disconnected=True) 
+v0 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=v0_too_big, root_user=1, dataset='EB', random_seed=v0_random_seed,
+             do_magic_bool=True, is_coarse=True, preserve_disconnected=True)  
 v0.run_VIA()
+
 
 tsi_list = get_loc_terminal_states(v0, input_data) #translate the terminal clusters found in v0 to the fine-grained run in v1
 
-v1 = via.VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
-             too_big_factor=v1_too_big,super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
-             super_terminal_cells=tsi_list, root_user=1,is_coarse=False, full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
+v1 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=v1_too_big, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
+             super_terminal_cells=tsi_list, root_user=1, is_coarse=False, full_neighbor_array=v0.full_neighbor_array,
+             full_distance_array=v0.full_distance_array, ig_full_graph=v0.ig_full_graph,
+             csr_array_locally_pruned=v0.csr_array_locally_pruned,
              x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='EB',
-             super_terminal_clusters=v0.terminal_clusters,  random_seed=21)
+             super_terminal_clusters=v0.terminal_clusters, random_seed=21)
 v1.run_VIA()
 
 #Plot the true and inferred times and pseudotimes
@@ -60,17 +64,16 @@ plt.show()
 #obtain the single-cell locations of the terminal clusters to be used for visualization of trajectories/lineages 
 super_clus_ds_PCA_loc = via.sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v1.labels)))
 #draw the overall lineage paths on the embedding
-via.draw_trajectory_gams(Y_phate, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
-                     v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, time_labels, knn=v0.knn,
-                     final_super_terminal=v1.revised_super_terminal_clusters,
-                     sub_terminal_clusters=v1.terminal_clusters,
-                     title_str='Markov Hitting Times (Gams)', ncomp=ncomps)
+draw_trajectory_gams(Y_phate, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
+                         v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, time_labels, knn=v0.knn,
+                         final_super_terminal=v1.revised_super_terminal_clusters,
+                         sub_terminal_clusters=v1.terminal_clusters,
+                         title_str='Pseudotime and path', ncomp=ncomps)
 
 2D_knn_hnsw = via.make_knn_embeddedspace(Y_phate) #used to visualize the path obtained in the high-dimensional KNN
 #draw the individual lineage paths and cell-fate probabilities at single-cell level 
 via.draw_sc_evolution_trajectory_dijkstra(v1, Y_phate, 2D_knn_hnsw, v0.full_graph_shortpath,
                                       idx=np.arange(0, input_data.shape[0]))
-
 plt.show()
 ```
 ![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/EB_fig0.png)
@@ -89,3 +92,26 @@ via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Tra
 
 ### VIA wrapper for any input (uses example of pre-B cell differentiation) 
 Datasets and labels used in this example are provided in [Datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets)
+```
+# Read the two files:
+# 1) the first file contains 200PCs of the Bcell filtered and normalized data for the first 5000 HVG.
+# 2)The second file contains raw count data for marker genes
+
+        data = pd.read_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_200PCs.csv')
+        data_genes = pd.read_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_markergenes.csv')
+        data_genes = data_genes.drop(['cell'], axis=1)
+        true_label = data['time_hour']
+        data = data.drop(['cell', 'time_hour'], axis=1)
+        adata = sc.AnnData(data_genes)
+        adata.obsm['X_pca'] = data.values
+
+        # use UMAP or PHate to obtain embedding that is used for single-cell level visualization
+        embedding = umap.UMAP(random_state=42, n_neighbors=15, init='random').fit_transform(data.values[:, 0:5])
+
+        # list marker genes or genes of interest if known in advance. otherwise marker_genes = []
+        marker_genes = ['Igll1', 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4', 'Sp7']  # irf4 down-up
+        # call VIA
+        via_wrapper(adata, true_label, embedding, knn=20, ncomps=20, jac_std_global=0.15, root=42, dataset='',
+                    random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes)
+```
+
