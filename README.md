@@ -28,7 +28,7 @@ pip install pyVIA
 ### 3.a General input format and wrapper function
 ### 3.b General disconnected trajectories wrapper function
 ------------------------------------------------------
-### 1.a Human Embryoid Bodies
+### 1.a Human Embryoid Bodies (wrapper function)
 save the [Raw data](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9Ew4RHf/view?usp=sharing) matrix as 'EBdata.mat'. The cells in this file have been filtered for too small/large libraries by [Moon et al. 2019](https://nbviewer.jupyter.org/github/KrishnaswamyLab/PHATE/blob/master/Python/tutorial/EmbryoidBody.ipynb) 
 
 The function main_EB_clean() preprocesses the cells (normalized by library size, sqrt transformation). It then calls VIA to: plot the pseudotimes, terminal states, lineage pathways and gene-clustermap. The visualization method used in this function is PHATE.
@@ -36,7 +36,7 @@ The function main_EB_clean() preprocesses the cells (normalized by library size,
 import pyVia.core as via
 via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20, foldername = '') # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
 ```
-### 1.b EB with parameter control
+### 1.b Human Embryoid Bodies (Configuring VIA)
 If you wish to run the data using UMAP or TSNE (instead of PHATE), or require more control of the parameters/outputs, then use the following code:
 ```
 import pyVia.core as via
