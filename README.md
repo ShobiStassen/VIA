@@ -84,7 +84,8 @@ via.draw_sc_evolution_trajectory_dijkstra(v1, Y_phate, 2D_knn_hnsw, v0.full_grap
                                       idx=np.arange(0, input_data.shape[0]))
 plt.show()
 ```
-![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/EB_fig0.png)
+![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/EB_fig1.png?raw=true)
+
 
 ### 2.a/b Toy data (Multifurcation and Disconnected)
 Two examples [toy datasets](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing) with annotations are generated using DynToy are provided. 
@@ -98,9 +99,9 @@ via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername = ".../T
 via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Trajectory/Datasets/") #2 disconnected trajectories
 ```
 ## Output of Multifurcating toy dataset
-![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png)
+![Output of VIA on multifurcating toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true)
 ## Output of disconnected toy dataset
-![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png)
+![Output of VIA on disconnected toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true)
 
 ### 3.a VIA wrapper for any input (uses example of pre-B cell differentiation) 
 Datasets and labels used in this example are provided in [Datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets).
@@ -149,5 +150,3 @@ via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['
 #in the case of connected data (i.e. only 1 graph component. e.g. Toy Data Multifurcating) then the wrapper function from example 3.a can be used:
 #via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca'][:,0:2], root=[1], knn=30, ncomps=10,cluster_graph_pruning_std = 1)
 ```
-
-
