@@ -103,7 +103,7 @@ via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Tra
 ## Output of disconnected toy dataset
 ![Output of VIA on disconnected toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true)
 
-### 3.a VIA wrapper for any input (uses example of pre-B cell differentiation) 
+### 3.a General input format and wrapper function (uses example of pre-B cell differentiation) 
 Datasets and labels used in this example are provided in [Datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets).
 
 ```
