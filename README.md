@@ -21,26 +21,42 @@ pip install python-igraph, leidenalg>=0.7.0, hnswlib, umap-learn, numpy>=1.17, s
 pip install pyVIA
 ```
 ## Examples (Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data) 
-### 1.a Human Embryoid Bodies (wrapper function)
-### 1.b Human Embryoid Bodies (Configuring VIA)
-### 2.a Toy Data (multifurcation)
-### 2.b Toy Data (disconnected)
+### 1.a Toy Data (multifurcation)
+### 1.b Toy Data (disconnected)
+### 2.a Human Embryoid Bodies (wrapper function)
+### 2.b Human Embryoid Bodies (Configuring VIA)
 ### 3.a General input format and wrapper function
 ### 3.b General disconnected trajectories wrapper function
 ------------------------------------------------------
-### 1.a Human Embryoid Bodies (wrapper function)
+### 1.a/b Toy data (Multifurcation and Disconnected)
+Two examples [toy datasets](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing) with annotations are generated using DynToy are provided. 
+```
+import pyVIA.core as via
+#multifurcation
+#the root is automatically set to  root_user = 'M1'
+via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername = ".../Trajectory/Datasets/") #multifurcation
+#disconnected trajectory
+#the root is automatically set as a list root_user = ['T1_M1', 'T2_M1'] # e.g. T2_M3 is a cell belonging to the 3rd Milestone (M3) of the second Trajectory (T2)
+via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Trajectory/Datasets/") #2 disconnected trajectories
+```
+## Output of Multifurcating toy dataset
+![Output of VIA on multifurcating toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true)
+## Output of disconnected toy dataset
+![Output of VIA on disconnected toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true)
+
+### 2.a Human Embryoid Bodies (wrapper function)
 save the [Raw data](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9Ew4RHf/view?usp=sharing) matrix as 'EBdata.mat'. The cells in this file have been filtered for too small/large libraries by [Moon et al. 2019](https://nbviewer.jupyter.org/github/KrishnaswamyLab/PHATE/blob/master/Python/tutorial/EmbryoidBody.ipynb) 
 
 The function main_EB_clean() preprocesses the cells (normalized by library size, sqrt transformation). It then calls VIA to: plot the pseudotimes, terminal states, lineage pathways and gene-clustermap. The visualization method used in this function is PHATE.
 ```
-import pyVia.core as via
+import pyVIA.core as via
 via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20, foldername = '') # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
 ```
-### 1.b Human Embryoid Bodies (Configuring VIA)
+### 2.b Human Embryoid Bodies (Configuring VIA)
 If you wish to run the data using UMAP or TSNE (instead of PHATE), or require more control of the parameters/outputs, then use the following code:
 Expected runtime will be around 2 minutes
 ```
-import pyVia.core as via
+import pyVIA.core as via
 #pre-process the data as needed and provide to via as a numpy array
 #root_user is the index of the cell corresponding to a suitable start/root cell
 
@@ -86,24 +102,6 @@ via.draw_sc_evolution_trajectory_dijkstra(v1, Y_phate, 2D_knn_hnsw, v0.full_grap
 plt.show()
 ```
 ![Output of VIA on Human Embryoid](https://github.com/ShobiStassen/VIA/blob/master/Figures/EB_fig1.png?raw=true)
-
-
-### 2.a/b Toy data (Multifurcation and Disconnected)
-Two examples [toy datasets](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing) with annotations are generated using DynToy are provided. 
-```
-import pyVia.core as via
-#multifurcation
-#the root is automatically set to  root_user = 'M1'
-via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername = ".../Trajectory/Datasets/") #multifurcation
-#disconnected trajectory
-#the root is automatically set as a list root_user = ['T1_M1', 'T2_M1'] # e.g. T2_M3 is a cell belonging to the 3rd Milestone (M3) of the second Trajectory (T2)
-via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Trajectory/Datasets/") #2 disconnected trajectories
-```
-## Output of Multifurcating toy dataset
-![Output of VIA on multifurcating toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true)
-## Output of disconnected toy dataset
-![Output of VIA on disconnected toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true)
-
 ### 3.a General input format and wrapper function (uses example of pre-B cell differentiation) 
 Datasets and labels used in this example are provided in [Datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets).
 
