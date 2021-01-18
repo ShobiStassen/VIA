@@ -20,7 +20,7 @@ If the pip install doesn't work, it usually suffices to first install all the re
 pip install python-igraph, leidenalg>=0.7.0, hnswlib, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate
 pip install pyVIA
 ```
-## Examples
+## Examples (Expected runntime will be a few minutes or less) 
 ### 1.a Human Embryoid Bodies (wrapper function)
 ### 1.b Human Embryoid Bodies (Configuring VIA)
 ### 2.a Toy Data (multifurcation)
@@ -38,6 +38,7 @@ via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20, foldername = '') # Most 
 ```
 ### 1.b Human Embryoid Bodies (Configuring VIA)
 If you wish to run the data using UMAP or TSNE (instead of PHATE), or require more control of the parameters/outputs, then use the following code:
+Expected runtime will be around 2 minutes
 ```
 import pyVia.core as via
 #pre-process the data as needed and provide to via as a numpy array
