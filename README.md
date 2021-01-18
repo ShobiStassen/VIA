@@ -20,7 +20,7 @@ If the pip install doesn't work, it usually suffices to first install all the re
 pip install python-igraph, leidenalg>=0.7.0, hnswlib, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate
 pip install pyVIA
 ```
-## Examples (Expected runntime will be a few minutes or less) 
+## Examples (Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data) 
 ### 1.a Human Embryoid Bodies (wrapper function)
 ### 1.b Human Embryoid Bodies (Configuring VIA)
 ### 2.a Toy Data (multifurcation)
