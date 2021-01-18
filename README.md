@@ -8,6 +8,12 @@ We recommend setting up a new conda environment
 conda create --name ViaEnv pip 
 pip install pyVIA // tested on linux
 ```
+This usually tries to install hnswlib, produces an error and automatically corrects itself by first installing pybind11 followed by hnswlib. To get a smoother installation, consider installing in the following order after creating a new conda environment:
+```
+pip install pybind11
+pip install hnswlib
+pip install pyVIA
+```
 ### install by cloning repository and running setup.py (ensure dependencies are installed)
 ```
 git clone https://github.com/ShobiStassen/VIA.git 
@@ -17,7 +23,7 @@ python3 setup.py install // cd into the directory of the cloned PARC folder cont
 ### install dependencies separately if needed (linux)
 If the pip install doesn't work, it usually suffices to first install all the requirements (using pip) and subsequently install VIA (also using pip)
 ```
-pip install python-igraph, leidenalg>=0.7.0, hnswlib, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate
+pip install python-igraph, leidenalg>=0.7.0, pybind11, hnswlib, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate
 pip install pyVIA
 ```
 ## Examples (Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data) 
