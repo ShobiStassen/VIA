@@ -60,17 +60,17 @@ import pyVIA.core as via
 #pre-process the data as needed and provide to via as a numpy array
 #root_user is the index of the cell corresponding to a suitable start/root cell
 
-v0 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
-             too_big_factor=v0_too_big, root_user=1, dataset='EB', random_seed=v0_random_seed,
+v0 = via.VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=v0_too_big, root_user=[1], dataset='EB', random_seed=v0_random_seed,
              do_magic_bool=True, is_coarse=True, preserve_disconnected=True)  
 v0.run_VIA()
 
 
 tsi_list = get_loc_terminal_states(v0, input_data) #translate the terminal clusters found in v0 to the fine-grained run in v1
 
-v1 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+v1 = via.VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=v1_too_big, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
-             super_terminal_cells=tsi_list, root_user=1, is_coarse=False, full_neighbor_array=v0.full_neighbor_array,
+             super_terminal_cells=tsi_list, root_user=[1], is_coarse=False, full_neighbor_array=v0.full_neighbor_array,
              full_distance_array=v0.full_distance_array, ig_full_graph=v0.ig_full_graph,
              csr_array_locally_pruned=v0.csr_array_locally_pruned,
              x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='EB',
@@ -89,7 +89,7 @@ plt.show()
 #obtain the single-cell locations of the terminal clusters to be used for visualization of trajectories/lineages 
 super_clus_ds_PCA_loc = via.sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v1.labels)))
 #draw the overall lineage paths on the embedding
-draw_trajectory_gams(Y_phate, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
+via.draw_trajectory_gams(Y_phate, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
                          v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, time_labels, knn=v0.knn,
                          final_super_terminal=v1.revised_super_terminal_clusters,
                          sub_terminal_clusters=v1.terminal_clusters,
@@ -129,6 +129,9 @@ via.via_wrapper(adata, true_label, embedding, knn=20, ncomps=20, jac_std_global=
 ```
 ### 3.b VIA wrapper for generic disconnected trajectory
 ```
+import scanpy as sc
+import pandas as pd
+
 #foldername corresponds to the location where you have saved the Toy Disconnected data (shown in example 2)
 #Read in the data and labels
 df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv", 'rt', delimiter=",")
@@ -141,11 +144,11 @@ df_ids = df_ids.sort_values(by=['cell_id_num'])
 df_ids = df_ids.reset_index(drop=True)
 true_label = df_ids['group_id']
 adata_counts = sc.AnnData(df_counts, obs=df_ids)
-sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
+sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=10)
 
 #Since there are 2 disconnected trajectories, we provide 2 arbitrary roots (start cells).If there are more disconnected paths, then VIA arbitrarily selects roots. #The root can also just be arbitrarily set as [1] and VIA can detect how many additional roots it must add
-via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[1,1], preserve_disconnected=True, knn=30, ncomps=10,cluster_graph_pruning_std = 1)
+via.via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[1,1], preserve_disconnected=True, knn=30, ncomps=10,cluster_graph_pruning_std = 1)
 
 #in the case of connected data (i.e. only 1 graph component. e.g. Toy Data Multifurcating) then the wrapper function from example 3.a can be used:
-#via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca'][:,0:2], root=[1], knn=30, ncomps=10,cluster_graph_pruning_std = 1)
+via.via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca'][:,0:2], root=[1], knn=30, ncomps=10,cluster_graph_pruning_std = 1)
 ```
