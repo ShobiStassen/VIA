@@ -38,6 +38,8 @@ pip install pyVIA
 Two examples [toy datasets](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing) with annotations are generated using DynToy are provided. 
 ```
 import pyVIA.core as via
+# for Windows you need to import os and then name the foldername as foldername = os.path.join(r'C:\Users....'+'\\')
+# ensure the data and label files are in csv format when you download/save them
 #multifurcation
 #the root is automatically set to  root_user = 'M1'
 via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername = ".../Trajectory/Datasets/") #multifurcation
