@@ -27,12 +27,12 @@ pip install pybind11, hnswlib, python-igraph, leidenalg>=0.7.0, umap-learn, nump
 pip install pyVIA
 ```
 ## Examples (Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data) 
-### 1.a Toy Data (multifurcation)
-### 1.b Toy Data (disconnected)
-### 2.a Human Embryoid Bodies (wrapper function)
-### 2.b Human Embryoid Bodies (Configuring VIA)
-### 3.a General input format and wrapper function
-### 3.b General disconnected trajectories wrapper function
+#### 1.a Toy Data (multifurcation)
+#### 1.b Toy Data (disconnected)
+#### 2.a Human Embryoid Bodies (wrapper function)
+#### 2.b Human Embryoid Bodies (Configuring VIA)
+#### 3.a General input format and wrapper function
+#### 3.b General disconnected trajectories wrapper function
 ------------------------------------------------------
 ### 1.a/b Toy data (Multifurcation and Disconnected)
 Two examples [toy datasets](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing) with annotations are generated using DynToy are provided. 
