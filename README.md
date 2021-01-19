@@ -162,9 +162,9 @@ via.via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca']
 
 ### Parameters
 
-| Input Parameter | Description |
+| Input Parameter for class VIA | Description |
 | ---------- |----------|
-| `data` | (numpy.ndarray) n_samples x n_features |
+| `data` | (numpy.ndarray) n_samples x n_features. When using via_wrapper(), data is ANNdata object that has a PCA object adata.obsm['X_pca'][:, 0:ncomps] and ncomps is the number of components that will be used. |
 | `true_label` | (list) 'ground truth' annotations or placeholder|
 | `knn` |  (optional, default = 30) number of K-Nearest Neighbors for HNSWlib KNN graph |
 |`root_user`|list containing roots corresponding to index (row number) of root cell. For most trajectories this is of the form [99], for multiple disconnected trajectories an arbitrary list of cells can be provided [1,506,1100] or VIA arbitratily chooses cells. If the root cells of disconnected trajectories are known in advance, then the cells should be annotated with similar syntax to that of Example Dataset in Disconnected Toy Example 1b.|
