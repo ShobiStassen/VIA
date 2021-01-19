@@ -5,8 +5,8 @@ VIA is a single-cell Trajectory Inference method that offers topology constructi
 ### install using pip takes a few minutes on a clean environment
 We recommend setting up a new conda environment
 ```
-conda create --name ViaEnv pip 
-pip install pyVIA // tested on linux
+conda create --name ViaEnv python=3.7 
+pip install pyVIA // tested on linux Ubuntu 16.04 and Windows 10
 ```
 This usually tries to install hnswlib, produces an error and automatically corrects itself by first installing pybind11 followed by hnswlib. To get a smoother installation, consider installing in the following order after creating a new conda environment:
 ```
@@ -20,10 +20,10 @@ git clone https://github.com/ShobiStassen/VIA.git
 python3 setup.py install // cd into the directory of the cloned PARC folder containing setup.py and issue this command
 ```
 
-### install dependencies separately if needed (linux)
+### install dependencies separately if needed (linux ubuntu 16.04 and Windows 10)
 If the pip install doesn't work, it usually suffices to first install all the requirements (using pip) and subsequently install VIA (also using pip)
 ```
-pip install python-igraph, leidenalg>=0.7.0, pybind11, hnswlib, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate
+pip install pybind11, hnswlib, python-igraph, leidenalg>=0.7.0, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate, matplotlib,scanpy
 pip install pyVIA
 ```
 ## Examples (Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data) 
@@ -38,7 +38,7 @@ pip install pyVIA
 Two examples [toy datasets](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing) with annotations are generated using DynToy are provided. 
 ```
 import pyVIA.core as via
-# for Windows you need to import os and then name the foldername as foldername = os.path.join(r'C:\Users....'+'\\')
+# To run on Windows, you need to "import os" and then name the foldername provided to the wrapper as foldername = os.path.join(r'C:\Users....'+'\\')
 # ensure the data and label files are in csv format when you download/save them
 #multifurcation
 #the root is automatically set to  root_user = 'M1'
