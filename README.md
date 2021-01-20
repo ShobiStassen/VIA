@@ -36,9 +36,9 @@ pip install pyVIA
 ------------------------------------------------------
 ### 1.a/b Toy data (Multifurcation and Disconnected)
 Two examples [toy datasets](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing) with annotations are generated using DynToy are provided. 
+Linux:
 ```
 import pyVIA.core as via
-# To run on Windows, you need to "import os" and then name the foldername provided to the wrapper as foldername = os.path.join(r'C:\Users\Tom\TI....'+'\\')
 # ensure the data and label files are in csv format when you download/save them
 #multifurcation
 #the root is automatically set to  root_user = 'M1'
@@ -46,6 +46,24 @@ via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername = ".../T
 #disconnected trajectory
 #the root is automatically set as a list root_user = ['T1_M1', 'T2_M1'] # e.g. T2_M3 is a cell belonging to the 3rd Milestone (M3) of the second Trajectory (T2)
 via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Trajectory/Datasets/") #2 disconnected trajectories
+```
+Windows (small modifications in calling the code due to the way multiprocessing works in Windows compared to Linux)
+# To run on Windows, you need to "import os" and then name the foldername provided to the wrapper as foldername = os.path.join(r'C:\Users\Tom\TI....'+'\\')
+```
+#when running from an IDE you need to call the function in the following way:
+import os
+import pyVIA.core as via
+f= os.path.join(r'C:\Users\...\Documents'+'\\')
+def main():
+    via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername= f)    
+if __name__ =='__main__':
+    main()
+#when running directly from terminal:
+import os
+import pyVIA.core as via
+f= os.path.join(r'C:\Users\...\Documents'+'\\')
+via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername= f)    
+if __name__ =='__main__':
 ```
 ## Output of Multifurcating toy dataset
 ![Output of VIA on multifurcating toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true)
