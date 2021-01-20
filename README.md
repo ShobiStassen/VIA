@@ -91,7 +91,8 @@ save the [Raw data](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9E
 The function main_EB_clean() preprocesses the cells (normalized by library size, sqrt transformation). It then calls VIA to: plot the pseudotimes, terminal states, lineage pathways and gene-clustermap. The visualization method used in this function is PHATE.
 ```
 import pyVIA.core as via
-via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20, foldername = '') # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
+#Windows example path for folder where EBdata.mat is saved: f= os.path.join(r'C:\Users\...\Documents'+'\\')
+via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20, foldername = f) # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
 ```
 ### 2.b Human Embryoid Bodies (Configuring VIA)
 If you wish to run the data using UMAP or TSNE (instead of PHATE), or require more control of the parameters/outputs, then use the following code:
