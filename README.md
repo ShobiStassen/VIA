@@ -48,7 +48,8 @@ via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername = ".../T
 via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Trajectory/Datasets/") #2 disconnected trajectories
 ```
 Windows (small modifications in calling the code due to the way multiprocessing works in Windows compared to Linux)
-# To run on Windows, you need to "import os" and then name the foldername provided to the wrapper as foldername = os.path.join(r'C:\Users\Tom\TI....'+'\\')
+### To run on Windows:
+A few additional lines are required: "import os" and then name the foldername provided to the wrapper as foldername = os.path.join(r'C:\Users\Tom\TI....'+'\\')
 ```
 #when running from an IDE you need to call the function in the following way:
 import os
