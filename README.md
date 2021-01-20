@@ -71,6 +71,7 @@ def main():
     via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername= f)    
 if __name__ =='__main__':
     main()
+    
 #when running directly from terminal:
 import os
 import pyVIA.core as via
@@ -78,6 +79,7 @@ f= os.path.join(r'C:\Users\...\Documents'+'\\')
 via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername= f)    
 if __name__ =='__main__':
 ```
+
 ## Output of Multifurcating toy dataset
 ![Output of VIA on multifurcating toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true)
 ## Output of disconnected toy dataset
