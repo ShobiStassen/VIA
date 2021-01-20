@@ -166,7 +166,7 @@ embedding = umap.UMAP(random_state=42, n_neighbors=15, init='random').fit_transf
 # list marker genes or genes of interest if known in advance. otherwise marker_genes = []
 marker_genes = ['Igll1', 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4', 'Sp7']  # irf4 down-up
 # call VIA. We identify an early (suitable) start cell root = [42]. Can also set an arbitrary value
-via.via_wrapper(adata, true_label, embedding, knn=20, ncomps=20, jac_std_global=0.15, root=[42], dataset='',
+via.via_wrapper(adata, true_label, embedding, knn=10, ncomps=20, jac_std_global=0.15, root=[42], dataset='',
             random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes)
 ```
 ### 3.b VIA wrapper for generic disconnected trajectory
