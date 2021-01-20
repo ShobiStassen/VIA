@@ -36,7 +36,9 @@ pip install pyVIA
 ------------------------------------------------------
 ### 1.a/b Toy data (Multifurcation and Disconnected)
 Two examples [toy datasets](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing) with annotations are generated using DynToy are provided. 
-Linux:
+
+### To run on Linux:
+All examples are shown according to Linux OS, small modifications are required to run on a Windows OS (see below)
 ```
 import pyVIA.core as via
 # ensure the data and label files are in csv format when you download/save them
