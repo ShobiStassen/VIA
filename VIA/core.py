@@ -20,10 +20,151 @@ from scipy.sparse.csgraph import connected_components
 import pygam as pg
 import matplotlib.colors as colors
 import matplotlib.cm as cm
-import palantir
 from termcolor import colored
 import seaborn as sns
 from matplotlib.path import get_path_collection_extents
+
+
+def prob_reaching_terminal_state1( terminal_state, all_terminal_states, A, root, pt, num_sim, q,
+                                  cumstateChangeHist, cumstateChangeHist_all, seed):
+    np.random.seed(seed)
+
+    n_states = A.shape[0]
+    n_components, labels = connected_components(csgraph=csr_matrix(A), directed=False)
+
+    A = A / (np.max(A))
+    # A[A<=0.05]=0
+    jj = 0
+    for row in A:
+        if np.all(row == 0): A[jj, jj] = 1
+        jj = jj + 1
+
+    P = A / A.sum(axis=1).reshape((n_states, 1))
+
+    # if P.shape[0]>16:
+    #    print("P 16", P[:,16])
+    n_steps = int(2 * n_states)  # 2
+    currentState = root
+    state = np.zeros((1, n_states))
+    state[0, currentState] = 1
+    currentState = root
+    state = np.zeros((1, n_states))
+    state[0, currentState] = 1
+    state_root = state.copy()
+    neigh_terminal = np.where(A[:, terminal_state] > 0)[0]
+    non_nn_terminal_state = []
+    for ts_i in all_terminal_states:
+        if pt[ts_i] > pt[terminal_state]: non_nn_terminal_state.append(ts_i)
+
+    for ts_i in all_terminal_states:
+        if np.all(neigh_terminal != ts_i): non_nn_terminal_state.append(ts_i)
+        # print(ts_i, 'is a non-neighbor terminal state to the target terminal', terminal_state)
+
+    # cumstateChangeHist = np.zeros((1, n_states))
+    # cumstateChangeHist_all = np.zeros((1, n_states))
+    count_reach_terminal_state = 0
+    count_r = 0
+    for i in range(num_sim):
+        # distr_hist = [[0 for i in range(n_states)]]
+        stateChangeHist = np.zeros((n_states, n_states))
+        stateChangeHist[root, root] = 1
+        state = state_root
+        currentState = root
+        stateHist = state
+        terminal_state_found = False
+        non_neighbor_terminal_state_reached = False
+        # print('root', root)
+        # print('terminal state target', terminal_state)
+
+        x = 0
+        while (x < n_steps) & (
+                (terminal_state_found == False)):  # & (non_neighbor_terminal_state_reached == False)):
+            currentRow = np.ma.masked_values((P[currentState]), 0.0)
+            nextState = simulate_multinomial(currentRow)
+            # print('next state', nextState)
+            if nextState == terminal_state:
+                terminal_state_found = True
+                count_r = count_r + 1
+                # print('terminal state found at step', x)
+            # if nextState in non_nn_terminal_state:
+            # non_neighbor_terminal_state_reached = True
+            # Keep track of state changes
+            stateChangeHist[currentState, nextState] += 1
+            # Keep track of the state vector itself
+            state = np.zeros((1, n_states))
+            state[0, nextState] = 1.0
+            # Keep track of state history
+            stateHist = np.append(stateHist, state, axis=0)
+            currentState = nextState
+            x = x + 1
+
+        if (terminal_state_found == True):
+            cumstateChangeHist = cumstateChangeHist + np.any(
+                stateChangeHist > 0, axis=0)
+            count_reach_terminal_state = count_reach_terminal_state + 1
+        cumstateChangeHist_all = cumstateChangeHist_all + np.any(
+            stateChangeHist > 0, axis=0)
+        # avoid division by zero on states that were never reached (e.g. terminal states that come after the target terminal state)
+
+    cumstateChangeHist_all[cumstateChangeHist_all == 0] = 1
+    # prob_ = cumstateChangeHist / cumstateChangeHist_all
+
+    np.set_printoptions(precision=3)
+    q.append([cumstateChangeHist, cumstateChangeHist_all])
+def simulate_markov_sub( A, num_sim, hitting_array, q, root):
+    n_states = A.shape[0]
+    P = A / A.sum(axis=1).reshape((n_states, 1))
+    # hitting_array = np.ones((P.shape[0], 1)) * 1000
+    hitting_array_temp = np.zeros((P.shape[0], 1)).astype('float64')
+    n_steps = int(2 * n_states)
+    hitting_array_final = np.zeros((1, n_states))
+    currentState = root
+
+    print('root is', root)
+    state = np.zeros((1, n_states))
+    state[0, currentState] = 1
+    state_root = state.copy()
+    for i in range(num_sim):
+        dist_list = []
+        # print(i, 'th simulation in Markov')
+        # if i % 10 == 0: print(i, 'th simulation in Markov', time.ctime())
+        state = state_root
+        currentState = root
+        stateHist = state
+        for x in range(n_steps):
+            currentRow = np.ma.masked_values((P[currentState]), 0.0)
+            nextState = simulate_multinomial(currentRow)
+            dist = A[currentState, nextState]
+
+            dist = (1 / ((1 + math.exp((dist - 1)))))
+
+            dist_list.append(dist)
+            # print('next state', nextState)
+            # Keep track of state changes
+            # stateChangeHist[currentState,nextState]+=1
+            # Keep track of the state vector itself
+            state = np.zeros((1, n_states))
+            state[0, nextState] = 1.0
+
+            currentState = nextState
+
+            # Keep track of state history
+            stateHist = np.append(stateHist, state, axis=0)
+
+        for state_i in range(P.shape[0]):
+            first_time_at_statei = np.where(stateHist[:, state_i] == 1)[0]
+            if len(first_time_at_statei) == 0:
+                hitting_array_temp[state_i, 0] = n_steps + 1
+            else:
+                total_dist = 0
+                for ff in range(first_time_at_statei[0]):
+                    total_dist = dist_list[ff] + total_dist
+
+                hitting_array_temp[state_i, 0] = total_dist  # first_time_at_statei[0]
+        hitting_array = np.append(hitting_array, hitting_array_temp, axis=1)
+
+    hitting_array = hitting_array[:, 1:]
+    q.append(hitting_array)
 
 def getbb(sc, ax):
     """
@@ -381,6 +522,8 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
             orange_pt_val = [orange_m[cc, 2] for cc in loc_comp_i]
             loc_comp_i_revised = [loc_comp_i[cc] for cc in range(len(orange_pt_val)) if
                                   orange_pt_val[cc] >= np.percentile(orange_pt_val, 70)]
+            if len(loc_comp_i_revised)<3: loc_comp_i_revised = loc_comp_i
+            print('len loc_compi and loc_notcompi',len(loc_comp_i_revised), len(loc_comp_noti))
 
             for nn_i in loc_comp_i_revised:
 
@@ -392,7 +535,7 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
                     min_ed = np.min(ed)
                     ed_loc_end = loc_comp_noti[ed_where_min]
                     ed_loc_start = nn_i
-            # print('min ed', min_ed)
+            print('min ed', min_ed, 'num mst', n_mst)
             print('Connecting components before sc-bp-GAM: the closest pair of points', ed_loc_start, ed_loc_end)
             orange_adjacency_knn[ed_loc_start, ed_loc_end] = min_ed
             n_mst, comp_labels_mst = connected_components(csgraph=orange_adjacency_knn, directed=False,
@@ -1259,147 +1402,9 @@ class VIA:
         roundtrip_times = roundtrip_commute_matrix[root, :]
         return abs(final_hitting_times), roundtrip_times
 
-    def prob_reaching_terminal_state1(self, terminal_state, all_terminal_states, A, root, pt, num_sim, q,
-                                      cumstateChangeHist, cumstateChangeHist_all, seed):
-        np.random.seed(seed)
 
-        n_states = A.shape[0]
-        n_components, labels = connected_components(csgraph=csr_matrix(A), directed=False)
 
-        A = A / (np.max(A))
-        # A[A<=0.05]=0
-        jj = 0
-        for row in A:
-            if np.all(row == 0): A[jj, jj] = 1
-            jj = jj + 1
 
-        P = A / A.sum(axis=1).reshape((n_states, 1))
-
-        # if P.shape[0]>16:
-        #    print("P 16", P[:,16])
-        n_steps = int(2 * n_states)  # 2
-        currentState = root
-        state = np.zeros((1, n_states))
-        state[0, currentState] = 1
-        currentState = root
-        state = np.zeros((1, n_states))
-        state[0, currentState] = 1
-        state_root = state.copy()
-        neigh_terminal = np.where(A[:, terminal_state] > 0)[0]
-        non_nn_terminal_state = []
-        for ts_i in all_terminal_states:
-            if pt[ts_i] > pt[terminal_state]: non_nn_terminal_state.append(ts_i)
-
-        for ts_i in all_terminal_states:
-            if np.all(neigh_terminal != ts_i): non_nn_terminal_state.append(ts_i)
-            # print(ts_i, 'is a non-neighbor terminal state to the target terminal', terminal_state)
-
-        # cumstateChangeHist = np.zeros((1, n_states))
-        # cumstateChangeHist_all = np.zeros((1, n_states))
-        count_reach_terminal_state = 0
-        count_r = 0
-        for i in range(num_sim):
-            # distr_hist = [[0 for i in range(n_states)]]
-            stateChangeHist = np.zeros((n_states, n_states))
-            stateChangeHist[root, root] = 1
-            state = state_root
-            currentState = root
-            stateHist = state
-            terminal_state_found = False
-            non_neighbor_terminal_state_reached = False
-            # print('root', root)
-            # print('terminal state target', terminal_state)
-
-            x = 0
-            while (x < n_steps) & (
-                    (terminal_state_found == False)):  # & (non_neighbor_terminal_state_reached == False)):
-                currentRow = np.ma.masked_values((P[currentState]), 0.0)
-                nextState = simulate_multinomial(currentRow)
-                # print('next state', nextState)
-                if nextState == terminal_state:
-                    terminal_state_found = True
-                    count_r = count_r + 1
-                    # print('terminal state found at step', x)
-                # if nextState in non_nn_terminal_state:
-                # non_neighbor_terminal_state_reached = True
-                # Keep track of state changes
-                stateChangeHist[currentState, nextState] += 1
-                # Keep track of the state vector itself
-                state = np.zeros((1, n_states))
-                state[0, nextState] = 1.0
-                # Keep track of state history
-                stateHist = np.append(stateHist, state, axis=0)
-                currentState = nextState
-                x = x + 1
-
-            if (terminal_state_found == True):
-                cumstateChangeHist = cumstateChangeHist + np.any(
-                    stateChangeHist > 0, axis=0)
-                count_reach_terminal_state = count_reach_terminal_state + 1
-            cumstateChangeHist_all = cumstateChangeHist_all + np.any(
-                stateChangeHist > 0, axis=0)
-            # avoid division by zero on states that were never reached (e.g. terminal states that come after the target terminal state)
-
-        cumstateChangeHist_all[cumstateChangeHist_all == 0] = 1
-        # prob_ = cumstateChangeHist / cumstateChangeHist_all
-
-        np.set_printoptions(precision=3)
-        q.append([cumstateChangeHist, cumstateChangeHist_all])
-
-    def simulate_markov_sub(self, A, num_sim, hitting_array, q, root):
-        n_states = A.shape[0]
-        P = A / A.sum(axis=1).reshape((n_states, 1))
-        # hitting_array = np.ones((P.shape[0], 1)) * 1000
-        hitting_array_temp = np.zeros((P.shape[0], 1)).astype('float64')
-        n_steps = int(2 * n_states)
-        hitting_array_final = np.zeros((1, n_states))
-        currentState = root
-
-        print('root is', root)
-        state = np.zeros((1, n_states))
-        state[0, currentState] = 1
-        state_root = state.copy()
-        for i in range(num_sim):
-            dist_list = []
-            # print(i, 'th simulation in Markov')
-            # if i % 10 == 0: print(i, 'th simulation in Markov', time.ctime())
-            state = state_root
-            currentState = root
-            stateHist = state
-            for x in range(n_steps):
-                currentRow = np.ma.masked_values((P[currentState]), 0.0)
-                nextState = simulate_multinomial(currentRow)
-                dist = A[currentState, nextState]
-
-                dist = (1 / ((1 + math.exp((dist - 1)))))
-
-                dist_list.append(dist)
-                # print('next state', nextState)
-                # Keep track of state changes
-                # stateChangeHist[currentState,nextState]+=1
-                # Keep track of the state vector itself
-                state = np.zeros((1, n_states))
-                state[0, nextState] = 1.0
-
-                currentState = nextState
-
-                # Keep track of state history
-                stateHist = np.append(stateHist, state, axis=0)
-
-            for state_i in range(P.shape[0]):
-                first_time_at_statei = np.where(stateHist[:, state_i] == 1)[0]
-                if len(first_time_at_statei) == 0:
-                     hitting_array_temp[state_i, 0] = n_steps + 1
-                else:
-                    total_dist = 0
-                    for ff in range(first_time_at_statei[0]):
-                        total_dist = dist_list[ff] + total_dist
-
-                    hitting_array_temp[state_i, 0] = total_dist  # first_time_at_statei[0]
-            hitting_array = np.append(hitting_array, hitting_array_temp, axis=1)
-
-        hitting_array = hitting_array[:, 1:]
-        q.append(hitting_array)
 
     def simulate_branch_probability(self, terminal_state, all_terminal_states, A, root, pt, num_sim=300):
         print('root in simulate branch probability', root)
@@ -1422,7 +1427,7 @@ class VIA:
         for i in range(n_jobs):
             cumstateChangeHist = np.zeros((1, n_states))
             cumstateChangeHist_all = np.zeros((1, n_states))
-            process = multiprocessing.Process(target=self.prob_reaching_terminal_state1, args=(
+            process = multiprocessing.Process(target=prob_reaching_terminal_state1, args=(
                 terminal_state, all_terminal_states, A, root, pt, num_sim_pp, q, cumstateChangeHist,
                 cumstateChangeHist_all,
                 seed_list[i]))
@@ -1512,7 +1517,7 @@ class VIA:
         q = manager.list()
         for i in range(n_jobs):
             hitting_array = np.ones((P.shape[0], 1)) * 1000
-            process = multiprocessing.Process(target=self.simulate_markov_sub,
+            process = multiprocessing.Process(target=simulate_markov_sub,
                                               args=(P, num_sim_pp, hitting_array, q, root))
             jobs.append(process)
 
@@ -2161,7 +2166,7 @@ class VIA:
                 gam_in = np.asarray(sc_pt)[loc_]
                 x = gam_in.reshape(-1, 1)
                 y = np.asarray(gene_exp)[loc_].reshape(-1, 1)
-                print(loc_)
+
 
                 weights = np.asarray(sc_bp[:, i])[loc_].reshape(-1, 1)
 
@@ -2222,7 +2227,7 @@ class VIA:
                 else:
                     print('loc_ has length zero')
                 # cmap_[i]
-                ax.plot(xval, yg, color='navy', linewidth=2, zorder=3,
+                ax.plot(xval, yg, color='navy', linewidth=3.5, zorder=3,
                        label='TS:' + str(self.terminal_clusters[i]))
             plt.legend()
             ax.set_title(title_gene)
@@ -2499,7 +2504,7 @@ class VIA:
             pop_list_raw.append(pop_item)
         print('list of cluster labels and populations', len(pop_list), pop_list)
         df_temporary_save = pd.DataFrame(PARC_labels_leiden, columns=['parc'])
-        df_temporary_save.to_csv("/home/shobi/Trajectory/Datasets/2MOrgan/Figures/Parc_.csv")
+        #df_temporary_save.to_csv("/home/shobi/Trajectory/Datasets/2MOrgan/Figures/Parc_.csv")
         self.labels = PARC_labels_leiden  # list
         n_clus = len(set(self.labels))
 
@@ -3397,41 +3402,6 @@ class VIA:
         return
 
 
-def run_palantir_func_human34(ad, ncomps, knn, tsne, revised_clus, start_cell='c4823'):
-    norm_df_pal = pd.DataFrame(ad.X)
-    # print('norm df', norm_df_pal)
-    new = ['c' + str(i) for i in norm_df_pal.index]
-    norm_df_pal.index = new
-    norm_df_pal.columns = [i for i in ad.var_names]
-    pca_projections, _ = palantir.utils.run_pca(norm_df_pal, n_components=ncomps)
-
-    sc.tl.pca(ad, svd_solver='arpack')
-    dm_res = palantir.utils.run_diffusion_maps(pca_projections, n_components=ncomps, knn=knn)
-
-    ms_data = palantir.utils.determine_multiscale_space(dm_res)  # n_eigs is determined using eigengap
-    print('ms data', ms_data.shape)
-    # tsne =  pd.DataFrame(tsnem)#palantir.utils.run_tsne(ms_data)
-    tsne.index = new
-    # print(type(tsne))
-    str_true_label = pd.Series(revised_clus, index=norm_df_pal.index)
-
-    palantir.plot.plot_cell_clusters(tsne, str_true_label)
-
-    # start_cell = 'c4823'  # '#C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
-
-    pr_res = palantir.core.run_palantir(ms_data, early_cell=start_cell, num_waypoints=1200, knn=knn)
-    palantir.plot.plot_palantir_results(pr_res, tsne, knn, ncomps)
-    # plt.show()
-    imp_df = palantir.utils.run_magic_imputation(norm_df_pal, dm_res)
-    # imp_df.to_csv('/home/shobi/Trajectory/Datasets/HumanCD34/MAGIC_palantir_knn30ncomp100.csv')
-
-    genes = ['GATA1', 'GATA2', 'ITGA2B']  # , 'SPI1']#['CD34','GATA1', 'IRF8','ITGA2B']
-    gene_trends = palantir.presults.compute_gene_trends(pr_res, imp_df.loc[:, genes])
-    palantir.plot.plot_gene_trends(gene_trends)
-    genes = ['MPO', 'ITGAX', 'IRF8', 'CSF1R', 'IL3RA']  # 'CD34','MPO', 'CD79B'
-    gene_trends = palantir.presults.compute_gene_trends(pr_res, imp_df.loc[:, genes])
-    palantir.plot.plot_gene_trends(gene_trends)
-    plt.show()
 
 
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
@@ -3557,8 +3527,6 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
     marker = ['x', '+', (5, 0), '>', 'o', (5, 2)]
     import colorcet as cc
-    if run_palantir_func == True:
-        run_palantir_func_human34(ad, ncomps, knn, tsne, revised_clus, start_cell='c4823')
 
     # tsnem = TSNE().fit_transform(adata_counts.obsm['X_pca'])
     '''
@@ -3834,33 +3802,10 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
     # sc.pl.paga(adata_counts, color=['leiden', 'group_id', 'dpt_pseudotime'],             title=['leiden (knn:' + str(knn) + ' ncomps:' + str(ncomps) + ')',                   'group_id (ncomps:' + str(ncomps) + ')', 'pseudotime (ncomps:' + str(ncomps) + ')'])
     # X = df_counts.values
 
-    print(palantir.__file__)  # location of palantir source code
-    counts = palantir.io.from_csv("/home/shobi/Trajectory/Datasets/Toy4/toy_disconnected_M9_n1000d1000.csv")
-    # counts = palantir.io.from_csv("/home/shobi/Trajectory/Datasets/Toy3/toy_multifurcating_M8_n1000d1000.csv")
-    # counts = palantir.io.from_csv("/home/shobi/Trajectory/Datasets/ToyCyclic/ToyCyclic_M4_n1000d1000.csv")
-    print('counts', counts)
+
     str_true_label = true_label.tolist()
     str_true_label = [(i[1:]) for i in str_true_label]
 
-    str_true_label = pd.Series(str_true_label, index=counts.index)
-    norm_df = counts  # palantir.preprocess.normalize_counts(counts)
-    # palantir
-    '''
-    pca_projections, _ = palantir.utils.run_pca(norm_df, n_components=ncomps)
-    dm_res = palantir.utils.run_diffusion_maps(pca_projections, n_components=ncomps, knn=knn)
-
-    ms_data = palantir.utils.determine_multiscale_space(dm_res)  # n_eigs is determined using eigengap
-
-    tsne = palantir.utils.run_tsne(ms_data)
-
-    palantir.plot.plot_cell_clusters(tsne, str_true_label)
-
-    # C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
-
-    pr_res = palantir.core.run_palantir(ms_data, start_cell, num_waypoints=500, knn=knn)
-    palantir.plot.plot_palantir_results(pr_res, tsne, n_knn=knn, n_comps=ncomps)
-    plt.show()
-    '''
     # clusters = palantir.utils.determine_cell_clusters(pca_projections)
 
     from sklearn.decomposition import PCA
@@ -3874,8 +3819,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
     super_labels = v0.labels
 
     super_edges = v0.edgelist
-    super_pt = v0.scaled_hitting_times  # pseudotime pt
-    # 0.05 for p1 toobig
+
 
     p = hnswlib.Index(space='l2', dim=adata_counts.obsm['X_pca'][:, 0:ncomps].shape[1])
     p.init_index(max_elements=adata_counts.obsm['X_pca'][:, 0:ncomps].shape[0], ef_construction=200, M=16)
@@ -4010,7 +3954,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user='M1',
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
 
     adata_counts.uns['iroot'] = np.flatnonzero(adata_counts.obs['group_id'] == paga_root)[0]  # 'T1_M1'#'M1'
-    via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca'][:,0:2], root=[1], knn=30, ncomps=10,cluster_graph_pruning_std = 1)
+    #via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca'][:,0:2], root=[1], knn=30, ncomps=10,cluster_graph_pruning_std = 1)
     #via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[1],           preserve_disconnected=True, knn=30, ncomps=10, cluster_graph_pruning_std=1)
 
     v0 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
@@ -4157,39 +4101,6 @@ def main_Bcell(ncomps=50, knn=20, random_seed=0, path='/home/shobi/Trajectory/Da
         print('dpt format', adata_counts.obs['dpt_pseudotime'])
         plt.scatter(embedding[:, 0], embedding[:, 1], c=adata_counts.obs['dpt_pseudotime'].values, cmap='viridis')
         plt.title('PAGA DPT')
-        plt.show()
-
-    def run_palantir_func_Bcell(ad1, ncomps, knn, tsne_X, true_label):
-        ad = ad1.copy()
-        tsne = pd.DataFrame(tsne_X, index=ad.obs_names, columns=['x', 'y'])
-        norm_df_pal = pd.DataFrame(ad.X)
-        new = ['c' + str(i) for i in norm_df_pal.index]
-        norm_df_pal.columns = [i for i in ad.var_names]
-        # print('norm df', norm_df_pal)
-
-        norm_df_pal.index = new
-        pca_projections, _ = palantir.utils.run_pca(norm_df_pal, n_components=ncomps)
-
-        sc.tl.pca(ad, svd_solver='arpack')
-        dm_res = palantir.utils.run_diffusion_maps(pca_projections, n_components=ncomps, knn=knn)
-
-        ms_data = palantir.utils.determine_multiscale_space(dm_res)  # n_eigs is determined using eigengap
-        print('ms data shape: determined using eigengap', ms_data.shape)
-        # tsne =  pd.DataFrame(tsnem)#palantir.utils.run_tsne(ms_data)
-        tsne.index = new
-        # print(type(tsne))
-        str_true_label = pd.Series(true_label, index=norm_df_pal.index)
-
-        palantir.plot.plot_cell_clusters(tsne, str_true_label)
-
-        start_cell = 'c42'  # '#C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
-
-        pr_res = palantir.core.run_palantir(ms_data, early_cell=start_cell, num_waypoints=1200, knn=knn)
-        palantir.plot.plot_palantir_results(pr_res, tsne, n_knn=knn, n_comps=ncomps)
-        imp_df = palantir.utils.run_magic_imputation(norm_df_pal, dm_res)
-        Bcell_marker_gene_list = ['Igll1', 'Myc', 'Ldha', 'Foxo1', 'Lig4']  # , 'Slc7a5']#,'Slc7a5']#,'Sp7','Zfp629']
-        gene_trends = palantir.presults.compute_gene_trends(pr_res, imp_df.loc[:, Bcell_marker_gene_list])
-        palantir.plot.plot_gene_trends(gene_trends)
         plt.show()
 
     def find_time_Bcell(s):
@@ -4708,7 +4619,7 @@ def main_EB(ncomps=30, knn=20, v0_random_seed=21):
     input_data =pcs[:, 0:ncomps]
     '''
 
-    print('v0_toobig, p1_toobig, v0randomseed', v0_too_big, p1_too_big, v0_random_seed)
+    print('v0_toobig, p1_toobig, v0randomseed', v0_too_big, v1_too_big, v0_random_seed)
     print('do pca')
     # sc.tl.pca(adata, svd_solver='arpack', n_comps=200, random_state = 0)
     # sc.tl.pca(adata_umap, svd_solver='arpack', n_comps=200)
@@ -4753,7 +4664,7 @@ def main_EB(ncomps=30, knn=20, v0_random_seed=21):
     v0 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=v0_too_big,
 
-             root_user=1, dataset='EB', random_seed=v0_random_seed,
+             root_user=[1], dataset='EB', random_seed=v0_random_seed,
              do_magic_bool=True, is_coarse=True, preserve_disconnected=True)  # *.4 root=1,
     v0.run_VIA()
     super_labels = v0.labels
@@ -4785,7 +4696,7 @@ def main_EB(ncomps=30, knn=20, v0_random_seed=21):
              too_big_factor=v1_too_big, is_coarse=False,
 
              super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
-             super_terminal_cells=tsi_list, root_user=1, ig_full_graph=v0.ig_full_graph,
+             super_terminal_cells=tsi_list, root_user=[1], ig_full_graph=v0.ig_full_graph,
              csr_array_locally_pruned=v0.csr_array_locally_pruned, full_distance_array=v0.full_distance_array,
              full_neighbor_array=v0.full_neighbor_array,
              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='EB',
@@ -5154,50 +5065,6 @@ def main_mESC(knn=30, v0_random_seed=42, run_palantir_func=False):
     plt.show()
 
 
-def run_palantir_mESC(ad, knn, tsne, str_true_label, start_cell='c4823'):
-    t0 = time.time()
-    norm_df_pal = pd.DataFrame(ad.X)
-    # print('norm df', norm_df_pal)
-    new = ['c' + str(i) for i in norm_df_pal.index]
-    ncomps = ad.X.shape[1]
-    loc_start = np.where(np.asarray(str_true_label) == '0.0')[0][0]
-    start_cell = 'c' + str(loc_start)
-    print('start cell', start_cell)
-    norm_df_pal.index = new
-    norm_df_pal.columns = [i for i in ad.var_names]
-    # pca_projections, _ = palantir.utils.run_pca(norm_df_pal, n_components=ncomps)
-    # print(type(pca_projections)) Dataframe
-    pca_projections = norm_df_pal
-    # sc.tl.pca(ad, svd_solver='arpack')
-    dm_res = palantir.utils.run_diffusion_maps(pca_projections, knn=knn, n_components=ncomps)
-
-    ms_data = palantir.utils.determine_multiscale_space(dm_res)  # n_eigs is determined using eigengap
-    print('ms data', ms_data.shape)
-    tsne = pd.DataFrame(tsne, columns=['x', 'y'])  # palantir.utils.run_tsne(ms_data)
-    tsne.index = new
-    # print(type(tsne))
-
-    str_true_label = pd.Series(str_true_label, index=norm_df_pal.index)
-    palantir.plot.plot_cell_clusters(tsne, str_true_label)
-
-    # start_cell = 'c4823'  # '#C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
-    num_waypoints = 1200  # 5000 takes 20 mins and not good. 1200 is default and similar accuracy to 5000wp
-    pr_res = palantir.core.run_palantir(ms_data, early_cell=start_cell, num_waypoints=num_waypoints, knn=knn)
-    print('time end palantir', round(time.time() - t0))
-    palantir.plot.plot_palantir_results(pr_res, tsne, knn, ncomps)
-    # plt.show()
-    imp_df = palantir.utils.run_magic_imputation(norm_df_pal, dm_res)
-    # imp_df.to_csv('/home/shobi/Trajectory/Datasets/HumanCD34/MAGIC_palantir_knn30ncomp100.csv')
-
-    # genes = ['GATA1', 'GATA2', 'ITGA2B']#, 'SPI1']#['CD34','GATA1', 'IRF8','ITGA2B']
-    # gene_trends = palantir.presults.compute_gene_trends( pr_res, imp_df.loc[:, genes])
-    # palantir.plot.plot_gene_trends(gene_trends)
-    # genes = ['MPO','ITGAX','IRF8','CSF1R','IL3RA']#'CD34','MPO', 'CD79B'
-    # gene_trends = palantir.presults.compute_gene_trends(pr_res, imp_df.loc[:, genes])
-    # palantir.plot.plot_gene_trends(gene_trends)
-    plt.show()
-
-
 def paga_faced(ad, knn, embedding, true_label):
     adata_counts = ad.copy()
     adata_counts.obs['group_id'] = true_label
@@ -5229,113 +5096,6 @@ def paga_faced(ad, knn, embedding, true_label):
     plt.scatter(embedding[:, 0], embedding[:, 1], c=adata_counts.obs['dpt_pseudotime'].values, cmap='viridis')
     plt.title('PAGA DPT')
     plt.show()
-
-
-def run_palantir_faced(ad, knn, tsne, str_true_label):
-    t0 = time.time()
-    norm_df_pal = pd.DataFrame(ad.X)
-    # print('norm df', norm_df_pal)
-    new = ['c' + str(i) for i in norm_df_pal.index]
-
-    loc_start = np.where(np.asarray(str_true_label) == 'T1_M1')[0][0]
-    start_cell = 'c' + str(loc_start)
-    print('start cell', start_cell)
-    norm_df_pal.index = new
-    norm_df_pal.columns = [i for i in ad.var_names]
-    ncomps = norm_df_pal.values.shape[1]
-    print('palantir ncomps', ncomps)
-    dm_res = palantir.utils.run_diffusion_maps(norm_df_pal, knn=knn, n_components=ncomps)
-
-    ms_data = palantir.utils.determine_multiscale_space(dm_res)  # n_eigs is determined using eigengap
-    print('ms data', ms_data.shape)
-    tsne = pd.DataFrame(tsne, columns=['x', 'y'])  # palantir.utils.run_tsne(ms_data)
-    tsne.index = new
-    # print(type(tsne))
-    tsne = palantir.utils.run_tsne(ms_data)
-    str_true_label = pd.Series(str_true_label, index=norm_df_pal.index)
-    palantir.plot.plot_cell_clusters(tsne, str_true_label)
-
-    # start_cell = 'c4823'  # '#C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
-    num_waypoints = 1200  # 1200 default
-    pr_res = palantir.core.run_palantir(ms_data, early_cell=start_cell, num_waypoints=num_waypoints, knn=knn)
-    print('time end palantir', round(time.time() - t0))
-    palantir.plot.plot_palantir_results(pr_res, tsne, knn, ncomps)
-
-
-def run_palantir_EB(ad, ncomps, knn, tsne, str_true_label):
-    t0 = time.time()
-    norm_df_pal = pd.DataFrame(ad.X)
-    # print('norm df', norm_df_pal)
-    new = ['c' + str(i) for i in norm_df_pal.index]
-
-    loc_start = np.where(np.asarray(str_true_label) == '1')[0][0]
-    start_cell = 'c' + str(loc_start)
-    print('start cell', start_cell)
-    norm_df_pal.index = new
-    norm_df_pal.columns = [i for i in ad.var_names]
-    pca_projections, _ = palantir.utils.run_pca(norm_df_pal, n_components=ncomps)
-
-    # sc.tl.pca(ad, svd_solver='arpack')
-    dm_res = palantir.utils.run_diffusion_maps(pca_projections, knn=knn, n_components=ncomps)
-
-    ms_data = palantir.utils.determine_multiscale_space(dm_res)  # n_eigs is determined using eigengap
-    print('ms data', ms_data.shape)
-    tsne = pd.DataFrame(tsne, columns=['x', 'y'])  # palantir.utils.run_tsne(ms_data)
-    tsne.index = new
-    # print(type(tsne))
-
-    str_true_label = pd.Series(str_true_label, index=norm_df_pal.index)
-    palantir.plot.plot_cell_clusters(tsne, str_true_label)
-
-    # start_cell = 'c4823'  # '#C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
-    num_waypoints = 1200  # 1200 default
-    pr_res = palantir.core.run_palantir(ms_data, early_cell=start_cell, num_waypoints=num_waypoints, knn=knn)
-    print('time end palantir', round(time.time() - t0))
-    palantir.plot.plot_palantir_results(pr_res, tsne, knn, ncomps)
-    # plt.show()
-    # imp_df = palantir.utils.run_magic_imputation(norm_df_pal, dm_res)
-    # imp_df.to_csv('/home/shobi/Trajectory/Datasets/HumanCD34/MAGIC_palantir_knn30ncomp100.csv')
-
-    # genes = ['GATA1', 'GATA2', 'ITGA2B']#, 'SPI1']#['CD34','GATA1', 'IRF8','ITGA2B']
-    # gene_trends = palantir.presults.compute_gene_trends( pr_res, imp_df.loc[:, genes])
-    # palantir.plot.plot_gene_trends(gene_trends)
-    # genes = ['MPO','ITGAX','IRF8','CSF1R','IL3RA']#'CD34','MPO', 'CD79B'
-    # gene_trends = palantir.presults.compute_gene_trends(pr_res, imp_df.loc[:, genes])
-    # palantir.plot.plot_gene_trends(gene_trends)
-    plt.show()
-
-
-def palantir_scATAC_Hemato(pc_array, knn, tsne, str_true_label):
-    t0 = time.time()
-    norm_df_pal = pd.DataFrame(pc_array)
-    # print('norm df', norm_df_pal)
-
-    new = ['c' + str(i) for i in norm_df_pal.index]
-
-    # loc_start = np.where(np.asarray(str_true_label) == 'T1_M1')[0][0]
-    start_cell = 'c1200'
-    print('start cell', start_cell)
-    norm_df_pal.index = new
-
-    ncomps = norm_df_pal.values.shape[1]
-    print('palantir ncomps', ncomps)
-    dm_res = palantir.utils.run_diffusion_maps(norm_df_pal, knn=knn, n_components=ncomps)
-
-    ms_data = palantir.utils.determine_multiscale_space(dm_res)  # n_eigs is determined using eigengap.
-    ## In this case n_eigs becomes 1. to increase sensitivity then increase n_eigs in this dataset
-    print('ms data', ms_data.shape)
-    tsne = pd.DataFrame(tsne, columns=['x', 'y'])  # palantir.utils.run_tsne(ms_data)
-    tsne.index = new
-
-    str_true_label = pd.Series(str_true_label, index=norm_df_pal.index)
-    print('c1200 in str true label', str_true_label['c1200'])
-    palantir.plot.plot_cell_clusters(tsne, str_true_label)
-
-    # start_cell = 'c4823'  # '#C108 for M12 connected' #M8n1000d1000 start - c107 #c1001 for bifurc n2000d1000 #disconnected n1000 c108, "C1 for M10 connected" # c10 for bifurcating_m4_n2000d1000
-    num_waypoints = 1200  # 1200  # 1200 default
-    pr_res = palantir.core.run_palantir(ms_data, early_cell=start_cell, num_waypoints=num_waypoints, knn=knn)
-    print('time end palantir', round(time.time() - t0))
-    palantir.plot.plot_palantir_results(pr_res, tsne, knn, ncomps)
 
 
 def main_scATAC_zscores(knn=20, ncomps=30):
@@ -5973,6 +5733,7 @@ def main_faced():
     fig, axs = plt.subplots(2, plot_n)  # (2,10)
     for enum_i, pheno_i in enumerate(all_cols[0:14]):  # [0:14]
         subset_ = df[pheno_i].values
+        #subset_ = (subset_ - subset_.mean()) / subset_.std()
         print('subset shape', subset_.shape)
         if enum_i >= plot_n:
             row = 1
@@ -6040,8 +5801,8 @@ def main():
         main_mESC(knn=20, v0_random_seed=9, run_palantir_func=False)  # knn=20 and randomseed =8 is good
 
     elif dataset == 'EB':
-        # main_EB(ncomps=30, knn=20, v0_random_seed=24)
-        main_EB_clean(ncomps=30, knn=20, v0_random_seed=20)
+        main_EB(ncomps=30, knn=20, v0_random_seed=24)
+        #main_EB_clean(ncomps=30, knn=20, v0_random_seed=20)
         # plot_EB()
     elif dataset == 'scATAC_Hema':
         main_scATAC_Hemato(knn=20)
