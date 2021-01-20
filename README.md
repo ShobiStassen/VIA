@@ -21,7 +21,8 @@ python3 setup.py install // cd into the directory of the cloned PARC folder cont
 ```
 
 ### install dependencies separately if needed (linux ubuntu 16.04 and Windows 10)
-If the pip install doesn't work, it usually suffices to first install all the requirements (using pip) and subsequently install VIA (also using pip)
+If the pip install doesn't work, it usually suffices to first install all the requirements (using pip) and subsequently install VIA (also using pip). 
+Note that on Windows if you do not have Visual C++ (required for hnswlib) you can install using [this link](https://www.scivision.dev/python-windows-visual-c-14-required/) . 
 ```
 pip install pybind11, hnswlib, python-igraph, leidenalg>=0.7.0, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate, matplotlib,scanpy
 pip install pyVIA
@@ -51,7 +52,7 @@ via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Tra
 ```
 Windows (small modifications in calling the code due to the way multiprocessing works in Windows compared to Linux)
 ### To run on Windows:
-A few additional lines are required: "import os" and then name the foldername provided to the wrapper as foldername = os.path.join(r'C:\Users\Tom\TI....'+'\\')
+A few additional lines are required:
 ```
 #when running from an IDE you need to call the function in the following way:
 import os
