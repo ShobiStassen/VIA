@@ -20,6 +20,14 @@ git clone https://github.com/ShobiStassen/VIA.git
 python3 setup.py install // cd into the directory of the cloned PARC folder containing setup.py and issue this command
 ```
 
+### MAC installation
+```
+conda create --name ViaEnv python=3.7 
+pip install pybind11
+conda install -c conda-forge hnswlib
+pip install pyVIA
+```
+
 ### install dependencies separately if needed (linux ubuntu 16.04 and Windows 10)
 If the pip install doesn't work, it usually suffices to first install all the requirements (using pip) and subsequently install VIA (also using pip). 
 Note that on Windows if you do not have Visual C++ (required for hnswlib) you can install using [this link](https://www.scivision.dev/python-windows-visual-c-14-required/) . 
@@ -27,7 +35,8 @@ Note that on Windows if you do not have Visual C++ (required for hnswlib) you ca
 pip install pybind11, hnswlib, python-igraph, leidenalg>=0.7.0, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate, matplotlib,scanpy
 pip install pyVIA
 ```
-## Examples (Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data) 
+## Examples 
+Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data 
 #### 1.a Toy Data (multifurcation)
 #### 1.b Toy Data (disconnected)
 #### 2.a Human Embryoid Bodies (wrapper function)
