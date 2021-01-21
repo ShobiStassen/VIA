@@ -45,7 +45,7 @@ Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 
 #### 3.b General disconnected trajectories wrapper function
 ------------------------------------------------------
 ### 1.a/b Toy data (Multifurcation and Disconnected)
-Two examples [toy datasets](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing) with annotations are generated using DynToy are provided. 
+Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets)  with annotations are generated using DynToy are provided. 
 
 ### To run on Linux:
 All examples are shown according to Linux OS, small modifications are required to run on a Windows OS (see below)
@@ -87,6 +87,7 @@ if __name__ =='__main__':
 
 ### 2.a Human Embryoid Bodies (wrapper function)
 save the [Raw data](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9Ew4RHf/view?usp=sharing) matrix as 'EBdata.mat'. The cells in this file have been filtered for too small/large libraries by [Moon et al. 2019](https://nbviewer.jupyter.org/github/KrishnaswamyLab/PHATE/blob/master/Python/tutorial/EmbryoidBody.ipynb) 
+save the phate [embedding](https://github.com/ShobiStassen/VIA/tree/master/Datasets) 
 
 The function main_EB_clean() preprocesses the cells (normalized by library size, sqrt transformation). It then calls VIA to: plot the pseudotimes, terminal states, lineage pathways and gene-clustermap. The visualization method used in this function is PHATE.
 ```
