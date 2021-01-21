@@ -99,7 +99,7 @@ via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20, foldername = f) # Most r
 ```
 ### 2.b Human Embryoid Bodies (Configuring VIA)
 If you wish to run the data using UMAP or TSNE (instead of PHATE), or require more control of the parameters/outputs, then use the following code:
-Expected runtime will be around 2 minutes
+Expected runtime will be around 1-2 minutes using 5 cores, or ~8-10 on "normal" laptop
 ```
 import pyVIA.core as via
 #pre-process the data as needed and provide to via as a numpy array
