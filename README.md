@@ -92,6 +92,7 @@ Save the phate [embedding](https://github.com/ShobiStassen/VIA/tree/master/Datas
 
 The function main_EB_clean() preprocesses the cells (normalized by library size, sqrt transformation). It then calls VIA to: plot the pseudotimes, terminal states, lineage pathways and gene-clustermap. The visualization method used in this function is PHATE.
 ```
+#runtime on single core, 8GB RAM 64bit Windows is about 8-10 minutes. This can be lowered by reducing the number of simulations.
 import pyVIA.core as via
 #Windows example path for folder where EBdata.mat is saved: f= os.path.join(r'C:\Users\...\Documents'+'\\')
 via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20, foldername = f) # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
@@ -218,7 +219,7 @@ via.via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca']
 | `preserve_disconnected_after_pruning` |  (optional, default = False) Cluster-graph pruning can occasionally cause fragmentation that can be repaired (by setting to True) by retaining select edges. |
 |`cluster_graph_pruning_std`| (optional, default =0.15) Usually set to the same value as the PARC clustering level of jac_std_global. To retain more connectivity in the graph underlying the trajectory computations, increase the value|
 |`visual_cluster_graph_pruning`| (optional, default = 0.15) Usually set to the same value as the PARC clustering level of jac_std_global. This does not impact computation of terminal states, pseudotime or lineage likelihoods. It controls the number of edges plotted for visual effect|
-
+|`num_sim_branch_probability`|(optional), default = 500. Number of MCMCs run per terminal state. This can be safely reduced to 100 when computational resources are limited|
 As shown in the examples, VIA is built to run on a single or double iteration. For extremely large datasets (>1M cells), a single pass is favourable. For mid-size it can be useful to run the double-pass mode which is shown in Example 2b and 3a,b. In the first pass VIA performs a coarser clustering which is useful for capturing terminal states. To increase the resolution of the pseudotime, lineage likelihood and gene trends, we re-run VIA in a second pass which produces a finer cluster-graph and transfers the lineages (terminal states) obtained in the first pass into the second pass. We therefore provide the second pass with the terminal_states obtained in the first pass. To speed up the computation, we also pass the original HNSW KNN graph. The following parameters are used for second passes.
 
 | Input Parameter | Description |
