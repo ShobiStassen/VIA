@@ -21,6 +21,7 @@ python3 setup.py install // cd into the directory of the cloned PARC folder cont
 ```
 
 ### MAC installation
+The pie-chart cluster-graph plot does not render correctly for MACs for the time-being. All other outputs are as expected. 
 ```
 conda create --name ViaEnv python=3.7 
 pip install pybind11
