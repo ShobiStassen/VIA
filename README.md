@@ -64,7 +64,7 @@ Windows (small modifications in calling the code due to the way multiprocessing 
 ### To run on Windows:
 A few additional lines are required:
 ```
-#when running from an IDE you need to call the function in the following way:
+#when running from an IDE you need to call the function in the following way to ensure the parallel processing works:
 import os
 import pyVIA.core as via
 f= os.path.join(r'C:\Users\...\Documents'+'\\')
