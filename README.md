@@ -17,7 +17,7 @@ pip install pyVIA
 ### install by cloning repository and running setup.py (ensure dependencies are installed)
 ```
 git clone https://github.com/ShobiStassen/VIA.git 
-python3 setup.py install // cd into the directory of the cloned PARC folder containing setup.py and issue this command
+python3 setup.py install // cd into the directory of the cloned VIA folder containing setup.py and issue this command
 ```
 
 ### MAC installation
