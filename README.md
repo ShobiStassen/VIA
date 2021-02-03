@@ -2,7 +2,7 @@
 VIA is a single-cell Trajectory Inference method that offers topology construction, pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. VIA combines lazy-teleporting random walks and Monte-Carlo Markov Chain simulations to overcome common challenges such as 1) accurate terminal state and lineage inference, 2) ability to capture combination of cyclic, disconnected and tree-like structures, 3) scalability in feature and sample space. It is also well-suited for multi-omic analysis. In addition to transcriptomic data, VIA works on scATAC-seq, flow and imaging cytometry data 
 
 ## Getting Started
-### install using pip takes a few minutes on a clean environment
+### Linux Ubuntu 16.04 and Windows 10 Installation
 We recommend setting up a new conda environment
 ```
 conda create --name ViaEnv python=3.7 
@@ -36,6 +36,9 @@ Note that on Windows if you do not have Visual C++ (required for hnswlib) you ca
 pip install pybind11, hnswlib, python-igraph, leidenalg>=0.7.0, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate, matplotlib,scanpy
 pip install pyVIA
 ```
+## Jupyter Notebooks
+There are several Jupyter Notebooks with step-by-step code for real and simulated datasets. If you experience issues with opening the notebook from github, then copy the Jupyter Notebook URL and paste it into nb viewer https://nbviewer.jupyter.org/
+
 ## Examples 
 Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data 
 #### 1.a Toy Data (multifurcation)
