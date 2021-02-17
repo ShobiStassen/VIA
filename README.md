@@ -242,5 +242,5 @@ As shown in the examples, VIA is built to run on a single or double iteration. F
 | `labels` | (list) length n_samples of corresponding cluster labels |
 | `edgelist_maxout` | (list) used to draw trajectories on the 2D embedding |
 | `single_cell_pt_markov` | (list) computed pseudotime|
-|'single_cell_bp|(array) computed single cell branch probabilities (lineage likelihoods). n_cells x n_terminal states. The columns each correspond to a terminal state, in the same order presented in the'terminal_clusters' attribute|
+|'single_cell_bp'|(array) computed single cell branch probabilities (lineage likelihoods). n_cells x n_terminal states. The columns each correspond to a terminal state, in the same order presented in the'terminal_clusters' attribute|
 | `terminal clusters` | (list) terminal clusters found by VIA|
