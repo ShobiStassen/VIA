@@ -103,12 +103,14 @@ import pyVIA.core as via
 via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20, foldername = f) # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
 ```
 ### 2.b Human Embryoid Bodies (Configuring VIA)
-If you wish to run the data using UMAP or TSNE (instead of PHATE), or require more control of the parameters/outputs, then use the following code:
-Expected runtime will be around 1-2 minutes using 5 cores, or ~8-10 on "normal" laptop
+If you wish to run the data using UMAP or TSNE (instead of PHATE), or require more control of the parameters/outputs, then use the following code. (See the Jupyter Notebook for detailed output and code). Expected runtime will be around 1-2 minutes using 5 cores, or ~8-10 on "normal" laptop. .
 ```
 import pyVIA.core as via
 #pre-process the data as needed and provide to via as a numpy array
 #root_user is the index of the cell corresponding to a suitable start/root cell
+
+v0_too_big = 0.3 #clusters comprising more than 30% of total cell population will be re-clustered by PARC
+v1_too_big = 0.05
 
 v0 = via.VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=v0_too_big, root_user=[1], dataset='EB', random_seed=v0_random_seed,
