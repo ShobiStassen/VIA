@@ -42,10 +42,10 @@ There are several Jupyter Notebooks with step-by-step code for real and simulate
 
 ## Examples 
 Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data 
-#### 1.a Toy Data (multifurcation)
-#### 1.b Toy Data (disconnected)
+#### 1.a Toy Data (multifurcation) [Multifurcation Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb)
+#### 1.b Toy Data (disconnected) [Disconnected Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb)
 #### 2.a Human Embryoid Bodies (wrapper function)
-#### 2.b Human Embryoid Bodies (Configuring VIA)
+#### 2.b Human Embryoid Bodies (Configuring VIA) [EB Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_EmbryoidBody.ipynb)
 #### 3.a General input format and wrapper function
 #### 3.b General disconnected trajectories wrapper function
 ------------------------------------------------------
