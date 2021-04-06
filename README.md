@@ -38,11 +38,11 @@ pip install pybind11, hnswlib, python-igraph, leidenalg>=0.7.0, umap-learn, nump
 pip install pyVIA
 ```
 ## Jupyter Notebooks
-There are several Jupyter Notebooks with step-by-step code for real and simulated datasets. If you experience issues with opening the notebook from github, then copy the Jupyter Notebook URL and paste it into nb viewer https://nbviewer.jupyter.org/
+There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. If you experience issues with opening the notebook from github, then copy the Jupyter Notebook URL and paste it into nb viewer https://nbviewer.jupyter.org/
 
 ## Examples 
 Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data.
-Data for the Jupyter Notebooks and Examples are available in the [Datasets folder](https://github.com/ShobiStassen/VIA/tree/master/Datasets) (smaller files) and larger datasets [here]()https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing. 
+Data for the Jupyter Notebooks and Examples are available in the [Datasets folder](https://github.com/ShobiStassen/VIA/tree/master/Datasets) (smaller files) and larger datasets [here](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing). 
 #### 1.a Toy Data (multifurcation) [Multifurcation Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb)
 #### 1.b Toy Data (disconnected) [Disconnected Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb)
 #### 2.a Human Embryoid Bodies (wrapper function)
