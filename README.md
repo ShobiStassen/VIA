@@ -4,7 +4,7 @@ Please refer to our [paper](https://www.biorxiv.org/content/10.1101/2021.02.10.4
 
 ## Getting Started
 ### Linux Ubuntu 16.04 and Windows 10 Installation
-We recommend setting up a new conda environment. You can use the examples below, the jupyter notebooks and/or the [test script ](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) to make sure your installation works as expected.
+We recommend setting up a new conda environment. You can use the examples below, the [Jupyter notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) and/or the [test script](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) to make sure your installation works as expected.
 ```
 conda create --name ViaEnv python=3.7 
 pip install pyVIA // tested on linux Ubuntu 16.04 and Windows 10
@@ -38,7 +38,7 @@ pip install pybind11, hnswlib, python-igraph, leidenalg>=0.7.0, umap-learn, nump
 pip install pyVIA
 ```
 ## Jupyter Notebooks
-There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. If you experience issues with opening the notebook from github (opening from within Github can be patchy), then copy the Jupyter Notebook URL and paste it into nb viewer https://nbviewer.jupyter.org/ 
+There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. The notebooks are best viewed when opening the URL through NB Viewer. If you experience issues with opening the notebook from Github (opening from within Github can be patchy), then copy the Jupyter Notebook URL and paste it into nb viewer https://nbviewer.jupyter.org/ 
 
 ## Examples 
 Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data.
