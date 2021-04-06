@@ -38,7 +38,7 @@ pip install pybind11, hnswlib, python-igraph, leidenalg>=0.7.0, umap-learn, nump
 pip install pyVIA
 ```
 ## Jupyter Notebooks
-There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. If you experience issues with opening the notebook from github, then copy the Jupyter Notebook URL and paste it into nb viewer https://nbviewer.jupyter.org/
+There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. If you experience issues with opening the notebook from github (opening from within Github can be patchy), then copy the Jupyter Notebook URL and paste it into nb viewer https://nbviewer.jupyter.org/ 
 
 ## Examples 
 Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data.
