@@ -97,10 +97,10 @@ Save the phate [embedding](https://github.com/ShobiStassen/VIA/tree/master/Datas
 
 The function main_EB_clean() preprocesses the cells (normalized by library size, sqrt transformation). It then calls VIA to: plot the pseudotimes, terminal states, lineage pathways and gene-clustermap. The visualization method used in this function is PHATE.
 ```
-#runtime on single core, 8GB RAM 64bit Windows is about 8-10 minutes. This can be lowered by reducing the number of simulations.
+#runtime on single core, 8GB RAM 64bit Windows is about 8-10 minutes. This can be lowered by reducing the number of MCMC simulations (num_mcmc_simulations).
 import pyVIA.core as via
 #Windows example path for folder where EBdata.mat is saved: f= os.path.join(r'C:\Users\...\Documents'+'\\')
-via.main_EB_clean(ncomps=30, knn=20, p0_random_seed=20, foldername = f) # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
+via.main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, foldername = f) # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
 ```
 ### 2.b Human Embryoid Bodies (Configuring VIA)
 If you wish to run the data using UMAP or TSNE (instead of PHATE), or require more control of the parameters/outputs, then use the following code. (See the Jupyter Notebook for detailed output and code). Expected runtime will be around 1-2 minutes using 5 cores, or ~8-10 on "normal" laptop. .
