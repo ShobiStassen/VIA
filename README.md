@@ -4,7 +4,7 @@ Please refer to our [paper](https://www.biorxiv.org/content/10.1101/2021.02.10.4
 
 ## Getting Started
 ### Linux Ubuntu 16.04 and Windows 10 Installation
-We recommend setting up a new conda environment
+We recommend setting up a new conda environment. You can use the examples below, the jupyter notebooks and/or the [test script ](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) to make sure your installation works as expected.
 ```
 conda create --name ViaEnv python=3.7 
 pip install pyVIA // tested on linux Ubuntu 16.04 and Windows 10
