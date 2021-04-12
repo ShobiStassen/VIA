@@ -95,9 +95,9 @@ if __name__ =='__main__':
 ### 2.a Human Embryoid Bodies (wrapper function)
 Save the [Raw data](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9Ew4RHf/view?usp=sharing) matrix as 'EBdata.mat'. The cells in this file have been filtered for too small/large libraries by [Moon et al. 2019](https://nbviewer.jupyter.org/github/KrishnaswamyLab/PHATE/blob/master/Python/tutorial/EmbryoidBody.ipynb). 
 
-Save the phate [embedding](https://github.com/ShobiStassen/VIA/tree/master/Datasets) which is required to run Example 2.a (since the phate operation is 
+Save the phate [embedding](https://github.com/ShobiStassen/VIA/tree/master/Datasets) which is required to run Example 2.a (Or use another 2D embedding of your choice)
 
-The function main_EB_clean() preprocesses the cells (normalized by library size, sqrt transformation). It then calls VIA to: plot the pseudotimes, terminal states, lineage pathways and gene-clustermap. The visualization method used in this function is PHATE.
+The function main_EB_clean() is a wrapper function which preprocesses the cells (normalized by library size, sqrt transformation). It then calls VIA to: plot the pseudotimes, terminal states, lineage pathways and gene-clustermap. The visualization method used in this function is PHATE.
 ```
 #runtime on single core, 8GB RAM 64bit Windows is about 8-10 minutes. This can be lowered by reducing the number of MCMC simulations (num_mcmc_simulations).
 import pyVIA.core as via
@@ -105,7 +105,7 @@ import pyVIA.core as via
 via.main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, foldername = f) # Most reasonable parameters of ncomps (10-200) and knn (15-50) work well
 ```
 ### 2.b Human Embryoid Bodies (Configuring VIA)
-If you wish to run the data using UMAP or TSNE (instead of PHATE), or require more control of the parameters/outputs, then use the following code. (See the Jupyter Notebook for detailed output and code). Expected runtime will be around 1-2 minutes using 5 cores, or ~8-10 on "normal" laptop. .
+If you require more control of the parameters/outputs or choice of embedding, then use the following code which is otherwise wrapped within main_EB_clean(). (See the Jupyter Notebook for detailed code and outputs). Expected runtime will be around 1-2 minutes using 5 cores, or ~8-10 on "normal" laptop. .
 ```
 import pyVIA.core as via
 #pre-process the data as needed and provide to via as a numpy array
@@ -116,25 +116,25 @@ v1_too_big = 0.05
 ncomps=30
 knn=20
 v0_random_seed=24
-v0 = via.VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
-             too_big_factor=v0_too_big, root_user=[1], dataset='EB', random_seed=v0_random_seed,
-             do_magic_bool=True, is_coarse=True, preserve_disconnected=True)  
-v0.run_VIA()
 
+v0 = ia.VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             too_big_factor=v0_too_big, root_user=1, dataset='EB', random_seed=v0_random_seed,
+             do_magic_bool=True, is_coarse=True, preserve_disconnected=True)
+v0.run_VIA()
 
 tsi_list = get_loc_terminal_states(v0, input_data) #translate the terminal clusters found in v0 to the fine-grained run in v1
 
 v1 = via.VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=v1_too_big, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
-             super_terminal_cells=tsi_list, root_user=[1], is_coarse=False, full_neighbor_array=v0.full_neighbor_array,
+             super_terminal_cells=tsi_list, root_user=1, is_coarse=False, full_neighbor_array=v0.full_neighbor_array,
              full_distance_array=v0.full_distance_array, ig_full_graph=v0.ig_full_graph,
              csr_array_locally_pruned=v0.csr_array_locally_pruned,
              x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='EB',
-             super_terminal_clusters=v0.terminal_clusters, random_seed=21)
+             super_terminal_clusters=v0.terminal_clusters, random_seed=v0_random_seed)
 v1.run_VIA()
 
 #Plot the true and inferred times and pseudotimes
-#Replace Y_phate with UMAP, TSNE embedding
+#Optional to replace Y_phate with UMAP, TSNE embedding
 Y_phate = pd.read_csv(foldername+'EB_phate_embedding.csv')
 Y_phate = Y_phate.values
 f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
@@ -219,7 +219,7 @@ via.via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca']
 | `data` | (numpy.ndarray) n_samples x n_features. When using via_wrapper(), data is ANNdata object that has a PCA object adata.obsm['X_pca'][:, 0:ncomps] and ncomps is the number of components that will be used. |
 | `true_label` | (list) 'ground truth' annotations or placeholder|
 | `knn` |  (optional, default = 30) number of K-Nearest Neighbors for HNSWlib KNN graph |
-|`root_user`|When using the via.VIA() function, simply provide the index number of the cell corresponding to a sensible root: root_user = 1. When using the generic via wrapper via_wrapper(), then the root_user should be provided as a list containing roots corresponding to index (row number in cell matrix) of root cell. For most trajectories this is of the form [99], for multiple disconnected trajectories an arbitrary list of cells can be provided [1,506,1100], otherwise VIA arbitratily chooses cells. If the root cells of disconnected trajectories are known in advance, then the cells should be annotated with similar syntax to that of Example Dataset in Disconnected Toy Example 1b.|
+|`root_user`| root_user should be provided as a list containing roots corresponding to index (row number in cell matrix) of root cell. For most trajectories this is of the form [53] where 53 is the index of a sensible root cell, for multiple disconnected trajectories an arbitrary list of cells can be provided [1,506,1100], otherwise VIA arbitratily chooses cells. If the root cells of disconnected trajectories are known in advance, then the cells should be annotated with similar syntax to that of Example Dataset in Disconnected Toy Example 1b.|
 | `dist_std_local` |  (optional, default = 1) local pruning threshold for PARC clustering stage: the number of standard deviations above the mean minkowski distance between neighbors of a given node. the higher the parameter, the more edges are retained|
 | `jac_std_global` |  (optional, default = 0.15) global level  graph pruning for PARC clustering stage. This threshold can also be set as the number of standard deviations below the network's mean-jaccard-weighted edges. 0.1-1 provide reasonable pruning. higher value means less pruning. e.g. a value of 0.15 means all edges that are above mean(edgeweight)-0.15*std(edge-weights) are retained. We find both 0.15 and 'median' to yield good results resulting in pruning away ~ 50-60% edges |
 | `too_big_factor` |  (optional, default = 0.4) if a cluster exceeds this share of the entire cell population, then the PARC will be run on the large cluster|
