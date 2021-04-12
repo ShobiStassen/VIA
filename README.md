@@ -15,7 +15,7 @@ pip install pybind11
 pip install hnswlib
 pip install pyVIA
 ```
-### install by cloning repository and running setup.py (ensure dependencies are installed)
+### Install by cloning repository and running setup.py (ensure dependencies are installed)
 ```
 git clone https://github.com/ShobiStassen/VIA.git 
 python3 setup.py install // cd into the directory of the cloned VIA folder containing setup.py and issue this command
@@ -30,7 +30,7 @@ conda install -c conda-forge hnswlib
 pip install pyVIA
 ```
 
-### install dependencies separately if needed (linux ubuntu 16.04 and Windows 10)
+### Install dependencies separately if needed (linux ubuntu 16.04 and Windows 10)
 If the pip install doesn't work, it usually suffices to first install all the requirements (using pip) and subsequently install VIA (also using pip). 
 Note that on Windows if you do not have Visual C++ (required for hnswlib) you can install using [this link](https://www.scivision.dev/python-windows-visual-c-14-required/) . 
 ```
@@ -38,10 +38,10 @@ pip install pybind11, hnswlib, python-igraph, leidenalg>=0.7.0, umap-learn, nump
 pip install pyVIA
 ```
 ## Jupyter Notebooks
-There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. The notebooks are best viewed when opening the URL through NB Viewer. If you experience issues with opening the notebook from Github (opening from within Github can be patchy), then copy the Jupyter Notebook URL and paste it into nb viewer https://nbviewer.jupyter.org/ 
+There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. The notebooks are best viewed when opening the URL through NB Viewer. If you experience issues with opening the notebook from Github (opening from within Github can be patchy), then please copy the Jupyter Notebook URL and paste it into NB Viewer https://nbviewer.jupyter.org/ 
 
 ## Examples 
-Expected runtime will be a few minutes or less. Runtime on a "normal" laptop ~5 minutes for EB and less for smaller data.
+Expected runtime will be a few minutes or less for 8-core machine. Runtime on a "normal" laptop ~8 minutes for EB (16,800 cells) and less for smaller data.
 Data for the Jupyter Notebooks and Examples are available in the [Datasets folder](https://github.com/ShobiStassen/VIA/tree/master/Datasets) (smaller files) and larger datasets [here](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing). 
 #### 1.a Toy Data (multifurcation) [Multifurcation Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb)
 #### 1.b Toy Data (disconnected) [Disconnected Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb)
@@ -113,7 +113,9 @@ import pyVIA.core as via
 
 v0_too_big = 0.3 #clusters comprising more than 30% of total cell population will be re-clustered by PARC
 v1_too_big = 0.05
-
+ncomps=30
+knn=20
+v0_random_seed=24
 v0 = via.VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=v0_too_big, root_user=[1], dataset='EB', random_seed=v0_random_seed,
              do_magic_bool=True, is_coarse=True, preserve_disconnected=True)  
@@ -133,6 +135,8 @@ v1.run_VIA()
 
 #Plot the true and inferred times and pseudotimes
 #Replace Y_phate with UMAP, TSNE embedding
+Y_phate = pd.read_csv(foldername+'EB_phate_embedding.csv')
+Y_phate = Y_phate.values
 f, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
 ax1.scatter(Y_phate[:, 0], Y_phate[:, 1], c=time_labels, s=5, cmap='viridis', alpha=0.5)
 ax2.scatter(Y_phate[:, 0], Y_phate[:, 1], c=v1.single_cell_pt_markov, s=5, cmap='viridis', alpha=0.5)
