@@ -684,7 +684,7 @@ def absorption_probability(N, R, absorption_state_j):
 def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_cluster_labels, super_edgelist, x_lazy,
                          alpha_teleport,
                          projected_sc_pt, true_label, knn, ncomp, final_super_terminal, sub_terminal_clusters,
-                         title_str="hitting times", super_root=[0], draw_all_curves = True):
+                         title_str="hitting times", super_root=[0], draw_all_curves = True,arrow_width_scale_factor=15):
     X_dimred=X_dimred*1./np.max(X_dimred, axis=0)
     x = X_dimred[:, 0]
     y = X_dimred[:, 1]
@@ -872,7 +872,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
                 closest_loc = idx_keep[i]
         step = 1
 
-        head_width = noise * 10  #arrow_width needs to be adjusted sometimes # 40#30  ##0.2 #0.05 for mESC #0.00001 (#for 2MORGAN and others) # 0.5#1
+        head_width = noise * arrow_width_scale_factor  #arrow_width needs to be adjusted sometimes # 40#30  ##0.2 #0.05 for mESC #0.00001 (#for 2MORGAN and others) # 0.5#1
         if direction_arrow == 1:
             ax2.arrow(xp[closest_loc], preds[closest_loc], xp[closest_loc + step] - xp[closest_loc],
                       preds[closest_loc + step] - preds[closest_loc], shape='full', lw=0, length_includes_head=False,
@@ -1093,7 +1093,7 @@ class VIA:
                  super_cluster_labels=False,
                  super_node_degree_list=False, super_terminal_cells=False, x_lazy=0.95, alpha_teleport=0.99,
                  root_user="root_cluster", preserve_disconnected=True, dataset="humanCD34", super_terminal_clusters=[],
-                 do_magic_bool=False, is_coarse=True, csr_full_graph='', csr_array_locally_pruned='', ig_full_graph='',
+                 do_impute_bool=False, is_coarse=True, csr_full_graph='', csr_array_locally_pruned='', ig_full_graph='',
                  full_neighbor_array='', full_distance_array='', embedding=None, df_annot=None,
                  preserve_disconnected_after_pruning=False,
                  secondary_annotations=None, pseudotime_threshold_TS=30,cluster_graph_pruning_std = 0.15, visual_cluster_graph_pruning = 0.15,neighboring_terminal_states_threshold=2,num_mcmc_simulations=1300):
@@ -1133,7 +1133,7 @@ class VIA:
         self.preserve_disconnected = preserve_disconnected
         self.dataset = dataset
         self.super_terminal_clusters = super_terminal_clusters
-        self.do_magic_bool = do_magic_bool
+        self.do_impute_bool = do_impute_bool
         self.is_coarse = is_coarse
         self.csr_full_graph = csr_full_graph
         self.ig_full_graph = ig_full_graph
@@ -1969,6 +1969,26 @@ class VIA:
 
         return graph_node_label, majority_truth_labels, deg_list, root
 
+    def find_root_bcell(self, graph_dense, PARC_labels_leiden, root_user, true_labels):
+        # root-user is the singlecell index given by the user when running VIA
+        majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
+        graph_node_label = []
+        true_labels = np.asarray(true_labels)
+
+        deg_list = graph_dense.sum(axis=1).reshape((1, -1)).tolist()[0]
+
+        for ci, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
+            # print('cluster i', cluster_i)
+            cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
+
+            majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
+
+            majority_truth_labels[cluster_i_loc] = str(majority_truth) + 'c' + str(cluster_i)
+
+            graph_node_label.append(str(majority_truth) + 'c' + str(cluster_i))
+        root = PARC_labels_leiden[root_user]
+        return graph_node_label, majority_truth_labels, deg_list, root
+
     def find_root_2Morgan(self, graph_dense, PARC_labels_leiden, root_idx, true_labels):
         # single cell index given corresponding to user defined root cell
         majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
@@ -1991,25 +2011,7 @@ class VIA:
 
         return graph_node_label, majority_truth_labels, deg_list, root
 
-    def find_root_bcell(self, graph_dense, PARC_labels_leiden, root_user, true_labels):
-        # root-user is the singlecell index given by the user when running VIA
-        majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
-        graph_node_label = []
-        true_labels = np.asarray(true_labels)
 
-        deg_list = graph_dense.sum(axis=1).reshape((1, -1)).tolist()[0]
-
-        for ci, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
-            # print('cluster i', cluster_i)
-            cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
-
-            majority_truth = self.func_mode(list(true_labels[cluster_i_loc]))
-
-            majority_truth_labels[cluster_i_loc] = str(majority_truth) + 'c' + str(cluster_i)
-
-            graph_node_label.append(str(majority_truth) + 'c' + str(cluster_i))
-        root = PARC_labels_leiden[root_user]
-        return graph_node_label, majority_truth_labels, deg_list, root
 
     def find_root_toy(self, graph_dense, PARC_labels_leiden, root_user, true_labels, super_cluster_labels_sub,
                       super_node_degree_list):
@@ -2214,10 +2216,10 @@ class VIA:
             ax.set_title(title_gene)
         return
 
-    def do_magic(self, df_gene, magic_steps=3, gene_list=[]):
+    def do_impute(self, df_gene, magic_steps=3, gene_list=[]):
         # ad_gene is an ann data object from scanpy
-        if self.do_magic_bool == False:
-            print(colored('please re-run Via with do_magic set to True', 'red'))
+        if self.do_impute_bool == False:
+            print(colored('please re-run Via with do_impute set to True', 'red'))
             return
         else:
             from sklearn.preprocessing import normalize
@@ -2604,6 +2606,7 @@ class VIA:
             # print('cluster_labels_subi', cluster_labels_subi)
             sc_labels_subi = [PARC_labels_leiden[i] for i in range(len(PARC_labels_leiden)) if
                               (PARC_labels_leiden[i] in cluster_labels_subi)]
+
             sc_truelabels_subi = [self.true_label[i] for i in range(len(PARC_labels_leiden)) if
                                   (PARC_labels_leiden[i] in cluster_labels_subi)]
 
@@ -2613,9 +2616,13 @@ class VIA:
                     # find which sub-cluster has the super-cluster root
 
                     if 'T1_M1' in sc_truelabels_subi:
-                        root_user = 'T1_M1'
+                        root_user_ = 'T1_M1'
                     elif 'T2_M1' in sc_truelabels_subi:
-                        root_user = 'T2_M1'
+                        root_user_ = 'T2_M1'
+                    else:
+                        for ri in root_user:
+                            if ri in sc_truelabels_subi:root_user_ = ri
+
 
                     super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if
                                          (PARC_labels_leiden[i] in cluster_labels_subi)]
@@ -2625,45 +2632,52 @@ class VIA:
 
                     graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_toy(a_i,
                                                                                                           sc_labels_subi,
-                                                                                                          root_user,
+                                                                                                          root_user_,
                                                                                                           sc_truelabels_subi,
                                                                                                           super_labels_subi,
                                                                                                           self.super_node_degree_list)
                 else:
                     if 'T1_M1' in sc_truelabels_subi:
-                        root_user = 'T1_M1'
+                        root_user_ = 'T1_M1'
                     elif 'T2_M1' in sc_truelabels_subi:
-                        root_user = 'T2_M1'
+                        root_user_ = 'T2_M1'
+                    else:
+                        for ri in root_user:
+                            if ri in sc_truelabels_subi: root_user_ = ri
 
                     # print('component', comp_i, 'has root', root_user[comp_i])
                     graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_toy(a_i,
                                                                                                           sc_labels_subi,
-                                                                                                          root_user,
+                                                                                                          root_user_,
                                                                                                           sc_truelabels_subi,
                                                                                                           [], [])
 
             elif (self.dataset == 'humanCD34'):  # | (self.dataset == '2M'):
-
+                for ri in root_user:
+                    if PARC_labels_leiden[ri] in cluster_labels_subi: root_user_ = ri
                 graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_HumanCD34(a_i,
                                                                                                             sc_labels_subi,
-                                                                                                            root_user,
+                                                                                                            root_user_,
                                                                                                             sc_truelabels_subi)
 
             elif (self.dataset == '2M'):
-
+                for ri in root_user:
+                    if PARC_labels_leiden[ri] in cluster_labels_subi: root_user_ = ri
                 graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_2Morgan(a_i,
                                                                                                           sc_labels_subi,
-                                                                                                          root_user,
+                                                                                                          root_user_,
                                                                                                           sc_truelabels_subi)
 
             elif (self.dataset == 'bcell') | (self.dataset == 'EB'):
-
+                for ri in root_user:
+                    if PARC_labels_leiden[ri] in cluster_labels_subi: root_user_ = ri
                 graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_bcell(a_i,
                                                                                                         sc_labels_subi,
-                                                                                                        root_user,
+                                                                                                        root_user_,
                                                                                                         sc_truelabels_subi)
             elif ((self.dataset == 'iPSC') | (self.dataset == 'mESC')):
-
+                for ri in root_user:
+                    if PARC_labels_leiden[ri] in cluster_labels_subi: root_user_ = ri
                 if self.super_cluster_labels != False:
                     super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if
                                          (PARC_labels_leiden[i] in cluster_labels_subi)]
@@ -2671,14 +2685,14 @@ class VIA:
 
                     graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_iPSC(a_i,
                                                                                                            sc_labels_subi,
-                                                                                                           root_user,
+                                                                                                           root_user_,
                                                                                                            sc_truelabels_subi,
                                                                                                            super_labels_subi,
                                                                                                            self.super_node_degree_list)
                 else:
                     graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_iPSC(a_i,
                                                                                                            sc_labels_subi,
-                                                                                                           root_user,
+                                                                                                           root_user_,
                                                                                                            sc_truelabels_subi,
                                                                                                            [],
                                                                                                            [])
@@ -2686,7 +2700,9 @@ class VIA:
                 if comp_i > len(root_user) - 1:
                     root_generic = 0
                 else:
-                    root_generic = root_user[comp_i]
+                    for ri in root_user:
+                        if PARC_labels_leiden[ri] in cluster_labels_subi: root_generic = ri
+                    #root_generic = root_user[comp_i]
                 graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_bcell(a_i,
                                                                                                         sc_labels_subi,
                                                                                                         root_generic,
@@ -2801,7 +2817,7 @@ class VIA:
                     # If you have disconnected components and corresponding labels to identify which cell belongs to which components, then use the Toy 'T1_M1' format
                     CHECK_BOOL = False
                     if (self.dataset == 'toy'):
-                        if (root_user[0:2] in true_majority_i[0]) | (root_user[0:1] == 'M'): CHECK_BOOL = True
+                        if (root_user_[0:2] in true_majority_i[0]) | (root_user_[0:1] == 'M'): CHECK_BOOL = True
 
                     # Find the sub-terminal cluster in second iteration of VIA that best corresponds to the super-terminal cluster  (i)from iteration 1
                     if (CHECK_BOOL) | (
@@ -3067,7 +3083,7 @@ class VIA:
     def draw_piechart_graph(self, ax, ax1, type_pt='pt', gene_exp='', title=''):
 
         # ax1 is the pseudotime
-        arrow_head_w = 0.4#0.6
+        arrow_head_w = 0.4#0.4
         edgeweight_scale = 3#1.5
 
         node_pos = self.graph_node_pos
@@ -3572,21 +3588,21 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     # 'CD27', 'CD14', 'CD22', 'ITGAM', 'CLC', 'MS4A3', 'FCGR3A', 'CSF1R']
 
     true_label = nover_labels  # revised_clus
-
+    root_user = [4823]
     print('v0 random seed', v0_random_seed)
     # df_temp_write  = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:200])
     # df_temp_write.to_csv("/home/shobi/Trajectory/Datasets/HumanCD34/Human_CD34_200PCA.csv")
     v0 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=0.3,
-             root_user=4823, dataset='humanCD34', preserve_disconnected=True, random_seed=v0_random_seed,
-             do_magic_bool=True, is_coarse=True, pseudotime_threshold_TS=20, neighboring_terminal_states_threshold=3)  # *.4 root=1,
+             root_user=root_user, dataset='humanCD34', preserve_disconnected=True, random_seed=v0_random_seed,
+             do_impute_bool=True, is_coarse=True, pseudotime_threshold_TS=20, neighboring_terminal_states_threshold=3)  # *.4 root=1,
     v0.run_VIA()
     super_labels = v0.labels
     df_ = pd.DataFrame(ad.X)
     df_.columns = [i for i in ad.var_names]
     print('start magic')
     gene_list_magic = ['IL3RA', 'IRF8', 'GATA1', 'GATA2', 'ITGA2B', 'MPO', 'CD79B', 'SPI1', 'CD34', 'CSF1R', 'ITGAX']
-    df_magic = v0.do_magic(df_, magic_steps=3, gene_list=gene_list_magic)
+    df_magic = v0.do_impute(df_, magic_steps=3, gene_list=gene_list_magic)
     df_magic_cluster = df_magic.copy()
     df_magic_cluster['parc'] = v0.labels
     df_magic_cluster = df_magic_cluster.groupby('parc', as_index=True).mean()
@@ -3619,7 +3635,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     tsi_list = get_loc_terminal_states(v0, adata_counts.obsm['X_pca'][:, 0:ncomps])
     v1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=0.05, super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
-             super_terminal_cells=tsi_list, root_user=4823,
+             super_terminal_cells=tsi_list, root_user=root_user,
              x_lazy=0.95, alpha_teleport=0.99, dataset='humanCD34', preserve_disconnected=True,
              super_terminal_clusters=v0.terminal_clusters, is_coarse=False, full_neighbor_array=v0.full_neighbor_array,
              ig_full_graph=v0.ig_full_graph, full_distance_array=v0.full_distance_array,
@@ -3913,7 +3929,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
     plt.show()
 
 
-def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user='M1',
+def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1'],
              foldername="/home/shobi/Trajectory/Datasets/"):
     print('dataset, ncomps, knn, seed', dataset, ncomps, knn, random_seed)
 
@@ -3923,7 +3939,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user='M1',
         df_ids = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000_ids.csv", 'rt',
                              delimiter=",")
 
-        root_user = 'M1'
+        root_user = ['M1']
         paga_root = "M1"
     if dataset == "Toy4":  # 2 disconnected components
         print('inside toy4')
@@ -4237,12 +4253,12 @@ def main_Bcell(ncomps=50, knn=20, random_seed=0, path='/home/shobi/Trajectory/Da
     df_annot = pd.DataFrame(['t' + str(i) for i in true_label])
     # df_input.to_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_200PC_5000HVG.csv')
     # df_annot.to_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_annots.csv')
-
+    root_user = [42]
     v0 = VIA(input_via, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=0.3, dataset='bcell',
 
-             root_user=42, preserve_disconnected=True, random_seed=random_seed,
-             do_magic_bool=True)  # *.4#root_user = 34
+             root_user=root_user, preserve_disconnected=True, random_seed=random_seed,
+             do_impute_bool=True)  # *.4#root_user = 34
     v0.run_VIA()
 
     super_labels = v0.labels
@@ -4251,7 +4267,7 @@ def main_Bcell(ncomps=50, knn=20, random_seed=0, path='/home/shobi/Trajectory/Da
     v1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=0.05, is_coarse=False,
              super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
-             super_terminal_cells=tsi_list, root_user=42, full_neighbor_array=v0.full_neighbor_array,
+             super_terminal_cells=tsi_list, root_user=root_user, full_neighbor_array=v0.full_neighbor_array,
              full_distance_array=v0.full_distance_array, ig_full_graph=v0.ig_full_graph,
              csr_array_locally_pruned=v0.csr_array_locally_pruned,
              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='bcell',
@@ -4268,8 +4284,8 @@ def main_Bcell(ncomps=50, knn=20, random_seed=0, path='/home/shobi/Trajectory/Da
     df_Bcell_marker = df_[Bcell_marker_gene_list]
     print(df_Bcell_marker.shape, 'df_Bcell_marker.shape')
     df_Bcell_marker.to_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_markergenes.csv')
-    # v0 is run with "do_magic" = true, hence it stores the full graph (in subsequent iterations we dont recompute and store the full unpruned knn graph)
-    df_magic = v0.do_magic(df_, magic_steps=3, gene_list=Bcell_marker_gene_list)
+    # v0 is run with "do_impute" = true, hence it stores the full graph (in subsequent iterations we dont recompute and store the full unpruned knn graph)
+    df_magic = v0.do_impute(df_, magic_steps=3, gene_list=Bcell_marker_gene_list)
     for gene_name in Bcell_marker_gene_list:
         # loc_gata = np.where(np.asarray(adata_counts_unfiltered.var_names) == gene_name)[0][0]
         subset_ = df_magic[gene_name].values
@@ -4458,10 +4474,10 @@ def main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, foldername='/home/shobi/
     input_data = adata.obsm['X_pca'][:, 0:ncomps]
 
     print('do v0')
-    root_user = 1
+    root_user = [1]
     v0 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=v0_too_big, root_user=root_user, dataset='EB', random_seed=v0_random_seed,
-             do_magic_bool=True, is_coarse=True, preserve_disconnected=True)  # *.4 root=1,
+             do_impute_bool=True, is_coarse=True, preserve_disconnected=True)  # *.4 root=1,
     v0.run_VIA()
 
     tsi_list = get_loc_terminal_states(v0, input_data)
@@ -4667,7 +4683,7 @@ def main_EB(ncomps=30, knn=20, v0_random_seed=24):
     print('do v0')
     v0 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=v0_too_big,   root_user=root_user, dataset='EB', random_seed=v0_random_seed,
-             do_magic_bool=True, is_coarse=True, preserve_disconnected=True)  # *.4 root=1,
+             do_impute_bool=True, is_coarse=True, preserve_disconnected=True)  # *.4 root=1,
     v0.run_VIA()
     super_labels = v0.labels
     v0_labels_df = pd.DataFrame(super_labels, columns=['v0_labels'])
@@ -4975,7 +4991,7 @@ def main_mESC(knn=30, v0_random_seed=42, run_palantir_func=False):
     v0 = VIA(adata.X, true_label_int, jac_std_global=0.3, dist_std_local=1, knn=knn,
              too_big_factor=v0_too_big, resolution_parameter=2,
              root_user=root, dataset='mESC', random_seed=v0_random_seed,
-             do_magic_bool=True, is_coarse=True, preserve_disconnected=False, pseudotime_threshold_TS=40, x_lazy=0.99,
+             do_impute_bool=True, is_coarse=True, preserve_disconnected=False, pseudotime_threshold_TS=40, x_lazy=0.99,
              alpha_teleport=0.99)  # *.4 root=1,
     v0.run_VIA()
     df_pt = v0.single_cell_pt_markov
@@ -5205,7 +5221,7 @@ def main_scATAC_zscores(knn=20, ncomps=30):
 
     v0 = VIA(X_in, true_label, jac_std_global=0.3, dist_std_local=1, knn=knn,
              too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
-             do_magic_bool=True, is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
+             do_impute_bool=True, is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
     v0.run_VIA()
     f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True)
     df['via0'] = v0.labels
@@ -5357,7 +5373,7 @@ def main_scATAC_Hemato(knn=20):
 
     v0 = VIA(X_in, true_label, jac_std_global=0.5, dist_std_local=1, knn=knn,
              too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
-             do_magic_bool=True, is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
+             do_impute_bool=True, is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
     v0.run_VIA()
 
     df['via0'] = v0.labels
@@ -5416,7 +5432,7 @@ def via_wrapper(adata,true_label, embedding, knn=20,jac_std_global=0.15,root=0,d
 
     v0 = VIA(adata.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
              too_big_factor=v0_toobig,  root_user=root, dataset=dataset, random_seed=random_seed,
-             do_magic_bool=True, is_coarse=True, preserve_disconnected=preserve_disconnected,cluster_graph_pruning_std = cluster_graph_pruning_std)  # *.4 root=1,
+             do_impute_bool=True, is_coarse=True, preserve_disconnected=preserve_disconnected,cluster_graph_pruning_std = cluster_graph_pruning_std)  # *.4 root=1,
     v0.run_VIA()
 
    #plot coarse cluster heatmap
@@ -5460,7 +5476,7 @@ def via_wrapper(adata,true_label, embedding, knn=20,jac_std_global=0.15,root=0,d
     if len(marker_genes)>0:
         df_ = pd.DataFrame(adata.X)
         df_.columns = [i for i in adata.var_names]
-        df_magic = v0.do_magic(df_, magic_steps=3, gene_list=marker_genes)
+        df_magic = v0.do_impute(df_, magic_steps=3, gene_list=marker_genes)
         for gene_name in marker_genes:
             # loc_gata = np.where(np.asarray(adata_counts_unfiltered.var_names) == gene_name)[0][0]
             subset_ = df_magic[gene_name].values
@@ -5474,7 +5490,7 @@ def via_wrapper_disconnected(adata,true_label, embedding, knn=20,jac_std_global=
 
     v0 = VIA(adata.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
              too_big_factor=v0_toobig,  root_user=root, dataset=dataset, random_seed=random_seed,
-             do_magic_bool=True, is_coarse=True, preserve_disconnected=preserve_disconnected,cluster_graph_pruning_std = cluster_graph_pruning_std)  # *.4 root=1,
+             do_impute_bool=True, is_coarse=True, preserve_disconnected=preserve_disconnected,cluster_graph_pruning_std = cluster_graph_pruning_std)  # *.4 root=1,
     v0.run_VIA()
 
    #plot coarse cluster heatmap
@@ -5502,7 +5518,7 @@ def via_wrapper_disconnected(adata,true_label, embedding, knn=20,jac_std_global=
     if len(marker_genes)>0:
         df_ = pd.DataFrame(adata.X)
         df_.columns = [i for i in adata.var_names]
-        df_magic = v0.do_magic(df_, magic_steps=3, gene_list=marker_genes)
+        df_magic = v0.do_impute(df_, magic_steps=3, gene_list=marker_genes)
         for gene_name in marker_genes:
             # loc_gata = np.where(np.asarray(adata_counts_unfiltered.var_names) == gene_name)[0][0]
             subset_ = df_magic[gene_name].values
@@ -5818,7 +5834,7 @@ def main_faced():
 
     v0 = VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=3, knn=knn, resolution_parameter=1,
              too_big_factor=0.3, root_user=root_user, dataset='faced', random_seed=random_seed,
-             do_magic_bool=True, is_coarse=True, preserve_disconnected=True, preserve_disconnected_after_pruning=True,
+             do_impute_bool=True, is_coarse=True, preserve_disconnected=True, preserve_disconnected_after_pruning=True,
              pseudotime_threshold_TS=40)  # *.4 root=1,
     v0.run_VIA()
 
@@ -5947,7 +5963,7 @@ def main1():
     correlation = pt.corr(truth)
     print('corr via knn',knn, correlation)
 def main():
-    dataset = 'faced'  #
+    dataset = 'EB'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
         main_Human(ncomps=100, knn=30, v0_random_seed=4,
