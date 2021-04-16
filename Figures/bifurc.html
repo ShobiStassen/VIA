@@ -1,0 +1,62 @@
+<head>
+  <style> body { margin: 0; } </style>
+
+  <script src="https://unpkg.com/3d-force-graph"></script>
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <script src="bifurc.js"></script>
+  <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+  <!--<script src="../../dist/3d-force-graph.js"></script>-->
+</head>
+
+<body>
+<div id="3d-graph"></div>
+
+<script>
+  /*
+
+  const gData = {
+      "nodes": [
+          {
+            "id": "id1",
+
+            "name": "name1",
+            "val": 1
+          },
+          {
+            "id": "id2",
+            "name": "name2",
+            "val": 2
+          },
+
+      ],
+      "links": [
+          {
+              "source": "id1",
+              "target": "id2"
+          },
+      ]
+  }
+  */
+  /*
+  var colors = d3.scaleQuantize()
+    .domain([0,10])
+    .range(["#5E4FA2", "#3288BD", "#66C2A5", "#ABDDA4", "#E6F598",
+    "#FFFFBF", "#FEE08B", "#FDAE61", "#F46D43", "#D53E4F", "#9E0142"]);
+  */
+
+  var colors = d3.scaleSequential().domain([1,10])
+    .interpolator(d3.interpolateViridis);
+  const Graph = ForceGraph3D({ controlType: 'orbit' })
+  (document.getElementById('3d-graph'))
+    //.jsonUrl('https://raw.githubusercontent.com/vasturiano/3d-force-graph/master/example/datasets/miserables.json')
+    //.jsonUrl('file://localhost/home/shobi/JavaCode/basicgraph/bifurc.json')
+    //https://stackoverflow.com/questions/50360821/how-do-i-influence-link-distance-in-3d-force-graph
+    .nodeLabel('id')
+    //.nodeAutoColorBy('val')
+    .graphData(gData)
+    .nodeColor(d=>colors(d.val))
+    .linkWidth('width')
+    .d3Force("link", d3.forceLink().distance(d => d.distance))
+    .d3Force("charge", d3.forceManyBody().theta(0.5).strength(-1));;
+</script>
+</body>
