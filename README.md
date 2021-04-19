@@ -87,7 +87,7 @@ via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername= f)
 if __name__ =='__main__':
 ```
 
-## Output of Multifurcating toy dataset
+## Output of [Multifurcating](https://shobistassen.github.io/bifurc.html) toy dataset
 ![Output of VIA on multifurcating toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true)
 ## Output of disconnected toy dataset
 ![Output of VIA on disconnected toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true)
