@@ -92,7 +92,7 @@ if __name__ =='__main__':
 ## Output of disconnected toy dataset
 ![Output of VIA on disconnected toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true)
 <p align="center">
-     <a href="https://shobistassen.github.io/bifurc.html"><img width="80%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true"></a>
+     <a href="https://shobistassen.github.io/bifurc.html"><img width="80%" src="https://github.com/ShobiStassen/shobistassen.github.io/blob/main/Examples/preview_bifurc.png?raw=true"></a>
 </p>
 ### 2.a Human Embryoid Bodies (wrapper function)
 Save the [Raw data](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9Ew4RHf/view?usp=sharing) matrix as 'EBdata.mat'. The cells in this file have been filtered for too small/large libraries by [Moon et al. 2019](https://nbviewer.jupyter.org/github/KrishnaswamyLab/PHATE/blob/master/Python/tutorial/EmbryoidBody.ipynb). 
