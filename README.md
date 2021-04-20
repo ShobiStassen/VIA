@@ -91,7 +91,7 @@ if __name__ =='__main__':
 ![Output of VIA on multifurcating toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true)
 ## Interactive 3D multifurcating toy dataset
 <p align="center">
-     <a href="https://shobistassen.github.io/bifurc.html"><img width="80%" height ='30%' src="https://github.com/ShobiStassen/shobistassen.github.io/blob/main/Examples/preview_bifurc.png?raw=true"></a>
+     <a href="https://shobistassen.github.io/bifurc.html"><img width="50%" src="https://github.com/ShobiStassen/shobistassen.github.io/blob/main/Examples/preview_bifurc.png?raw=true"></a>
 </p> 
 
 ## Output of disconnected toy dataset
