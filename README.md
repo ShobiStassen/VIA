@@ -90,8 +90,8 @@ if __name__ =='__main__':
 ## Output of [Multifurcating](https://shobistassen.github.io/bifurc.html) toy dataset
 ![Output of VIA on multifurcating toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true)
 ## Interactive 3D multifurcating toy dataset
-<p align="left">
-     <a href="https://shobistassen.github.io/bifurc.html"><img width="30%" src="https://github.com/ShobiStassen/shobistassen.github.io/blob/main/Examples/preview_bifurc.png?raw=true"></a>
+<p align="centre">
+     <a href="https://shobistassen.github.io/bifurc.html"><img width="70%" src="https://github.com/ShobiStassen/shobistassen.github.io/blob/main/Examples/preview_bifurc.png?raw=true"></a>
 </p> 
 
 ## Output of disconnected toy dataset
