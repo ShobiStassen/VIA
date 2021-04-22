@@ -33,7 +33,7 @@ Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Data
 ![Output of VIA on multifurcating toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true)
 ### 3D Interactive VIA Graph of multifurcation colored by pseudotime
 <p align="center">
-     <a href="https://shobistassen.github.io/bifurc.html"><img width="70%" src="https://github.com/ShobiStassen/shobistassen.github.io/blob/main/Examples/preview_bifurc.png?raw=true"></a>
+     <a href="https://shobistassen.github.io/bifurc.html"><img width="70%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_mainFig.png?raw=true"></a>
 </p> 
 
 ### Output of disconnected toy dataset
