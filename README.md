@@ -32,7 +32,7 @@ Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Data
 ### [Multifurcating](https://shobistassen.github.io/bifurc.html) toy dataset
 
 <p align="center">
-     <a href="https://shobistassen.github.io/bifurc.html"><img width="100%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_mainFig.png?raw=true"></a>
+     <a href="https://shobistassen.github.io/bifurc.html"><img width="100%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_MainFig.png?raw=true></a>
 </p> 
 
 ### Output of disconnected toy dataset
