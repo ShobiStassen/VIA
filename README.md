@@ -50,7 +50,9 @@ notebook       | details         | dataset  | reference
 [*scRNA-seq Hematopoiesis*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_scRNA_Hematopoiesis.ipynb) | Human hematopoiesis (5780 cells) | [CD34 scRNA-seq](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | Setty et al. (2019)
 ## Examples 
 
-The examples below show how to run VIA on generic connected and disconnected data. They also highlight a few difference in calling VIA when using Windows versus Linux. The data for the Jupyter Notebooks and Examples are available in the [Datasets folder](https://github.com/ShobiStassen/VIA/tree/master/Datasets) (smaller files) with larger datasets [here](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing). 
+<p>The examples below show how to run VIA on generic connected and disconnected data. They also highlight a few difference in calling VIA when using Windows versus Linux. The data for the Jupyter Notebooks and Examples are available in the [Datasets folder](https://github.com/ShobiStassen/VIA/tree/master/Datasets) (smaller files) with larger datasets [here](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing). <p>
+
+<p>We also provide a [test script](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) for some of the examples, please change the foldername accordingly to the folder containing relevant data files<p>
 
 * 1.a Toy Data (multifurcation) [Multifurcation Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb)
 * 1.b Toy Data (disconnected) [Disconnected Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb)
@@ -59,7 +61,7 @@ The examples below show how to run VIA on generic connected and disconnected dat
 * 3.a **General input** format and wrapper function
 * 3.b **General disconnected** trajectories wrapper function 
         
-We also provide a [test script](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) for some of the examples, please change the foldername accordingly to the folder containing relevant data files
+
 ------------------------------------------------------
 ### 1.a/b Toy data (Multifurcation and Disconnected)
 Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets)  with annotations are generated using DynToy are provided. 
