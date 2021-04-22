@@ -36,6 +36,10 @@ Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Data
 
 ### Output of disconnected toy dataset
 ![Output of VIA on disconnected toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true)
+<p align="center">
+     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true" alt="Trulli" width="500" height="333">
+</p> 
+
 ### To run on Linux:
 All examples are shown according to Linux OS, small modifications are required to run on a Windows OS (see below)
 ```
@@ -48,9 +52,9 @@ via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername = ".../T
 #the root is automatically set as a list root_user = ['T1_M1', 'T2_M1'] # e.g. T2_M3 is a cell belonging to the 3rd Milestone (M3) of the second Trajectory (T2)
 via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Trajectory/Datasets/") #2 disconnected trajectories
 ```
-Windows (small modifications in calling the code due to the way multiprocessing works in Windows compared to Linux)
+
 ### To run on Windows:
-A few additional lines are required:
+Windows requires minor modifications in calling the code due to the way multiprocessing works in Windows compared to Linux:
 ```
 #when running from an IDE you need to call the function in the following way to ensure the parallel processing works:
 import os
