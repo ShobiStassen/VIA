@@ -39,7 +39,11 @@ pip install pyVIA
 ```
 ## Jupyter Notebooks
 There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. The notebooks are best viewed when opening the URL through NB Viewer. If you experience issues with opening the notebook from Github (opening from within Github can be patchy), then please copy the Jupyter Notebook URL and paste it into NB Viewer https://nbviewer.jupyter.org/ 
-
+## Examples and Tutorials
+notebook       | details         | dataset  | reference 
+---------------| ---------------| ---------| ----------
+[*Multifurcation*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb) | 4-leaf simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | link
+[*Disconnected*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb) | disconnected simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | link
 ## Examples 
 Expected runtime will be a few minutes or less for 8-core machine. Runtime on a "normal" laptop ~8 minutes for EB (16,800 cells) and less for smaller data.
 Data for the Jupyter Notebooks and Examples are available in the [Datasets folder](https://github.com/ShobiStassen/VIA/tree/master/Datasets) (smaller files) and larger datasets [here](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing). 
