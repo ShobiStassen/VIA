@@ -42,8 +42,12 @@ There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/m
 ## Examples and Tutorials
 notebook       | details         | dataset  | reference 
 ---------------| ---------------| ---------| ----------
-[*Multifurcation*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb) | 4-leaf simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | link
-[*Disconnected*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb) | disconnected simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | link
+[*Multifurcation*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb) | 4-leaf simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | DynToy
+[*Disconnected*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb) | disconnected simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | DynToy
+[*Human Embryoid*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_EmbryoidBody.ipynb) | 16,825 ESCs | [EB scRNA-seq](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9Ew4RHf/view?usp=sharing) and [embedding](https://github.com/ShobiStassen/VIA/tree/master/Datasets)| Moon et al.
+[*FACED image-based*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb) | 2036 MCF7 cells in cell cycle | [MCF7 FACED](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | in-house data
+[*scATAC-seq Hematopoiesis*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_scATAC-seq_HumanHematopoiesis.ipynb) | Human hematopoiesis | [scATAC-seq](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | Buenrostro et al. (2018)
+[*scRNA-seq Hematopoiesis*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_scRNA_Hematopoiesis.ipynb) | Human hematopoiesis (5780 cells) | [CD34 scRNA-seq](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | Setty et al. (2019)
 ## Examples 
 Expected runtime will be a few minutes or less for 8-core machine. Runtime on a "normal" laptop ~8 minutes for EB (16,800 cells) and less for smaller data.
 Data for the Jupyter Notebooks and Examples are available in the [Datasets folder](https://github.com/ShobiStassen/VIA/tree/master/Datasets) (smaller files) and larger datasets [here](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing). 
