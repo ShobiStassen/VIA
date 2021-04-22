@@ -29,7 +29,7 @@ We also provide a [test script](https://github.com/ShobiStassen/VIA/blob/master/
 ------------------------------------------------------
 ### 1.a/b Toy data (Multifurcation and Disconnected)
 Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets)  with annotations are generated using DynToy are provided. 
-### [Multifurcating](https://shobistassen.github.io/bifurc.html) toy dataset with [*interactive graph*](href="https://shobistassen.github.io/bifurc.html)
+### [Multifurcating](https://shobistassen.github.io/bifurc.html) toy dataset with [interactive graph](href="https://shobistassen.github.io/bifurc.html)
 <p align="center">
      <a href="https://shobistassen.github.io/bifurc.html"><img width="100%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_MainFig.png?raw=true"></a>
 </p> 
