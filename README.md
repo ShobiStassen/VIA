@@ -59,7 +59,7 @@ The examples below show how to run VIA on generic connected and disconnected dat
 * 3.a **General input** format and wrapper function
 * 3.b **General disconnected** trajectories wrapper function
 
-We also provide a [test script](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) for some of the examples, please change the foldername accordingly to the folder containing relevant data files
+#### We also provide a [test script](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) for some of the examples, please change the foldername accordingly to the folder containing relevant data files
 ------------------------------------------------------
 ### 1.a/b Toy data (Multifurcation and Disconnected)
 Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets)  with annotations are generated using DynToy are provided. 
