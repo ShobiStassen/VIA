@@ -67,12 +67,12 @@ We also provide a [test script](https://github.com/ShobiStassen/VIA/blob/master/
 Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets)  with annotations are generated using DynToy are provided. 
 ## [Multifurcating](https://shobistassen.github.io/bifurc.html) toy dataset
 ![Output of VIA on multifurcating toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true)
-## 3D Interactive VIA Graph of multifurcation colored by pseudotime
+### 3D Interactive VIA Graph of multifurcation colored by pseudotime
 <p align="center">
      <a href="https://shobistassen.github.io/bifurc.html"><img width="70%" src="https://github.com/ShobiStassen/shobistassen.github.io/blob/main/Examples/preview_bifurc.png?raw=true"></a>
 </p> 
 
-## Output of disconnected toy dataset
+### Output of disconnected toy dataset
 ![Output of VIA on disconnected toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true)
 ### To run on Linux:
 All examples are shown according to Linux OS, small modifications are required to run on a Windows OS (see below)
