@@ -30,9 +30,10 @@ We also provide a [test script](https://github.com/ShobiStassen/VIA/blob/master/
 ### 1.a/b Toy data (Multifurcation and Disconnected)
 Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets)  with annotations are generated using DynToy are provided. 
 ### [Multifurcating](https://shobistassen.github.io/bifurc.html) toy dataset
-
+![Output of VIA on multifurcating toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_fig0.png?raw=true)
+### 3D Interactive VIA Graph of multifurcation colored by pseudotime
 <p align="center">
-     <a href="https://shobistassen.github.io/bifurc.html"><img width="100%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_MainFig.png?raw=true></a>
+     <a href="https://shobistassen.github.io/bifurc.html"><img width="70%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_MainFig.png?raw=true"></a>
 </p> 
 
 ### Output of disconnected toy dataset
