@@ -35,9 +35,8 @@ Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Data
 </p> 
 
 ### Output of disconnected toy dataset
-![Output of VIA on disconnected toy dataset](https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true)
 <p align="center">
-     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true" alt="Trulli" width="500" height="333">
+     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_fig0.png?raw=true" alt="Trulli" width="100%" >
 </p> 
 
 ### To run on Linux:
