@@ -4,6 +4,11 @@ Please refer to our [paper](https://www.biorxiv.org/content/10.1101/2021.02.10.4
 
 ## Jupyter Notebooks
 There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. The notebooks are best viewed when opening the URL through NB Viewer. If you experience issues with opening the notebook from Github (opening from within Github can be patchy), then please copy the Jupyter Notebook URL and paste it into NB Viewer https://nbviewer.jupyter.org/ 
+<p align="center">
+     <a href="https://shobistassen.github.io/scatac.html"><img width="100%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/scATAC_BuenrostroPCs_MainFig.png?raw=true"></a>
+</p> 
+
+
 ## Examples and Tutorials
 notebook       | details         | dataset  | reference 
 ---------------| ---------------| ---------| ----------
