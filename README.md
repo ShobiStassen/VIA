@@ -23,8 +23,8 @@ We also provide a [test script](https://github.com/ShobiStassen/VIA/blob/master/
 * 1.b Toy Data (disconnected) [Disconnected Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb)
 * 2.a Human Embryoid Bodies (wrapper function for testing VIA)
 * 2.b Human Embryoid Bodies (Configuring VIA) [EB Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_EmbryoidBody.ipynb)
-* 3.a **General input** format and wrapper function
-* 3.b **General disconnected** trajectories wrapper function 
+* 3.a **General input data** formatting and wrapper function
+* 3.b **General disconnected trajectories** wrapper function 
        
 ------------------------------------------------------
 ### 1.a/b Toy data (Multifurcation and Disconnected)
