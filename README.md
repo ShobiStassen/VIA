@@ -7,7 +7,7 @@ There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/m
 
 **scATAC-seq dataset of Human Hematopoiesis represented by VIA graphs** *(click image to open interactive graph)*
 <p align="center">
-     <a href="https://shobistassen.github.io/scatac.html"><img width="100%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/scATAC_BuenrostroPCs_MainFig.png?raw=true"></a>
+     <a href="https://shobistassen.github.io/toggle_data.html"><img width="100%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/scATAC_BuenrostroPCs_MainFig.png?raw=true"></a>
 </p> 
 
 
