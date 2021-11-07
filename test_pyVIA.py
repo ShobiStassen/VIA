@@ -7,6 +7,7 @@ import numpy as np
 import warnings
 
 
+
 # This is a test script for some of the examples shown on the github page and as Jupyter Notebooks (https://github.com/ShobiStassen/VIA)
 # change the foldername accordingly to the folder containing relevant data files
 # Please visit https://github.com/ShobiStassen/VIA for more detailed examples
@@ -32,7 +33,7 @@ def run_generic_wrapper(foldername = "/home/shobi/Trajectory/Datasets/Bcell/", k
 
     data = pd.read_csv(foldername+'Bcell_200PCs.csv')
     data_genes = pd.read_csv(foldername+'Bcell_markergenes.csv')
-    data_genes = data_genes.drop(['cell'], axis=1)
+    data_genes = data_genes.drop(['Unnamed: 0'], axis=1)#cell
     true_label = data['time_hour']
     data = data.drop(['cell', 'time_hour'], axis=1)
     adata = sc.AnnData(data_genes)
@@ -245,13 +246,36 @@ def run_scATAC_Buenrostro_Hemato(foldername = '/home/shobi/Trajectory/Datasets/s
     via.draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath,
                                               np.arange(0, len(true_label)), X_in)
     plt.show()
+
+def run_generic_discon(foldername ="/home/shobi/Trajectory/Datasets/Toy4/"):
+    df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv",
+                            delimiter=",")
+    df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids_with_truetime.csv", delimiter=",")
+
+
+
+    df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
+
+    df_counts = df_counts.drop('Unnamed: 0', 1)
+    df_ids = df_ids.sort_values(by=['cell_id_num'])
+    df_ids = df_ids.reset_index(drop=True)
+    true_label = df_ids['group_id']
+    true_label =['a' for i in true_label] #testing dummy true_label and overwriting the real true_labels
+    true_time = df_ids['true_time']
+    adata_counts = sc.AnnData(df_counts, obs=df_ids)
+    sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=100)
+
+    via.via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[23, 902],
+                             preserve_disconnected=True, knn=10, ncomps=30, cluster_graph_pruning_std=1, random_seed=41)
+
 if __name__ == '__main__':
 
     warnings.filterwarnings('ignore')
 
     #run_Toy_multi(foldername="/home/shobi/Trajectory/Datasets/Toy3/")
     #run_Toy_discon()
+    run_generic_discon()
     #run_EB(foldername = "/home/shobi/Trajectory/Datasets/EB_Phate/") #folder containing relevant data files
     #run_scATAC_Buenrostro_Hemato() #shows the main function calls within a typical VIA wrapper function
-    run_generic_wrapper(foldername = "/home/shobi/Trajectory/Datasets/Bcell/", knn=20, ncomps = 20)
+    #run_generic_wrapper(foldername = "/home/shobi/Trajectory/Datasets/Bcell/", knn=20, ncomps = 20)
     #run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/')
