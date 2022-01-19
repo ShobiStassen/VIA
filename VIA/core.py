@@ -1,3 +1,4 @@
+import igraph
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix, csgraph
@@ -736,18 +737,10 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
             if enum_edge < (len_path_orange - 1):
                 ll_.append((edge_fst, path_orange[enum_edge + 1]))
 
-    if draw_all_curves == True:
-        edges_to_draw = super_edgelist  # default is drawing all super-edges
-    else:
-        edges_to_draw = list(set(ll_))
-    for e_i, (start, end) in enumerate(
-            edges_to_draw):  # enumerate(list(set(ll_))):# : use the ll_ if you want to simplify the curves
-        # for e_i, (start, end) in enumerate(list(set(ll_))):# : use the ll_ if you want to simplify the curves
-
+    edges_to_draw = super_edgelist if draw_all_curves else list(set(ll_))
+    for e_i, (start, end) in enumerate(edges_to_draw):
         if pt[start] >= pt[end]:
-            temp = end
-            end = start
-            start = temp
+            start, end = end, start
 
         x_i_start = df[df['super_cluster'] == start]['x'].values
         y_i_start = df[df['super_cluster'] == start]['y'].values
@@ -770,10 +763,8 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         x_val = np.concatenate([x_i_start, x_i_end])
         y_val = np.concatenate([y_i_start, y_i_end])
 
-        idx_keep = np.where((x_val <= maxx) & (x_val >= minx))[
-            0]
-        idy_keep = np.where((y_val <= maxy) & (y_val >= miny))[
-            0]
+        idx_keep = np.where((x_val <= maxx) & (x_val >= minx))[0]
+        idy_keep = np.where((y_val <= maxy) & (y_val >= miny))[0]
 
         idx_keep = np.intersect1d(idy_keep, idx_keep)
 
@@ -785,29 +776,22 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         from scipy.spatial import distance
 
         very_straight = False
+        straight_level = 3
+        noise = noise0
+        x_super = np.array(
+            [super_start_x, super_end_x, super_start_x, super_end_x, super_start_x, super_end_x, super_start_x,
+             super_end_x, super_start_x + noise, super_end_x + noise,
+             super_start_x - noise, super_end_x - noise])
+        y_super = np.array(
+            [super_start_y, super_end_y, super_start_y, super_end_y, super_start_y, super_end_y, super_start_y,
+             super_end_y, super_start_y + noise, super_end_y + noise,
+             super_start_y - noise, super_end_y - noise])
+
         if abs(minx - maxx) <= 1:
             very_straight = True
             straight_level = 10
-            noise = noise0
-            x_super = np.array(
-                [super_start_x, super_end_x, super_start_x, super_end_x, super_start_x, super_end_x, super_start_x,
-                 super_end_x, super_start_x + noise, super_end_x + noise,
-                 super_start_x - noise, super_end_x - noise, super_mid_x])
-            y_super = np.array(
-                [super_start_y, super_end_y, super_start_y, super_end_y, super_start_y, super_end_y, super_start_y,
-                 super_end_y, super_start_y + noise, super_end_y + noise,
-                 super_start_y - noise, super_end_y - noise, super_mid_y])
-        else:
-            straight_level = 3
-            noise = noise0
-            x_super = np.array(
-                [super_start_x, super_end_x, super_start_x, super_end_x, super_start_x, super_end_x, super_start_x,
-                 super_end_x, super_start_x + noise, super_end_x + noise,
-                 super_start_x - noise, super_end_x - noise])
-            y_super = np.array(
-                [super_start_y, super_end_y, super_start_y, super_end_y, super_start_y, super_end_y, super_start_y,
-                 super_end_y, super_start_y + noise, super_end_y + noise,
-                 super_start_y - noise, super_end_y - noise])
+            x_super = np.append(x_super, super_mid_x)
+            y_super = np.append(y_super, super_mid_y)
 
         for i in range(straight_level):  # DO THE SAME FOR A MIDPOINT TOO
             y_super = np.concatenate([y_super, y_super])
@@ -815,14 +799,9 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
 
         list_selected_clus = list(zip(x_val, y_val))
 
-        if (len(list_selected_clus) >= 1) & (very_straight == True):
-
+        if len(list_selected_clus) >= 1 & very_straight:
             dist = distance.cdist([(super_mid_x, super_mid_y)], list_selected_clus, 'euclidean')
-
-            if len(list_selected_clus) >= 2:
-                k = 2
-            else:
-                k = 1
+            k = min(2, len(list_selected_clus))
             midpoint_loc = dist[0].argsort()[:k]
 
             midpoint_xy = []
@@ -832,10 +811,8 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
             noise = noise0 * 2
 
             if k == 1:
-                mid_x = np.array([midpoint_xy[0][0], midpoint_xy[0][0] + noise, midpoint_xy[0][
-                    0] - noise])
-                mid_y = np.array([midpoint_xy[0][1], midpoint_xy[0][1] + noise, midpoint_xy[0][
-                    1] - noise])
+                mid_x = np.array([midpoint_xy[0][0], midpoint_xy[0][0] + noise, midpoint_xy[0][0] - noise])
+                mid_y = np.array([midpoint_xy[0][1], midpoint_xy[0][1] + noise, midpoint_xy[0][1] - noise])
             if k == 2:
                 mid_x = np.array(
                     [midpoint_xy[0][0], midpoint_xy[0][0] + noise, midpoint_xy[0][0] - noise, midpoint_xy[1][0],
@@ -857,9 +834,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         xp = np.linspace(minx, maxx, 500)
 
         gam50 = pg.LinearGAM(n_splines=4, spline_order=3, lam=10).gridsearch(x_val, y_val)
-
         XX = gam50.generate_X_grid(term=0, n=500)
-
         preds = gam50.predict(XX)
 
         if ext_maxx == False:
@@ -930,7 +905,6 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
     ax1.grid(False)
     ax2.grid(False)
     plt.title(title_str)
-    return
 
 
 def csr_mst(adjacency_matrix):
@@ -940,8 +914,7 @@ def csr_mst(adjacency_matrix):
     # print('number of components before mst', n_components_mst)
     # print('len Tcsr data', len(Tcsr.data))
     Tcsr.data = -1 * Tcsr.data
-    Tcsr.data = Tcsr.data - np.min(Tcsr.data)
-    Tcsr.data = Tcsr.data + 1
+    Tcsr.data = Tcsr.data - np.min(Tcsr.data) + 1
     # print('len Tcsr data', len(Tcsr.data))
     Tcsr = minimum_spanning_tree(Tcsr)  # adjacency_matrix)
     n_components_mst, comp_labels_mst = connected_components(csgraph=Tcsr, directed=False, return_labels=True)
@@ -962,8 +935,8 @@ def connect_all_components(MSTcsr, cluster_graph_csr, adjacency_matrix):
         locxy = scipy.sparse.find(MSTcsr == np.min(sub_td.data))
         for i in range(len(locxy[0])):
             if (comp_labels[locxy[0][i]] == 0) & (comp_labels[locxy[1][i]] != 0):
-                x = locxy[0][i]
-                y = locxy[1][i]
+                x, y = locxy[0][i], locxy[1][i]
+
         minval = adjacency_matrix[x, y]
         cluster_graph_csr[x, y] = minval
         n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
@@ -980,7 +953,6 @@ def pruning_clustergraph(adjacency_matrix, global_pruning_std=1, max_outgoing=30
     from scipy.sparse.csgraph import minimum_spanning_tree
 
     Tcsr = csr_mst(adjacency_matrix)
-
     initial_links_n = len(adjacency_matrix.data)
 
     n_components_0, comp_labels_0 = connected_components(csgraph=adjacency_matrix, directed=False, return_labels=True)
@@ -995,11 +967,7 @@ def pruning_clustergraph(adjacency_matrix, global_pruning_std=1, max_outgoing=30
 
     for i in range(adjacency_matrix.shape[0]):
         row = np.asarray(adjacency_matrix[i, :]).flatten()
-
-        n_nonz = np.sum(row > 0)
-
-        n_nonz = min(n_nonz, max_outgoing)
-
+        n_nonz = min(np.sum(row > 0), max_outgoing)
         to_keep_index = np.argsort(row)[::-1][0:n_nonz]  # np.where(row>np.mean(row))[0]#
         # print('to keep', to_keep_index)
         updated_nn_weights = list(row[to_keep_index])
@@ -1052,8 +1020,8 @@ def pruning_clustergraph(adjacency_matrix, global_pruning_std=1, max_outgoing=30
                     locxy = np.where(Td == np.min(sub_td))
                     for i in range(len(locxy[0])):
                         if (comp_labels[locxy[0][i]] != comp_labels[locxy[1][i]]):
-                            x = locxy[0][i]
-                            y = locxy[1][i]
+                            x,y = locxy[0][i], locxy[1][i]
+
                     minval = adjacency_matrix[x, y]
                     cluster_graph_csr[x, y] = minval
                     n_components_, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False,
@@ -1068,7 +1036,6 @@ def pruning_clustergraph(adjacency_matrix, global_pruning_std=1, max_outgoing=30
 
     sources, targets = cluster_graph_csr.nonzero()
     edgelist = list(zip(sources, targets))
-
     edgeweights = cluster_graph_csr.data / (np.std(cluster_graph_csr.data))
 
     trimmed_n = (initial_links_n - final_links_n) * 100 / initial_links_n
@@ -1079,21 +1046,19 @@ def pruning_clustergraph(adjacency_matrix, global_pruning_std=1, max_outgoing=30
     return edgeweights, edgelist, comp_labels
 
 
-def get_sparse_from_igraph(graph, weight_attr=None):
+def get_sparse_from_igraph(graph: igraph.Graph, weight_attr=None):
     edges = graph.get_edgelist()
-    if weight_attr is None:
-        weights = [1] * len(edges)
-    else:
-        weights = graph.es[weight_attr]
+    weights = graph.es[weight_attr] if weight_attr else [1] * len(edges)
+
     if not graph.is_directed():
         edges.extend([(v, u) for u, v in edges])
         weights.extend(weights)
+
     shape = graph.vcount()
     shape = (shape, shape)
     if len(edges) > 0:
         return csr_matrix((weights, zip(*edges)), shape=shape)
-    else:
-        return csr_matrix(shape)
+    return csr_matrix(shape)
 
 
 class VIA:
@@ -1168,9 +1133,8 @@ class VIA:
 
     def knngraph_visual(self, data_visual, knn_umap=15, downsampled=False):
         k_umap = knn_umap
-        t0 = time.time()
         # neighbors in array are not listed in in any order of proximity
-        if downsampled == False:
+        if not downsampled:
             self.knn_struct.set_ef(k_umap + 1)
             neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=k_umap)
         else:
@@ -1192,9 +1156,7 @@ class VIA:
         distance_array = (distance_array - row_min[:, np.newaxis]) / row_sigma[:, np.newaxis]
 
         col_list = neighbor_array.flatten().tolist()
-        distance_array = distance_array.flatten()
-        distance_array = np.sqrt(distance_array)
-        distance_array = distance_array * -1
+        distance_array = -1 * np.sqrt(distance_array.flatten())
 
         weight_list = np.exp(distance_array)
 
@@ -1205,14 +1167,9 @@ class VIA:
         weight_list = weight_list.tolist()
         print('weight list', len(weight_list))
 
-        graph = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
-                           shape=(n_cells, n_cells))
-
-        graph_transpose = graph.T
-        prod_matrix = graph.multiply(graph_transpose)
-
-        graph = graph_transpose + graph - prod_matrix
-        return graph
+        graph = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),shape=(n_cells, n_cells))
+        prod_matrix = graph.multiply(graph.T)
+        return graph.T + graph - prod_matrix
 
     def run_umap_hnsw(self, X_input, graph, n_components=2, alpha: float = 1.0, negative_sample_rate: int = 5,
                       gamma: float = 1.0, spread=1.0, min_dist=0.1, init_pos='spectral', random_state=1, ):
@@ -1275,13 +1232,12 @@ class VIA:
         outdegree_score_takeout_outlier = out_deg[out_deg < (np.mean(out_deg) + n_outlier_std * np.std(out_deg))]
         loc_deg = [i for i, score in enumerate(out_deg) if
                    score < (np.mean(outdegree_score_takeout_outlier) - 0 * np.std(outdegree_score_takeout_outlier))]
+
         print('closeness  shortlist', closeness_list)
-
         print('betweeness shortlist', betweenness_list)
-
         print('out degree shortlist', loc_deg)
-        markov_pt = np.asarray(markov_pt)
 
+        markov_pt = np.asarray(markov_pt)
         if n_ <= 10:
             loc_pt = np.where(markov_pt >= np.percentile(markov_pt, 10))[0]  # 50
 
