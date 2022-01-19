@@ -1119,15 +1119,13 @@ class VIA:
         # higher dist_std_local means more edges are kept
         # highter jac_std_global means more edges are kept
         if keep_all_local_dist == 'auto':
-            if data.shape[0] > 50000:
-                keep_all_local_dist = True  # skips local pruning to increase speed
-            else:
-                keep_all_local_dist = False
+            # If large dataset skip local pruning to increase speed
+            keep_all_local_dist = data.shape[0] > 50000
 
         if resolution_parameter != 1:
             partition_type = "RBVP"  # Reichardt and Bornholdt’s Potts model. Note that this is the same as ModularityVertexPartition when setting 𝛾 = 1 and normalising by 2m
         self.data = data
-        self.true_label = true_label
+        self.true_label = true_label or [1] * data.shape[0]
         self.anndata = anndata
         self.dist_std_local = dist_std_local
         self.jac_std_global = jac_std_global  ##0.15 is also a recommended value performing empirically similar to 'median'
@@ -3614,13 +3612,9 @@ class VIA:
         pop_list = []
         for item in set(list(self.true_label)):
             pop_list.append([item, list(self.true_label).count(item)])
-        # print("population composition", pop_list)
-        if self.true_label is None:
-            self.true_label = [1] * self.data.shape[0]
+
         list_roc = []
-
         time_start_total = time.time()
-
         time_start_knn = time.time()
         self.knn_struct = self.make_knn_struct()
         time_end_knn_struct = time.time() - time_start_knn
