@@ -1691,22 +1691,19 @@ class VIA:
         return
 
     def make_knn_struct(self, too_big=False, big_cluster=None, visual=False, data_visual=None):
-        if visual == False:
-            data = self.data
-        else:
-            data = data_visual
+        data = data_visual if visual else self.data
+
         if self.knn > 190: print(colored('please provide a lower K_in for KNN graph construction', 'red'))
         ef_query = max(100, self.knn + 1)  # ef always should be >K. higher ef, more accuate query
-        if too_big == False:
-            num_dims = data.shape[1]
-            n_elements = data.shape[0]
+
+        if not too_big:
+            n_elements, num_dims = data.shape
             print('class', type(data))
             p = hnswlib.Index(space=self.distance, dim=num_dims)  # default to Euclidean distance
             p.set_num_threads(self.num_threads)  # allow user to set threads used in KNN construction
             if n_elements < 10000:
                 ef_param_const = min(n_elements - 10, 500)
                 ef_query = ef_param_const
-
             else:
                 ef_param_const = 200
 
@@ -1716,9 +1713,8 @@ class VIA:
             else:
                 p.init_index(max_elements=n_elements, ef_construction=ef_param_const, M=30)
             p.add_items(data)
-        if too_big == True:
-            num_dims = big_cluster.shape[1]
-            n_elements = big_cluster.shape[0]
+        else:
+            n_elements, num_dims = big_cluster.shape
             p = hnswlib.Index(space='l2', dim=num_dims)
             p.init_index(max_elements=n_elements, ef_construction=200, M=30)
             p.add_items(big_cluster)
@@ -2369,11 +2365,10 @@ class VIA:
         jac_weighted_edges = self.jac_weighted_edges
         n_elements = X_data.shape[0]
 
-        if self.is_coarse == True:
+        if self.is_coarse:
             # graph for PARC
             neighbor_array, distance_array = self.knn_struct.knn_query(X_data, k=self.knn)
-            csr_array_locally_pruned = self.make_csrmatrix_noselfloop(neighbor_array,
-                                                                      distance_array)  # incorporates  local distance pruning
+            csr_array_locally_pruned = self.make_csrmatrix_noselfloop(neighbor_array, distance_array)  # incorporates  local distance pruning
         else:
             neighbor_array = self.full_neighbor_array
             distance_array = self.full_distance_array
@@ -2382,7 +2377,6 @@ class VIA:
         sources, targets = csr_array_locally_pruned.nonzero()
 
         edgelist = list(zip(sources, targets))
-
         edgelist_copy = edgelist.copy()
 
         G = ig.Graph(n=X_data.shape[0], edges=edgelist,
@@ -2392,7 +2386,6 @@ class VIA:
         sim_list = G.similarity_jaccard(pairs=edgelist_copy)
 
         print('time is', time.ctime())
-
         print('commencing global pruning')
 
         sim_list_array = np.asarray(sim_list)
@@ -2408,15 +2401,13 @@ class VIA:
         sim_list_new = list(sim_list_array[strong_locs])
 
         G_sim = ig.Graph(n=n_elements, edges=list(new_edgelist), edge_attrs={'weight': sim_list_new})
-
         G_sim.simplify(combine_edges='sum')
 
-        if self.is_coarse == True:
-            #### construct full graph that has no pruning to be used for Clustergraph edges,  # not listed in in any order of proximity
+        if self.is_coarse:
+            # construct full graph that has no pruning to be used for Clustergraph edges,
+            # not listed in in any order of proximity
             row_list = []
-
-            n_neighbors = neighbor_array.shape[1]
-            n_cells = neighbor_array.shape[0]
+            n_cells, n_neighbors = neighbor_array.shape
 
             row_list.extend(list(np.transpose(np.ones((n_neighbors, n_cells)) * range(0, n_cells)).flatten()))
             col_list = neighbor_array.flatten().tolist()
@@ -2449,14 +2440,12 @@ class VIA:
             self.full_neighbor_array = neighbor_array
             self.full_distance_array = distance_array
 
-        if self.is_coarse == True:
             # knn graph used for making trajectory drawing on the visualization
             # print('skipping full_graph_shortpath')
-
             self.full_graph_shortpath = self.full_graph_paths(X_data, n_original_comp)
             neighbor_array = self.full_neighbor_array
 
-        if self.is_coarse == False:
+        else:
             ig_fullgraph = self.ig_full_graph  # for Trajectory
             # G_sim = self.csr_array_pruned  # for PARC
             # neighbor_array = self.full_neighbor_array  # needed to assign spurious outliers to clusters
@@ -2465,32 +2454,15 @@ class VIA:
 
         print('commencing community detection')
 
-        start_leiden = time.time()
-        if jac_weighted_edges == True:
-            if self.partition_type == 'ModularityVP':
-                partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition, weights='weight',
-                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed)
-                # print('partition type MVP')
-            else:
-                partition = leidenalg.find_partition(G_sim, leidenalg.RBConfigurationVertexPartition, weights='weight',
-                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed,
-                                                     resolution_parameter=self.resolution_parameter)
-                print('partition type RBC')
-        else:
-            if self.partition_type == 'ModularityVP':
-                # print('partition type MVP')
-                partition = leidenalg.find_partition(G_sim, leidenalg.ModularityVertexPartition,
-                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed)
-            else:
-                # print('partition type RBC')
-                partition = leidenalg.find_partition(G_sim, leidenalg.RBConfigurationVertexPartition,
-                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed,
-                                                     resolution_parameter=self.resolution_parameter)
-            print(round(time.time() - start_leiden), ' seconds for leiden')
+        weights = 'weight' if jac_weighted_edges else None
+        type = leidenalg.ModularityVertexPartition if self.partition_type == 'ModularityVP' else leidenalg.RBConfigurationVertexPartition
+        st = time.time()
+        partition = leidenalg.find_partition(G_sim, partition_type=type, weights=weights,
+                                             n_iterations=self.n_iter_leiden, seed=self.random_seed)
+        print(round(time.time() - st), ' seconds for leiden')
         time_end_PARC = time.time()
         # print('Q= %.1f' % (partition.quality()))
-        PARC_labels_leiden = np.asarray(partition.membership)
-        PARC_labels_leiden = np.reshape(PARC_labels_leiden, (n_elements, 1))
+        PARC_labels_leiden = np.asarray(partition.membership).reshape((n_elements, 1))
         print('time is', time.ctime())
         print(len(set(PARC_labels_leiden.flatten())), ' clusters before handling small/big')
         pop_list_1 = []
@@ -2518,7 +2490,7 @@ class VIA:
             list_pop_too_bigs = [pop_i]
 
         time0_big = time.time()
-        while (too_big == True) & (not ((time.time() - time0_big > 200) & (num_times_expanded >= count_big_pops))):
+        while (too_big) & (not ((time.time() - time0_big > 200) & (num_times_expanded >= count_big_pops))):
             X_data_big = X_data[cluster_big_loc, :]
 
             PARC_labels_leiden_big = self.run_toobig_subPARC(X_data_big)
@@ -2555,7 +2527,8 @@ class VIA:
                     cluster_big_loc = cluster_ii_loc
                     cluster_big = cluster_ii
                     big_pop = pop_ii
-            if too_big == True:
+
+            if too_big:
                 list_pop_too_bigs.append(big_pop)
                 print('cluster', cluster_big, 'is too big with population', big_pop, '. It will be expanded')
         dummy, PARC_labels_leiden = np.unique(list(PARC_labels_leiden.flatten()), return_inverse=True)
@@ -2585,7 +2558,7 @@ class VIA:
                     best_group = max(available_neighbours_list, key=available_neighbours_list.count)
                     PARC_labels_leiden[single_cell] = best_group
         time_smallpop = time.time()
-        while (small_pop_exist) == True & (time.time() - time_smallpop < 15):
+        while (not small_pop_exist) & (time.time() - time_smallpop < 15):
             small_pop_list = []
             small_pop_exist = False
             for cluster in set(list(PARC_labels_leiden.flatten())):
@@ -2634,9 +2607,7 @@ class VIA:
 
         ## Make cluster-graph
 
-        vc_graph = ig.VertexClustering(ig_fullgraph,
-                                       membership=PARC_labels_leiden)  # jaccard weights, bigger is better
-
+        vc_graph = ig.VertexClustering(ig_fullgraph,membership=PARC_labels_leiden)  # jaccard weights, bigger is better
         vc_graph = vc_graph.cluster_graph(combine_edges='sum')
 
         reweighted_sparse_vc, edgelist = self.recompute_weights(vc_graph, pop_list_raw)
@@ -2686,7 +2657,6 @@ class VIA:
         self.connected_comp_labels = comp_labels
 
         locallytrimmed_g = ig.Graph(edgelist, edge_attrs={'weight': edgeweights.tolist()})
-
         locallytrimmed_g = locallytrimmed_g.simplify(combine_edges='sum')
 
         locallytrimmed_sparse_vc = get_sparse_from_igraph(locallytrimmed_g, weight_attr='weight')
@@ -2864,12 +2834,11 @@ class VIA:
                     new_root_index = ii
                     new_root_index_found = True
                     # print('new root index', new_root_index, ' original root cluster was', root_i)
-            if new_root_index_found == False:
+            if not new_root_index_found:
                 print('cannot find the new root index')
                 new_root_index = 0
-            hitting_times, roundtrip_times = self.compute_hitting_time(a_i, root=new_root_index,
-                                                                       x_lazy=x_lazy,
-                                                                       alpha_teleport=alpha_teleport)
+            hitting_times, roundtrip_times = self.compute_hitting_time(
+                a_i, root=new_root_index, x_lazy=x_lazy, alpha_teleport=alpha_teleport)
             # rescale hitting times
             very_high = np.mean(hitting_times) + 1.5 * np.std(hitting_times)
             without_very_high_pt = [iii for iii in hitting_times if iii < very_high]
@@ -3291,11 +3260,7 @@ class VIA:
             z = np.polyfit([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]], 1)
             minx = np.min(np.array([node_pos[start, 0], node_pos[end, 0]]))
 
-            if (node_pos[start, 0] < node_pos[end, 0]):
-                direction_arrow = 1
-            else:
-                direction_arrow = -1
-
+            direction_arrow = 1 if node_pos[start, 0] < node_pos[end, 0] else -1
             maxx = np.max(np.array([node_pos[start, 0], node_pos[end, 0]]))
 
             xp = np.linspace(minx, maxx, 500)
@@ -3330,7 +3295,6 @@ class VIA:
             pie_size = pie_size_ar[node_i][0]
 
             x1, y1 = trans(node_pos[node_i])  # data coordinates
-
             xa, ya = trans2((x1, y1))  # axis coordinates
 
             xa = ax_x_min + (xa - pie_size / 2) * ax_len_x
@@ -3351,10 +3315,8 @@ class VIA:
         patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
         labels = list(set(self.true_label))
         plt.legend(patches, labels, loc=(-5, -5), fontsize=6)
-        if self.is_coarse == True:  # self.too_big_factor >= 0.1:
-            is_sub = ' super clusters'
-        else:
-            is_sub = ' sub clusters'
+
+        is_sub = ' super clusters' if self.is_coarse else ' sub clusters' # self.too_big_factor >= 0.1:
         ti = 'Annotations. K=' + str(self.knn) + '. ncomp = ' + str(self.ncomp)  # "+ is_sub
         ax.set_title(ti)
         ax.grid(False)
@@ -3363,17 +3325,11 @@ class VIA:
 
         title_list = [title_ax1]  # , "PT on undirected original graph"]
         for i, ax_i in enumerate([ax1]):
-
-            if type_pt == 'pt':
-                pt = self.markov_hitting_times
-            else:
-                pt = gene_exp
+            pt = self.markov_hitting_times if type_pt == 'pt' else gene_exp
 
             for e_i, (start, end) in enumerate(edgelist):
                 if pt[start] > pt[end]:
-                    temp = start
-                    start = end
-                    end = temp
+                    start, end = end, start
 
                 ax_i.add_line(
                     lines.Line2D([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]],
@@ -3381,30 +3337,16 @@ class VIA:
                 z = np.polyfit([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]], 1)
                 minx = np.min(np.array([node_pos[start, 0], node_pos[end, 0]]))
 
-                if (node_pos[start, 0] < node_pos[end, 0]):
-                    direction_arrow = 1
-                else:
-                    direction_arrow = -1
-
+                direction_arrow = 1 if node_pos[start, 0] < node_pos[end, 0] else -1
                 maxx = np.max(np.array([node_pos[start, 0], node_pos[end, 0]]))
 
                 xp = np.linspace(minx, maxx, 500)
                 p = np.poly1d(z)
                 smooth = p(xp)
                 step = 1
-                if direction_arrow == 1:
+                ax_i.arrow(xp[250], smooth[250], xp[250 + direction_arrow*step] - xp[250], smooth[250 + direction_arrow*step] - smooth[250],shape='full', lw=0,length_includes_head=True, head_width=arrow_head_w,color='grey')
 
-                    ax_i.arrow(xp[250], smooth[250], xp[250 + step] - xp[250], smooth[250 + step] - smooth[250],
-                               shape='full', lw=0,
-                               length_includes_head=True, head_width=arrow_head_w,
-                               color='grey')
-
-                else:
-                    ax_i.arrow(xp[250], smooth[250], xp[250 - step] - xp[250],
-                               smooth[250 - step] - smooth[250], shape='full', lw=0,
-                               length_includes_head=True, head_width=arrow_head_w, color='grey')
-            c_edge = []
-            l_width = []
+            c_edge, l_width = [], []
             for ei, pti in enumerate(pt):
                 if ei in self.terminal_clusters:
                     c_edge.append('red')
@@ -3607,49 +3549,38 @@ class VIA:
         return accuracy_val, predict_class_array, majority_truth_labels, number_clusters_for_target
 
     def run_VIA(self):
-        print('input data has shape', self.data.shape[0], '(samples) x', self.data.shape[1], '(features)')
+        print(f'Running VIA over input data of {self.data.shape[0]} (samples) x {self.data.shape[1]} (features)')
         self.ncomp = self.data.shape[1]
-        pop_list = []
-        for item in set(list(self.true_label)):
-            pop_list.append([item, list(self.true_label).count(item)])
 
         list_roc = []
         time_start_total = time.time()
-        time_start_knn = time.time()
         self.knn_struct = self.make_knn_struct()
-        time_end_knn_struct = time.time() - time_start_knn
-        # Query dataset, k - number of closest elements (returns 2 numpy arrays)
-
         self.run_subPARC()
         run_time = time.time() - time_start_total
         print('time elapsed {:.1f} seconds'.format(run_time))
 
-        targets = list(set(self.true_label))
-        N = len(list(self.true_label))
+        targets = set(self.true_label)
+        N = len(self.true_label)
         self.f1_accumulated = 0
         self.f1_mean = 0
         self.stats_df = pd.DataFrame({'jac_std_global': [self.jac_std_global], 'dist_std_local': [self.dist_std_local],
                                       'runtime(s)': [run_time]})
         # self.majority_truth_labels = []
+
         if len(targets) > 1:
-            f1_accumulated = 0
-            f1_acc_noweighting = 0
+            f1_accumulated, f1_acc_noweighting = 0, 0
             for onevsall_val in targets:
                 # print('target is', onevsall_val)
-                vals_roc, predict_class_array, majority_truth_labels, numclusters_targetval = self.accuracy(
-                    onevsall=onevsall_val)
+                vals_roc, predict_class_array, majority_truth_labels, numclusters_targetval = \
+                    self.accuracy(onevsall=onevsall_val)
                 f1_current = vals_roc[1]
-                # print('target', onevsall_val, 'has f1-score of %.2f' % (f1_current * 100))
-                f1_accumulated = f1_accumulated + f1_current * (list(self.true_label).count(onevsall_val)) / N
+                f1_accumulated = f1_accumulated + f1_current * (self.true_label.count(onevsall_val)) / N
                 f1_acc_noweighting = f1_acc_noweighting + f1_current
 
-                list_roc.append(
-                    [self.jac_std_global, self.dist_std_local, onevsall_val] + vals_roc + [numclusters_targetval] + [
-                        run_time])
+                list_roc.append([self.jac_std_global, self.dist_std_local, onevsall_val] +
+                                vals_roc + [numclusters_targetval] + [run_time])
 
             f1_mean = f1_acc_noweighting / len(targets)
-            # print("f1-score (unweighted) mean %.2f" % (f1_mean * 100), '%')
-            # print('f1-score weighted (by population) %.2f' % (f1_accumulated * 100), '%')
 
             df_accuracy = pd.DataFrame(list_roc,
                                        columns=['jac_std_global', 'dist_std_local', 'onevsall-target', 'error rate',
@@ -3661,7 +3592,6 @@ class VIA:
             self.f1_mean = f1_mean
             self.stats_df = df_accuracy
             # self.majority_truth_labels = majority_truth_labels
-        return
 
 
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
