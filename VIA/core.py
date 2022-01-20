@@ -1077,6 +1077,13 @@ class VIA:
                  visual_cluster_graph_pruning=0.15, neighboring_terminal_states_threshold=2, num_mcmc_simulations=1300,
                  piegraph_arrow_head_width=0.4,
                  piegraph_edgeweight_scalingfactor=1.5, max_visual_outgoing_edges=2):
+
+        self.data = data
+        self.nsamples, self.ncomp = data.shape
+        self.true_label = true_label or [1] * self.nsamples
+
+        self.knn_struct = None
+
         # higher dist_std_local means more edges are kept
         # highter jac_std_global means more edges are kept
         if keep_all_local_dist == 'auto':
@@ -1085,8 +1092,7 @@ class VIA:
 
         if resolution_parameter != 1:
             partition_type = "RBVP"  # Reichardt and Bornholdt’s Potts model. Note that this is the same as ModularityVertexPartition when setting 𝛾 = 1 and normalising by 2m
-        self.data = data
-        self.true_label = true_label or [1] * data.shape[0]
+
         self.anndata = anndata
         self.dist_std_local = dist_std_local
         self.jac_std_global = jac_std_global  ##0.15 is also a recommended value performing empirically similar to 'median'
@@ -1138,7 +1144,7 @@ class VIA:
             self.knn_struct.set_ef(k_umap + 1)
             neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=k_umap)
         else:
-            knn_struct_umap = self.make_knn_struct(visual=True, data_visual=data_visual)
+            knn_struct_umap = self.construct_knn(data_visual)
             knn_struct_umap.set_ef(k_umap + 1)
             neighbor_array, distance_array = knn_struct_umap.knn_query(data_visual, k=k_umap)
         row_list = []
@@ -1642,35 +1648,38 @@ class VIA:
         self.single_cell_pt_markov = pt_sc.flatten()
         return
 
-    def make_knn_struct(self, too_big=False, big_cluster=None, visual=False, data_visual=None):
-        data = data_visual if visual else self.data
+    def construct_knn(self, data: np.ndarray, too_big: bool = False) -> hnswlib.Index:
+        """
+        Construct K-NN graph for given data
 
-        if self.knn > 190: print(colored('please provide a lower K_in for KNN graph construction', 'red'))
-        ef_query = max(100, self.knn + 1)  # ef always should be >K. higher ef, more accuate query
+        Parameters
+        ----------
+        data: np.ndarray of shape (n_samples, n_features)
+            Data matrix over which to construct knn graph
 
+        too_big: bool, default = False
+
+        Returns
+        -------
+        Initialized instance of hnswlib.Index to be used over given data
+        """
+        if self.knn > 100:
+            print(colored(f'Passed number of neighbors exceeds max value. Setting number of neighbors too 100', 'red'))
+        k = min(100, self.knn + 1)
+
+        nsamples, dim = data.shape
+        ef_const, M = 200, 30
         if not too_big:
-            n_elements, num_dims = data.shape
-            print('class', type(data))
-            p = hnswlib.Index(space=self.distance, dim=num_dims)  # default to Euclidean distance
-            p.set_num_threads(self.num_threads)  # allow user to set threads used in KNN construction
-            if n_elements < 10000:
-                ef_param_const = min(n_elements - 10, 500)
-                ef_query = ef_param_const
-            else:
-                ef_param_const = 200
+            if nsamples < 10000:
+                k = ef_const = min(nsamples - 10, 500)
+            if nsamples <= 50000 and dim > 30:
+                M = 48  # good for scRNA-seq where dimensionality is high
 
-            if (num_dims > 30) & (n_elements <= 50000):
-                p.init_index(max_elements=n_elements, ef_construction=ef_param_const,
-                             M=48)  ## good for scRNA seq where dimensionality is high
-            else:
-                p.init_index(max_elements=n_elements, ef_construction=ef_param_const, M=30)
-            p.add_items(data)
-        else:
-            n_elements, num_dims = big_cluster.shape
-            p = hnswlib.Index(space='l2', dim=num_dims)
-            p.init_index(max_elements=n_elements, ef_construction=200, M=30)
-            p.add_items(big_cluster)
-        p.set_ef(ef_query)  # ef should always be > k
+        p = hnswlib.Index(space=self.distance, dim=dim)
+        p.set_num_threads(self.num_threads)
+        p.init_index(max_elements=nsamples, ef_construction=ef_const, M=M)
+        p.add_items(data)
+        p.set_ef(k)
         return p
 
     def make_csrmatrix_noselfloop(self, neighbor_array, distance_array, auto_=True):
@@ -1796,7 +1805,7 @@ class VIA:
     def run_toobig_subPARC(self, X_data, jac_std_toobig=1,
                            jac_weighted_edges=True):
         n_elements = X_data.shape[0]
-        hnsw = self.make_knn_struct(too_big=True, big_cluster=X_data)
+        hnsw = self.construct_knn(X_data, too_big=True)
         if self.knn >= 0.8 * n_elements:
             k = int(0.5 * n_elements)
         else:
@@ -3502,13 +3511,11 @@ class VIA:
 
     def run_VIA(self):
         print(f'Running VIA over input data of {self.data.shape[0]} (samples) x {self.data.shape[1]} (features)')
-        self.ncomp = self.data.shape[1]
 
-        list_roc = []
-        time_start_total = time.time()
-        self.knn_struct = self.make_knn_struct()
+        self.knn_struct = self.construct_knn(self.data)
+        st = time.time()
         self.run_subPARC()
-        run_time = time.time() - time_start_total
+        run_time = time.time() - st
         print('time elapsed {:.1f} seconds'.format(run_time))
 
         targets = set(self.true_label)
