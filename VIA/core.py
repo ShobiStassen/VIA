@@ -1682,56 +1682,21 @@ class VIA:
         p.set_ef(k)
         return p
 
-    def make_csrmatrix_noselfloop(self, neighbor_array, distance_array, auto_=True):
-        if auto_ == True:
-            local_pruning_bool = not (self.keep_all_local_dist)
-            # if local_pruning_bool == True: print(colored('commencing local pruning based on l2 (squared) at', 'blue'),colored(str(self.dist_std_local) + 's.dev above mean', 'green'))
-        if auto_ == False: local_pruning_bool = False
+    def make_csrmatrix_noselfloop(self, neighbors, distances, auto_: bool = True):
+        distances = np.sqrt(distances.astype(np.float64))
 
-        row_list = []
-        col_list = []
-        weight_list = []
-        neighbor_array = neighbor_array  # not listed in in any order of proximity
-        num_neigh = neighbor_array.shape[1]
-        distance_array = np.sqrt(distance_array)
-        n_neighbors = neighbor_array.shape[1]
-        n_cells = neighbor_array.shape[0]
-        rowi = 0
-        count_0dist = 0
-        discard_count = 0
+        if auto_ and not self.keep_all_local_dist:
+            # Local pruning based on neighbor being too far
+            msk = distances <= (np.mean(distances, axis=1) + self.dist_std_local * np.std(distances, axis=1))[:, np.newaxis]
+            # Remove self-loops
+            msk &= (neighbors != np.arange(neighbors.shape[0])[:, np.newaxis])
+        else:
+            msk = np.full_like(distances, True, dtype=np.bool_)
 
-        if local_pruning_bool == True:  # do some local pruning based on distance
-            for row in neighbor_array:
-                distlist = distance_array[rowi, :]
-                to_keep = np.where(distlist <= np.mean(distlist) + self.dist_std_local * np.std(distlist))[0]  # 0*std
-                updated_nn_ind = row[np.ix_(to_keep)]
-                updated_nn_weights = distlist[np.ix_(to_keep)]
-                discard_count = discard_count + (num_neigh - len(to_keep))
-
-                for ik in range(len(updated_nn_ind)):
-                    if rowi != row[ik]:  # remove self-loops
-                        row_list.append(rowi)
-                        col_list.append(updated_nn_ind[ik])
-                        dist = updated_nn_weights[ik]
-                        if dist == 0:
-                            count_0dist = count_0dist + 1
-                        weight_list.append(dist)
-
-                rowi = rowi + 1
-        weight_list = np.asarray(weight_list)
-        weight_list = 1. / (weight_list + 0.01)
-        if local_pruning_bool == False:  # dont prune based on distance
-            row_list.extend(list(np.transpose(np.ones((n_neighbors, n_cells)) * range(0, n_cells)).flatten()))
-            col_list = neighbor_array.flatten().tolist()
-            weight_list = (1. / (distance_array.flatten() + 0.01))
-
-        weight_list = weight_list * (np.mean(distance_array) ** 2)
-
-        weight_list = weight_list.tolist()
-
-        csr_graph = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
-                               shape=(n_cells, n_cells))
-        return csr_graph
+        weights = (np.mean(distances[msk]) ** 2) / (distances[msk] + .01)
+        rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
+        cols = neighbors[msk]
+        return csr_matrix((weights, (rows, cols)), shape=(len(neighbors), len(neighbors)), dtype=np.float64)
 
     def func_mode(self, ll):
         # return MODE of list
@@ -2318,21 +2283,11 @@ class VIA:
             return df_imputed_gene
 
     def run_subPARC(self):
-        root_user = self.root_user
-        X_data = self.data
-        too_big_factor = self.too_big_factor
-        small_pop = self.small_pop
-        jac_std_global = self.jac_std_global
-        jac_weighted_edges = self.jac_weighted_edges
-        n_elements = X_data.shape[0]
-
         if self.is_coarse:
-            # graph for PARC
-            neighbor_array, distance_array = self.knn_struct.knn_query(X_data, k=self.knn)
-            csr_array_locally_pruned = self.make_csrmatrix_noselfloop(neighbor_array, distance_array)  # incorporates  local distance pruning
+            neighbors, distances = self.knn_struct.knn_query(self.data, k=self.knn)
+            csr_array_locally_pruned = self.make_csrmatrix_noselfloop(neighbors, distances)
         else:
-            neighbor_array = self.full_neighbor_array
-            distance_array = self.full_distance_array
+            neighbors, distances = self.full_neighbor_array, self.full_distance_array
             csr_array_locally_pruned = self.csr_array_locally_pruned
 
         sources, targets = csr_array_locally_pruned.nonzero()
@@ -2340,8 +2295,7 @@ class VIA:
         edgelist = list(zip(sources, targets))
         edgelist_copy = edgelist.copy()
 
-        G = ig.Graph(n=X_data.shape[0], edges=edgelist,
-                     edge_attrs={'weight': csr_array_locally_pruned.data.tolist()})  # used for PARC
+        G = ig.Graph(n=self.nsamples, edges=edgelist, edge_attrs={'weight': csr_array_locally_pruned.data.tolist()})  # used for PARC
         # print('average degree of prejacard graph is %.1f'% (np.mean(G.degree())))
         # print('computing Jaccard metric')
         sim_list = G.similarity_jaccard(pairs=edgelist_copy)
@@ -2351,6 +2305,15 @@ class VIA:
 
         sim_list_array = np.asarray(sim_list)
         edge_list_copy_array = np.asarray(edgelist_copy)
+
+        root_user = self.root_user
+        X_data = self.data
+        too_big_factor = self.too_big_factor
+        small_pop = self.small_pop
+        jac_std_global = self.jac_std_global
+        jac_weighted_edges = self.jac_weighted_edges
+        n_elements = X_data.shape[0]
+
 
         if jac_std_global == 'median':
             threshold = np.median(sim_list)
@@ -2368,14 +2331,14 @@ class VIA:
             # construct full graph that has no pruning to be used for Clustergraph edges,
             # not listed in in any order of proximity
             row_list = []
-            n_cells, n_neighbors = neighbor_array.shape
+            n_cells, n_neighbors = neighbors.shape
 
             row_list.extend(list(np.transpose(np.ones((n_neighbors, n_cells)) * range(0, n_cells)).flatten()))
-            col_list = neighbor_array.flatten().tolist()
+            col_list = neighbors.flatten().tolist()
 
-            distance_array = np.sqrt(distance_array)
-            weight_list = (1. / (distance_array.flatten() + 0.05))  # 0.05
-            mean_sqrt_dist_array = np.mean(distance_array)
+            distances = np.sqrt(distances)
+            weight_list = (1. / (distances.flatten() + 0.05))  # 0.05
+            mean_sqrt_dist_array = np.mean(distances)
             weight_list = weight_list * (mean_sqrt_dist_array ** 2)
             # we scale weight_list by the mean_distance_value because inverting the distances makes the weights range between 0-1
             # and hence too many good neighbors end up having a weight near 0 which is misleading and non-neighbors have weight =0
@@ -2398,13 +2361,13 @@ class VIA:
             self.csr_array_locally_pruned = csr_array_locally_pruned
             self.ig_full_graph = ig_fullgraph  # for VIA we prune the vertex cluster graph *after* making the clustergraph
             self.csr_full_graph = csr_full_graph
-            self.full_neighbor_array = neighbor_array
-            self.full_distance_array = distance_array
+            self.full_neighbor_array = neighbors
+            self.full_distance_array = distances
 
             # knn graph used for making trajectory drawing on the visualization
             # print('skipping full_graph_shortpath')
             self.full_graph_shortpath = self.full_graph_paths(X_data, n_original_comp)
-            neighbor_array = self.full_neighbor_array
+            neighbors = self.full_neighbor_array
 
         else:
             ig_fullgraph = self.ig_full_graph  # for Trajectory
@@ -2509,7 +2472,7 @@ class VIA:
         for small_cluster in small_pop_list:
 
             for single_cell in small_cluster:
-                old_neighbors = neighbor_array[single_cell, :]
+                old_neighbors = neighbors[single_cell, :]
                 group_of_old_neighbors = PARC_labels_leiden[old_neighbors]
                 group_of_old_neighbors = list(group_of_old_neighbors.flatten())
                 available_neighbours = set(group_of_old_neighbors) - set(small_cluster_list)
@@ -2529,7 +2492,7 @@ class VIA:
                     small_pop_list.append(np.where(PARC_labels_leiden == cluster)[0])
             for small_cluster in small_pop_list:
                 for single_cell in small_cluster:
-                    old_neighbors = neighbor_array[single_cell, :]
+                    old_neighbors = neighbors[single_cell, :]
                     group_of_old_neighbors = PARC_labels_leiden[old_neighbors]
                     group_of_old_neighbors = list(group_of_old_neighbors.flatten())
                     best_group = max(set(group_of_old_neighbors), key=group_of_old_neighbors.count)
@@ -3525,7 +3488,7 @@ class VIA:
         self.stats_df = pd.DataFrame({'jac_std_global': [self.jac_std_global], 'dist_std_local': [self.dist_std_local],
                                       'runtime(s)': [run_time]})
         # self.majority_truth_labels = []
-
+        list_roc = []
         if len(targets) > 1:
             f1_accumulated, f1_acc_noweighting = 0, 0
             for onevsall_val in targets:
