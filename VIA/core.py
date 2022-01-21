@@ -1077,6 +1077,13 @@ class VIA:
                  visual_cluster_graph_pruning=0.15, neighboring_terminal_states_threshold=2, num_mcmc_simulations=1300,
                  piegraph_arrow_head_width=0.4,
                  piegraph_edgeweight_scalingfactor=1.5, max_visual_outgoing_edges=2):
+
+        self.data = data
+        self.nsamples, self.ncomp = data.shape
+        self.true_label = true_label or [1] * self.nsamples
+
+        self.knn_struct = None
+
         # higher dist_std_local means more edges are kept
         # highter jac_std_global means more edges are kept
         if keep_all_local_dist == 'auto':
@@ -1085,8 +1092,7 @@ class VIA:
 
         if resolution_parameter != 1:
             partition_type = "RBVP"  # Reichardt and Bornholdt’s Potts model. Note that this is the same as ModularityVertexPartition when setting 𝛾 = 1 and normalising by 2m
-        self.data = data
-        self.true_label = true_label or [1] * data.shape[0]
+
         self.anndata = anndata
         self.dist_std_local = dist_std_local
         self.jac_std_global = jac_std_global  ##0.15 is also a recommended value performing empirically similar to 'median'
@@ -1138,7 +1144,7 @@ class VIA:
             self.knn_struct.set_ef(k_umap + 1)
             neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=k_umap)
         else:
-            knn_struct_umap = self.make_knn_struct(visual=True, data_visual=data_visual)
+            knn_struct_umap = self.construct_knn(data_visual)
             knn_struct_umap.set_ef(k_umap + 1)
             neighbor_array, distance_array = knn_struct_umap.knn_query(data_visual, k=k_umap)
         row_list = []
@@ -1642,87 +1648,81 @@ class VIA:
         self.single_cell_pt_markov = pt_sc.flatten()
         return
 
-    def make_knn_struct(self, too_big=False, big_cluster=None, visual=False, data_visual=None):
-        data = data_visual if visual else self.data
+    def construct_knn(self, data: np.ndarray, too_big: bool = False) -> hnswlib.Index:
+        """
+        Construct K-NN graph for given data
 
-        if self.knn > 190: print(colored('please provide a lower K_in for KNN graph construction', 'red'))
-        ef_query = max(100, self.knn + 1)  # ef always should be >K. higher ef, more accuate query
+        Parameters
+        ----------
+        data: np.ndarray of shape (n_samples, n_features)
+            Data matrix over which to construct knn graph
 
+        too_big: bool, default = False
+
+        Returns
+        -------
+        Initialized instance of hnswlib.Index to be used over given data
+        """
+        if self.knn > 100:
+            print(colored(f'Passed number of neighbors exceeds max value. Setting number of neighbors too 100', 'red'))
+        k = min(100, self.knn + 1)
+
+        nsamples, dim = data.shape
+        ef_const, M = 200, 30
         if not too_big:
-            n_elements, num_dims = data.shape
-            print('class', type(data))
-            p = hnswlib.Index(space=self.distance, dim=num_dims)  # default to Euclidean distance
-            p.set_num_threads(self.num_threads)  # allow user to set threads used in KNN construction
-            if n_elements < 10000:
-                ef_param_const = min(n_elements - 10, 500)
-                ef_query = ef_param_const
-            else:
-                ef_param_const = 200
+            if nsamples < 10000:
+                k = ef_const = min(nsamples - 10, 500)
+            if nsamples <= 50000 and dim > 30:
+                M = 48  # good for scRNA-seq where dimensionality is high
 
-            if (num_dims > 30) & (n_elements <= 50000):
-                p.init_index(max_elements=n_elements, ef_construction=ef_param_const,
-                             M=48)  ## good for scRNA seq where dimensionality is high
-            else:
-                p.init_index(max_elements=n_elements, ef_construction=ef_param_const, M=30)
-            p.add_items(data)
-        else:
-            n_elements, num_dims = big_cluster.shape
-            p = hnswlib.Index(space='l2', dim=num_dims)
-            p.init_index(max_elements=n_elements, ef_construction=200, M=30)
-            p.add_items(big_cluster)
-        p.set_ef(ef_query)  # ef should always be > k
+        p = hnswlib.Index(space=self.distance, dim=dim)
+        p.set_num_threads(self.num_threads)
+        p.init_index(max_elements=nsamples, ef_construction=ef_const, M=M)
+        p.add_items(data)
+        p.set_ef(k)
         return p
 
-    def make_csrmatrix_noselfloop(self, neighbor_array, distance_array, auto_=True):
-        if auto_ == True:
-            local_pruning_bool = not (self.keep_all_local_dist)
-            # if local_pruning_bool == True: print(colored('commencing local pruning based on l2 (squared) at', 'blue'),colored(str(self.dist_std_local) + 's.dev above mean', 'green'))
-        if auto_ == False: local_pruning_bool = False
+    def make_csrmatrix_noselfloop(self, neighbors: np.ndarray, distances: np.ndarray,
+                                  auto_: bool = True, distance_factor=.01) -> csr_matrix:
+        """
+        Create sparse matrix from weighted knn graph
 
-        row_list = []
-        col_list = []
-        weight_list = []
-        neighbor_array = neighbor_array  # not listed in in any order of proximity
-        num_neigh = neighbor_array.shape[1]
-        distance_array = np.sqrt(distance_array)
-        n_neighbors = neighbor_array.shape[1]
-        n_cells = neighbor_array.shape[0]
-        rowi = 0
-        count_0dist = 0
-        discard_count = 0
+        Parameters
+        ----------
+        neighbors: np.ndarray of shape (n_samples, n_neighbors)
+            Indicating neighbors of each sample. neighbors[i,j] means that sample j is a neighbor of sample i
 
-        if local_pruning_bool == True:  # do some local pruning based on distance
-            for row in neighbor_array:
-                distlist = distance_array[rowi, :]
-                to_keep = np.where(distlist <= np.mean(distlist) + self.dist_std_local * np.std(distlist))[0]  # 0*std
-                updated_nn_ind = row[np.ix_(to_keep)]
-                updated_nn_weights = distlist[np.ix_(to_keep)]
-                discard_count = discard_count + (num_neigh - len(to_keep))
+        distances: np.ndarray of shape (n_samples, n_neighbors)
+            Distances between neighboring samples corresponding `neighbors`
 
-                for ik in range(len(updated_nn_ind)):
-                    if rowi != row[ik]:  # remove self-loops
-                        row_list.append(rowi)
-                        col_list.append(updated_nn_ind[ik])
-                        dist = updated_nn_weights[ik]
-                        if dist == 0:
-                            count_0dist = count_0dist + 1
-                        weight_list.append(dist)
+        auto_: bool, default=True
+            If `False` and `self.keep_all_local_dist = False` perform local pruning (according to self.dist_std_local)
+            and remove self-loops
 
-                rowi = rowi + 1
-        weight_list = np.asarray(weight_list)
-        weight_list = 1. / (weight_list + 0.01)
-        if local_pruning_bool == False:  # dont prune based on distance
-            row_list.extend(list(np.transpose(np.ones((n_neighbors, n_cells)) * range(0, n_cells)).flatten()))
-            col_list = neighbor_array.flatten().tolist()
-            weight_list = (1. / (distance_array.flatten() + 0.01))
+        distance_factor: float, default=0.01
+            Factor used in calculation of edge weights. mean(sqrt(distances))^2 / (sqrt(distances) + distance_factor)
 
-        weight_list = weight_list * (np.mean(distance_array) ** 2)
+        Returns
+        -------
+            sparse matrix representing the locally pruned weighted knn graph
+        """
+        distances = np.sqrt(distances.astype(np.float64))
 
-        weight_list = weight_list.tolist()
+        if auto_ and not self.keep_all_local_dist:
+            # Local pruning based on neighbor being too far
+            msk = distances <= (np.mean(distances, axis=1) + self.dist_std_local * np.std(distances, axis=1))[:, np.newaxis]
+            # Remove self-loops
+            msk &= (neighbors != np.arange(neighbors.shape[0])[:, np.newaxis])
+        else:
+            msk = np.full_like(distances, True, dtype=np.bool_)
 
-        csr_graph = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
-                               shape=(n_cells, n_cells))
-        return csr_graph
+        # Inverting the distances outputs values in range [0-1]. This also causes many ``good'' neighbors ending up
+        # having a weight near zero (misleading as non-neighbors have a weight of zero). Therefore we scale by the
+        # mean distance.
+        weights = (np.mean(distances[msk]) ** 2) / (distances[msk] + distance_factor)
+        rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
+        cols = neighbors[msk]
+        return csr_matrix((weights, (rows, cols)), shape=(len(neighbors), len(neighbors)), dtype=np.float64)
 
     def func_mode(self, ll):
         # return MODE of list
@@ -1796,7 +1796,7 @@ class VIA:
     def run_toobig_subPARC(self, X_data, jac_std_toobig=1,
                            jac_weighted_edges=True):
         n_elements = X_data.shape[0]
-        hnsw = self.make_knn_struct(too_big=True, big_cluster=X_data)
+        hnsw = self.construct_knn(X_data, too_big=True)
         if self.knn >= 0.8 * n_elements:
             k = int(0.5 * n_elements)
         else:
@@ -2309,112 +2309,67 @@ class VIA:
             return df_imputed_gene
 
     def run_subPARC(self):
-        root_user = self.root_user
-        X_data = self.data
-        too_big_factor = self.too_big_factor
-        small_pop = self.small_pop
-        jac_std_global = self.jac_std_global
-        jac_weighted_edges = self.jac_weighted_edges
-        n_elements = X_data.shape[0]
+        st = time.time()
+        print(f"{time.ctime()}\tGlobal pruning of weighted knn graph")
+        # Construct graph or obtain from previous run
+        if self.is_coarse:
+            neighbors, distances = self.knn_struct.knn_query(self.data, k=self.knn)
+            adjacency = self.make_csrmatrix_noselfloop(neighbors, distances)
+        else:
+            neighbors, distances = self.full_neighbor_array, self.full_distance_array
+            adjacency = self.csr_array_locally_pruned
+
+        edges = np.array(list(zip(*adjacency.nonzero())))
+        sim = np.array(ig.Graph(n=self.nsamples, edges=edges, edge_attrs={'weight': adjacency.data})\
+                       .similarity_jaccard(pairs=edges))
+        tot = len(sim)
+
+        # Prune edges off graph
+        threshold = np.median(sim) if self.jac_std_global == 'median' else sim.mean() - self.jac_std_global * sim.std()
+        strong_locs = np.where(sim > threshold)[0]
+        pruned_similarities = ig.Graph(n=self.nsamples, edges=edges[strong_locs],
+                                       edge_attrs={'weight': sim[strong_locs]})\
+            .simplify(combine_edges='sum')
+        print(f"{time.ctime()}\tFinished global pruning. Kept {round(100 * len(strong_locs) / tot, 2)} of edges. "
+              f"Took {(time.time() - st) * 1000}")
 
         if self.is_coarse:
-            # graph for PARC
-            neighbor_array, distance_array = self.knn_struct.knn_query(X_data, k=self.knn)
-            csr_array_locally_pruned = self.make_csrmatrix_noselfloop(neighbor_array, distance_array)  # incorporates  local distance pruning
-        else:
-            neighbor_array = self.full_neighbor_array
-            distance_array = self.full_distance_array
-            csr_array_locally_pruned = self.csr_array_locally_pruned
-
-        sources, targets = csr_array_locally_pruned.nonzero()
-
-        edgelist = list(zip(sources, targets))
-        edgelist_copy = edgelist.copy()
-
-        G = ig.Graph(n=X_data.shape[0], edges=edgelist,
-                     edge_attrs={'weight': csr_array_locally_pruned.data.tolist()})  # used for PARC
-        # print('average degree of prejacard graph is %.1f'% (np.mean(G.degree())))
-        # print('computing Jaccard metric')
-        sim_list = G.similarity_jaccard(pairs=edgelist_copy)
-
-        print('time is', time.ctime())
-        print('commencing global pruning')
-
-        sim_list_array = np.asarray(sim_list)
-        edge_list_copy_array = np.asarray(edgelist_copy)
-
-        if jac_std_global == 'median':
-            threshold = np.median(sim_list)
-        else:
-            threshold = np.mean(sim_list) - jac_std_global * np.std(sim_list)
-        strong_locs = np.where(sim_list_array > threshold)[0]
-        print('Share of edges kept after Global Pruning %.2f' % (len(strong_locs) * 100 / len(sim_list)), '%')
-        new_edgelist = list(edge_list_copy_array[strong_locs])
-        sim_list_new = list(sim_list_array[strong_locs])
-
-        G_sim = ig.Graph(n=n_elements, edges=list(new_edgelist), edge_attrs={'weight': sim_list_new})
-        G_sim.simplify(combine_edges='sum')
-
-        if self.is_coarse:
-            # construct full graph that has no pruning to be used for Clustergraph edges,
-            # not listed in in any order of proximity
-            row_list = []
-            n_cells, n_neighbors = neighbor_array.shape
-
-            row_list.extend(list(np.transpose(np.ones((n_neighbors, n_cells)) * range(0, n_cells)).flatten()))
-            col_list = neighbor_array.flatten().tolist()
-
-            distance_array = np.sqrt(distance_array)
-            weight_list = (1. / (distance_array.flatten() + 0.05))  # 0.05
-            mean_sqrt_dist_array = np.mean(distance_array)
-            weight_list = weight_list * (mean_sqrt_dist_array ** 2)
-            # we scale weight_list by the mean_distance_value because inverting the distances makes the weights range between 0-1
-            # and hence too many good neighbors end up having a weight near 0 which is misleading and non-neighbors have weight =0
-            weight_list = weight_list.tolist()
-
-            # print('distance values', np.percentile(distance_array, 5), np.percentile(distance_array, 95),   np.mean(distance_array))
-            csr_full_graph = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
-                                        shape=(n_cells, n_cells))
-
+            # Construct full graph with no pruning - used for cluster graph edges, not listed in any order of proximity
+            csr_full_graph = self.make_csrmatrix_noselfloop(neighbors, distances, auto_=False, distance_factor=0.05)
             n_original_comp, n_original_comp_labels = connected_components(csr_full_graph, directed=False)
-            sources, targets = csr_full_graph.nonzero()
-            edgelist = list(zip(sources.tolist(), targets.tolist()))
-            G = ig.Graph(edgelist, edge_attrs={'weight': csr_full_graph.data.tolist()})
 
-            sim_list = G.similarity_jaccard(pairs=edgelist)  # list of jaccard weights
-            ig_fullgraph = ig.Graph(list(edgelist), edge_attrs={'weight': sim_list})
-            ig_fullgraph.simplify(combine_edges='sum')
+            edges = np.array(list(zip(*adjacency.nonzero())))
+            sim = ig.Graph(edges, edge_attrs={'weight': csr_full_graph.data}).similarity_jaccard(pairs=edges)
+            ig_fullgraph = ig.Graph(edges, edge_attrs={'weight': sim}).simplify(combine_edges='sum')
 
-            # self.csr_array_pruned = G_sim  # this graph is pruned (locally and globally) for use in PARC
-            self.csr_array_locally_pruned = csr_array_locally_pruned
+            self.csr_array_locally_pruned = adjacency
             self.ig_full_graph = ig_fullgraph  # for VIA we prune the vertex cluster graph *after* making the clustergraph
             self.csr_full_graph = csr_full_graph
-            self.full_neighbor_array = neighbor_array
-            self.full_distance_array = distance_array
+            self.full_neighbor_array = neighbors
+            self.full_distance_array = distances
 
             # knn graph used for making trajectory drawing on the visualization
-            # print('skipping full_graph_shortpath')
-            self.full_graph_shortpath = self.full_graph_paths(X_data, n_original_comp)
-            neighbor_array = self.full_neighbor_array
-
+            self.full_graph_shortpath = self.full_graph_paths(self.data, n_original_comp)
+            neighbors = self.full_neighbor_array
         else:
             ig_fullgraph = self.ig_full_graph  # for Trajectory
-            # G_sim = self.csr_array_pruned  # for PARC
-            # neighbor_array = self.full_neighbor_array  # needed to assign spurious outliers to clusters
 
-        # print('average degree of SIMPLE graph is %.1f' % (np.mean(G_sim.degree())))
 
         print('commencing community detection')
 
-        weights = 'weight' if jac_weighted_edges else None
+        root_user = self.root_user
+        too_big_factor = self.too_big_factor
+        small_pop = self.small_pop
+
+        weights = 'weight' if self.jac_weighted_edges else None
         type = leidenalg.ModularityVertexPartition if self.partition_type == 'ModularityVP' else leidenalg.RBConfigurationVertexPartition
         st = time.time()
-        partition = leidenalg.find_partition(G_sim, partition_type=type, weights=weights,
+        partition = leidenalg.find_partition(pruned_similarities, partition_type=type, weights=weights,
                                              n_iterations=self.n_iter_leiden, seed=self.random_seed)
         print(round(time.time() - st), ' seconds for leiden')
         time_end_PARC = time.time()
         # print('Q= %.1f' % (partition.quality()))
-        PARC_labels_leiden = np.asarray(partition.membership).reshape((n_elements, 1))
+        PARC_labels_leiden = np.asarray(partition.membership).reshape((self.nsamples, 1))
         print('time is', time.ctime())
         print(len(set(PARC_labels_leiden.flatten())), ' clusters before handling small/big')
         pop_list_1 = []
@@ -2422,7 +2377,7 @@ class VIA:
         num_times_expanded = 0
         for item in set(list(PARC_labels_leiden.flatten())):
             count_item = list(PARC_labels_leiden.flatten()).count(item)
-            if count_item > self.too_big_factor * n_elements:
+            if count_item > self.too_big_factor * self.nsamples:
                 count_big_pops = count_big_pops + 1
             pop_list_1.append([item, count_item])
         print(colored('There are ' + str(count_big_pops) + ' clusters that are too big', 'blue'))
@@ -2433,7 +2388,7 @@ class VIA:
             0]  # the 0th cluster is the largest one. so if cluster 0 is not too big, then the others wont be too big either
         pop_i = len(cluster_i_loc)
 
-        if pop_i > too_big_factor * n_elements:
+        if pop_i > too_big_factor * self.nsamples:
             too_big = True
             print('too big is', too_big, ' cluster 0 will be Expanded')
 
@@ -2443,7 +2398,7 @@ class VIA:
 
         time0_big = time.time()
         while (too_big) & (not ((time.time() - time0_big > 200) & (num_times_expanded >= count_big_pops))):
-            X_data_big = X_data[cluster_big_loc, :]
+            X_data_big = self.data[cluster_big_loc, :]
 
             PARC_labels_leiden_big = self.run_toobig_subPARC(X_data_big)
             num_times_expanded = num_times_expanded + 1
@@ -2473,7 +2428,7 @@ class VIA:
                 cluster_ii_loc = np.where(PARC_labels_leiden == cluster_ii)[0]
                 pop_ii = len(cluster_ii_loc)
                 not_yet_expanded = pop_ii not in list_pop_too_bigs
-                if (pop_ii > too_big_factor * n_elements) & (not_yet_expanded) == True:
+                if (pop_ii > too_big_factor * self.nsamples) & (not_yet_expanded) == True:
                     too_big = True
                     # print('cluster', cluster_ii, 'is too big and has population', pop_ii)
                     cluster_big_loc = cluster_ii_loc
@@ -2500,7 +2455,7 @@ class VIA:
         for small_cluster in small_pop_list:
 
             for single_cell in small_cluster:
-                old_neighbors = neighbor_array[single_cell, :]
+                old_neighbors = neighbors[single_cell, :]
                 group_of_old_neighbors = PARC_labels_leiden[old_neighbors]
                 group_of_old_neighbors = list(group_of_old_neighbors.flatten())
                 available_neighbours = set(group_of_old_neighbors) - set(small_cluster_list)
@@ -2520,7 +2475,7 @@ class VIA:
                     small_pop_list.append(np.where(PARC_labels_leiden == cluster)[0])
             for small_cluster in small_pop_list:
                 for single_cell in small_cluster:
-                    old_neighbors = neighbor_array[single_cell, :]
+                    old_neighbors = neighbors[single_cell, :]
                     group_of_old_neighbors = PARC_labels_leiden[old_neighbors]
                     group_of_old_neighbors = list(group_of_old_neighbors.flatten())
                     best_group = max(set(group_of_old_neighbors), key=group_of_old_neighbors.count)
@@ -3501,14 +3456,12 @@ class VIA:
         return accuracy_val, predict_class_array, majority_truth_labels, number_clusters_for_target
 
     def run_VIA(self):
-        print(f'Running VIA over input data of {self.data.shape[0]} (samples) x {self.data.shape[1]} (features)')
-        self.ncomp = self.data.shape[1]
+        print(f'{time.ctime()}\tRunning VIA over input data of {self.data.shape[0]} (samples) x {self.data.shape[1]} (features)')
 
-        list_roc = []
-        time_start_total = time.time()
-        self.knn_struct = self.make_knn_struct()
+        self.knn_struct = self.construct_knn(self.data)
+        st = time.time()
         self.run_subPARC()
-        run_time = time.time() - time_start_total
+        run_time = time.time() - st
         print('time elapsed {:.1f} seconds'.format(run_time))
 
         targets = set(self.true_label)
@@ -3518,7 +3471,7 @@ class VIA:
         self.stats_df = pd.DataFrame({'jac_std_global': [self.jac_std_global], 'dist_std_local': [self.dist_std_local],
                                       'runtime(s)': [run_time]})
         # self.majority_truth_labels = []
-
+        list_roc = []
         if len(targets) > 1:
             f1_accumulated, f1_acc_noweighting = 0, 0
             for onevsall_val in targets:
