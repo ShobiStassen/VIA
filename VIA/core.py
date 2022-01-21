@@ -6,6 +6,7 @@ import scipy
 import igraph as ig
 import leidenalg
 import time
+from datetime import datetime
 import hnswlib
 
 import matplotlib
@@ -19,6 +20,7 @@ import pygam as pg
 import matplotlib.colors as colors
 import matplotlib.cm as cm
 from termcolor import colored
+from collections import Counter
 
 from matplotlib.path import get_path_collection_extents
 #import palantir  # /home/shobi/anaconda3/envs/ViaEnv/lib/python3.7/site-packages/palantir
@@ -2309,8 +2311,7 @@ class VIA:
             return df_imputed_gene
 
     def run_subPARC(self):
-        st = time.time()
-        print(f"{time.ctime()}\tGlobal pruning of weighted knn graph")
+        print(f"{datetime.now()}\tGlobal pruning of weighted knn graph")
         # Construct graph or obtain from previous run
         if self.is_coarse:
             neighbors, distances = self.knn_struct.knn_query(self.data, k=self.knn)
@@ -2330,8 +2331,7 @@ class VIA:
         pruned_similarities = ig.Graph(n=self.nsamples, edges=edges[strong_locs],
                                        edge_attrs={'weight': sim[strong_locs]})\
             .simplify(combine_edges='sum')
-        print(f"{time.ctime()}\tFinished global pruning. Kept {round(100 * len(strong_locs) / tot, 2)} of edges. "
-              f"Took {(time.time() - st) * 1000}")
+        print(f"{datetime.now()}\tFinished global pruning. Kept {round(100 * len(strong_locs) / tot, 2)} of edges. ")
 
         if self.is_coarse:
             # Construct full graph with no pruning - used for cluster graph edges, not listed in any order of proximity
@@ -2355,93 +2355,45 @@ class VIA:
             ig_fullgraph = self.ig_full_graph  # for Trajectory
 
 
-        print('commencing community detection')
-
-        root_user = self.root_user
-        too_big_factor = self.too_big_factor
-        small_pop = self.small_pop
-
+        print(f"{datetime.now()}\tCommencing community detection")
         weights = 'weight' if self.jac_weighted_edges else None
         type = leidenalg.ModularityVertexPartition if self.partition_type == 'ModularityVP' else leidenalg.RBConfigurationVertexPartition
-        st = time.time()
         partition = leidenalg.find_partition(pruned_similarities, partition_type=type, weights=weights,
                                              n_iterations=self.n_iter_leiden, seed=self.random_seed)
-        print(round(time.time() - st), ' seconds for leiden')
-        time_end_PARC = time.time()
-        # print('Q= %.1f' % (partition.quality()))
-        PARC_labels_leiden = np.asarray(partition.membership).reshape((self.nsamples, 1))
-        print('time is', time.ctime())
-        print(len(set(PARC_labels_leiden.flatten())), ' clusters before handling small/big')
-        pop_list_1 = []
-        count_big_pops = 0
-        num_times_expanded = 0
-        for item in set(list(PARC_labels_leiden.flatten())):
-            count_item = list(PARC_labels_leiden.flatten()).count(item)
-            if count_item > self.too_big_factor * self.nsamples:
-                count_big_pops = count_big_pops + 1
-            pop_list_1.append([item, count_item])
-        print(colored('There are ' + str(count_big_pops) + ' clusters that are too big', 'blue'))
+        PARC_labels_leiden = np.array(partition.membership)
+        print(f"{datetime.now()}\tFinished running Leiden algorithm. Found {len(set(PARC_labels_leiden))} clusters.")
 
-        too_big = False
+        # Searching for clusters that are too big and split them
+        too_big_clusters = [k for k, v in Counter(PARC_labels_leiden).items() if
+                            v > self.too_big_factor * self.nsamples]
+        if len(too_big_clusters):
+            print(colored(f"{datetime.now()}\tFound {len(too_big_clusters)} clusters that are too big", "blue"))
+        else:
+            print(colored(f"{datetime.now()}\tNo cluster is too big", "blue"))
 
-        cluster_i_loc = np.where(PARC_labels_leiden == 0)[
-            0]  # the 0th cluster is the largest one. so if cluster 0 is not too big, then the others wont be too big either
-        pop_i = len(cluster_i_loc)
+        # TODO - add max running time condition
+        while len(too_big_clusters):
+            cluster = too_big_clusters.pop(0)
+            idx = PARC_labels_leiden == cluster
+            print(f"{datetime.now()}\tCluster {cluster} contains "
+                  f"{idx.sum()}>{round(self.too_big_factor * self.nsamples)} samples and is too big")
 
-        if pop_i > too_big_factor * self.nsamples:
-            too_big = True
-            print('too big is', too_big, ' cluster 0 will be Expanded')
+            data = self.data[idx]
+            membership = max(PARC_labels_leiden) + 1 + np.array(self.run_toobig_subPARC(data))
 
-            num_times_expanded = num_times_expanded + 1
-            cluster_big_loc = cluster_i_loc
-            list_pop_too_bigs = [pop_i]
+            if len(set(membership)) > 1:
+                PARC_labels_leiden[idx] = membership
+                too_big_clusters.extend(
+                    [k for k, v in Counter(membership).items() if v > self.too_big_factor * self.nsamples])
+            else:
+                print(f"{datetime.now()}\t\tCould not expand cluster {cluster}")
 
-        time0_big = time.time()
-        while (too_big) & (not ((time.time() - time0_big > 200) & (num_times_expanded >= count_big_pops))):
-            X_data_big = self.data[cluster_big_loc, :]
-
-            PARC_labels_leiden_big = self.run_toobig_subPARC(X_data_big)
-            num_times_expanded = num_times_expanded + 1
-
-            PARC_labels_leiden_big = PARC_labels_leiden_big + 100000
-
-            pop_list = []
-            for item in set(list(PARC_labels_leiden_big.flatten())):
-                pop_list.append([item, list(PARC_labels_leiden_big.flatten()).count(item)])
-
-            jj = 0
-
-            for j in cluster_big_loc:
-                PARC_labels_leiden[j] = PARC_labels_leiden_big[jj]
-                jj = jj + 1
-            dummy, PARC_labels_leiden = np.unique(list(PARC_labels_leiden.flatten()), return_inverse=True)
-
-            pop_list_1 = []
-            for item in set(list(PARC_labels_leiden.flatten())):
-                pop_list_1.append([item, list(PARC_labels_leiden.flatten()).count(item)])
-            # print(pop_list_1, set(PARC_labels_leiden))
-            too_big = False
-            set_PARC_labels_leiden = set(PARC_labels_leiden)
-
-            PARC_labels_leiden = np.asarray(PARC_labels_leiden)
-            for cluster_ii in set_PARC_labels_leiden:
-                cluster_ii_loc = np.where(PARC_labels_leiden == cluster_ii)[0]
-                pop_ii = len(cluster_ii_loc)
-                not_yet_expanded = pop_ii not in list_pop_too_bigs
-                if (pop_ii > too_big_factor * self.nsamples) & (not_yet_expanded) == True:
-                    too_big = True
-                    # print('cluster', cluster_ii, 'is too big and has population', pop_ii)
-                    cluster_big_loc = cluster_ii_loc
-                    cluster_big = cluster_ii
-                    big_pop = pop_ii
-
-            if too_big:
-                list_pop_too_bigs.append(big_pop)
-                print('cluster', cluster_big, 'is too big with population', big_pop, '. It will be expanded')
-        dummy, PARC_labels_leiden = np.unique(list(PARC_labels_leiden.flatten()), return_inverse=True)
         small_pop_list = []
         small_cluster_list = []
         small_pop_exist = False
+
+        root_user = self.root_user
+        small_pop = self.small_pop
 
         for cluster in set(PARC_labels_leiden):
             population = len(np.where(PARC_labels_leiden == cluster)[0])
@@ -3456,7 +3408,7 @@ class VIA:
         return accuracy_val, predict_class_array, majority_truth_labels, number_clusters_for_target
 
     def run_VIA(self):
-        print(f'{time.ctime()}\tRunning VIA over input data of {self.data.shape[0]} (samples) x {self.data.shape[1]} (features)')
+        print(f'{datetime.now()}\tRunning VIA over input data of {self.data.shape[0]} (samples) x {self.data.shape[1]} (features)')
 
         self.knn_struct = self.construct_knn(self.data)
         st = time.time()
