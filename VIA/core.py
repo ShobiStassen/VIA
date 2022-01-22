@@ -249,12 +249,9 @@ def get_loc_terminal_states(via0, X_input):
 
 def simulate_multinomial(vmultinomial):
     # used in Markov Simulations
-    r = np.random.uniform(0.0, 1.0)
-    CS = np.cumsum(vmultinomial)
-    CS = np.insert(CS, 0, 0)
-    m = (np.where(CS < r))[0]
-    nextState = m[len(m) - 1]
-    return nextState
+    sc = np.insert(np.cumsum(vmultinomial), 0, 0)
+    m = (np.where(sc < np.random.uniform()))[0]
+    return m[len(m) - 1]
 
 
 def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
@@ -370,12 +367,11 @@ def sc_loc_ofsuperCluster_embeddedspace(embedding, p0, p1, idx):
 
 def make_knn_embeddedspace(embedding):
     # knn struct built in the embedded space to be used for drawing the lineage trajectories onto the 2D plot
-    knn_hnsw = hnswlib.Index(space='l2', dim=embedding.shape[1])
-    knn_hnsw.init_index(max_elements=embedding.shape[0], ef_construction=200, M=16)
-    knn_hnsw.add_items(embedding)
-    knn_hnsw.set_ef(50)
-
-    return knn_hnsw
+    knn = hnswlib.Index(space='l2', dim=embedding.shape[1])
+    knn.init_index(max_elements=embedding.shape[0], ef_construction=200, M=16)
+    knn.add_items(embedding)
+    knn.set_ef(50)
+    return knn
 
 
 def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_name='plasma'):
@@ -675,16 +671,12 @@ def get_biased_weights(edgelist, weights, pt, round_no=1):
 
 
 def expected_num_steps(start_i, N):
-    n_t = N.shape[0]
-    N_steps = np.dot(N, np.ones(n_t))
-    n_steps_i = N_steps[start_i]
-    return n_steps_i
+    return np.dot(N, np.ones(N.shape[0]))[start_i]
 
 
 def absorption_probability(N, R, absorption_state_j):
     M = np.dot(N, R)
-    vec_prob_end_in_j = M[:, absorption_state_j]
-    return M, vec_prob_end_in_j
+    return M, M[:, absorption_state_j]
 
 
 def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_cluster_labels, super_edgelist, x_lazy,
@@ -912,19 +904,10 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
 def csr_mst(adjacency_matrix):
     # return minimum spanning tree from adjacency matrix (csr)
     Tcsr = adjacency_matrix.copy()
-    n_components_mst, comp_labels_mst = connected_components(csgraph=Tcsr, directed=False, return_labels=True)
-    # print('number of components before mst', n_components_mst)
-    # print('len Tcsr data', len(Tcsr.data))
     Tcsr.data = -1 * Tcsr.data
     Tcsr.data = Tcsr.data - np.min(Tcsr.data) + 1
-    # print('len Tcsr data', len(Tcsr.data))
-    Tcsr = minimum_spanning_tree(Tcsr)  # adjacency_matrix)
-    n_components_mst, comp_labels_mst = connected_components(csgraph=Tcsr, directed=False, return_labels=True)
-    # print('number of components after mst', n_components_mst)
-    Tcsr = (Tcsr + Tcsr.T) * 0.5  # make symmetric
-    # print('number of components after symmetric mst', n_components_mst)
-    # print('len Tcsr data', len(Tcsr.data))
-    return Tcsr
+    Tcsr = minimum_spanning_tree(Tcsr)
+    return (Tcsr + Tcsr.T) * 0.5  # make symmetric
 
 
 def connect_all_components(MSTcsr, cluster_graph_csr, adjacency_matrix):
@@ -1247,14 +1230,8 @@ class VIA:
         print('out degree shortlist', loc_deg)
 
         markov_pt = np.asarray(markov_pt)
-        if n_ <= 10:
-            loc_pt = np.where(markov_pt >= np.percentile(markov_pt, 10))[0]  # 50
-
-        if (n_ <= 40) & (n_ > 10):
-            loc_pt = np.where(markov_pt >= np.percentile(markov_pt, 10))[0]
-
-        if n_ > 40:
-            loc_pt = np.where(markov_pt >= np.percentile(markov_pt, 30))[0]
+        pct = 10 if n_ <= 40 else 30
+        loc_pt = np.where(markov_pt >= np.percentile(markov_pt, pct))[0]
 
         terminal_clusters_1 = list(set(closeness_list) & set(betweenness_list))
         terminal_clusters_2 = list(set(closeness_list) & set(loc_deg))
@@ -2405,16 +2382,6 @@ class VIA:
         self.labels = labels
         print(f"{datetime.now()}\tFinished detecting communities")
 
-        labels_list = list(labels)
-        pop_list = []
-        pop_list_raw = []
-        for item in range(len(set(labels_list))):
-            pop_item = labels_list.count(item)
-            pop_list.append((item, pop_item))
-            pop_list_raw.append(pop_item)
-
-        n_clus = len(set(self.labels))
-
         # end community detection
         # do kmeans instead
         '''
@@ -2435,6 +2402,15 @@ class VIA:
         # Make cluster-graph
         print(f"{datetime.now()}\tMaking cluster graph. Global pruning level: {self.cluster_graph_pruning_std}")
         vc_graph = ig.VertexClustering(ig_fullgraph, membership=self.labels).cluster_graph(combine_edges='sum')
+
+
+        labels_list = list(labels)
+        pop_list = []
+        pop_list_raw = []
+        for item in range(len(set(labels_list))):
+            pop_item = labels_list.count(item)
+            pop_list.append((item, pop_item))
+            pop_list_raw.append(pop_item)
         reweighted_sparse_vc, edgelist = self.recompute_weights(vc_graph, pop_list_raw)
 
         edgeweights, edgelist, comp_labels = pruning_clustergraph(reweighted_sparse_vc,
@@ -2835,6 +2811,7 @@ class VIA:
             row_list.append(rowi)
             col_list.append(coli)
 
+        n_clus = len(set(self.labels))
         temp_csr = csr_matrix((np.array(bias_weights_2_all), (np.array(row_list), np.array(col_list))),
                               shape=(n_clus, n_clus))
         if (self.dataset == '2M') | (self.dataset == 'mESC'):
