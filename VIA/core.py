@@ -1085,6 +1085,7 @@ class VIA:
         self.true_label = true_label or [1] * self.nsamples
 
         self.knn_struct = None
+        self.labels = None
 
         # higher dist_std_local means more edges are kept
         # highter jac_std_global means more edges are kept
@@ -1897,12 +1898,12 @@ class VIA:
         self.labels = PARC_labels_leiden
         return PARC_labels_leiden
 
-    def recompute_weights(self, clustergraph_ig, pop_list_raw):
-        sparse_clustergraph = get_sparse_from_igraph(clustergraph_ig, weight_attr='weight')
-        n = sparse_clustergraph.shape[0]
-        sources, targets = sparse_clustergraph.nonzero()
+    def recompute_weights(self, graph: igraph.Graph, pop_list_raw):
+        graph = get_sparse_from_igraph(graph, weight_attr='weight')
+        n = graph.shape[0]
+        sources, targets = graph.nonzero()
         edgelist = list(zip(sources, targets))
-        weights = sparse_clustergraph.data
+        weights = graph.data
 
         new_weights = []
         i = 0
@@ -1919,11 +1920,8 @@ class VIA:
 
         new_weights = [(wi + wmin) / scale_factor for wi in new_weights]
 
-        sparse_clustergraph = csr_matrix((np.array(new_weights), (sources, targets)), shape=(n, n))
-
-        sources, targets = sparse_clustergraph.nonzero()
-        edgelist = list(zip(sources, targets))
-        return sparse_clustergraph, edgelist
+        graph = csr_matrix((np.array(new_weights), graph.nonzero()), shape=(n, n))
+        return graph, list(zip(graph.nonzero()))
 
     def find_root_iPSC(self, graph_dense, PARC_labels_leiden, root_user, true_labels, super_cluster_labels_sub,
                        super_node_degree_list):
@@ -2360,11 +2358,11 @@ class VIA:
         type = leidenalg.ModularityVertexPartition if self.partition_type == 'ModularityVP' else leidenalg.RBConfigurationVertexPartition
         partition = leidenalg.find_partition(pruned_similarities, partition_type=type, weights=weights,
                                              n_iterations=self.n_iter_leiden, seed=self.random_seed)
-        PARC_labels_leiden = np.array(partition.membership)
-        print(f"{datetime.now()}\tFinished running Leiden algorithm. Found {len(set(PARC_labels_leiden))} clusters.")
+        labels = np.array(partition.membership)
+        print(f"{datetime.now()}\tFinished running Leiden algorithm. Found {len(set(labels))} clusters.")
 
         # Searching for clusters that are too big and split them
-        too_big_clusters = [k for k, v in Counter(PARC_labels_leiden).items() if
+        too_big_clusters = [k for k, v in Counter(labels).items() if
                             v > self.too_big_factor * self.nsamples]
         if len(too_big_clusters):
             print(colored(f"{datetime.now()}\tFound {len(too_big_clusters)} clusters that are too big", "blue"))
@@ -2374,77 +2372,47 @@ class VIA:
         # TODO - add max running time condition
         while len(too_big_clusters):
             cluster = too_big_clusters.pop(0)
-            idx = PARC_labels_leiden == cluster
+            idx = labels == cluster
             print(f"{datetime.now()}\tCluster {cluster} contains "
                   f"{idx.sum()}>{round(self.too_big_factor * self.nsamples)} samples and is too big")
 
             data = self.data[idx]
-            membership = max(PARC_labels_leiden) + 1 + np.array(self.run_toobig_subPARC(data))
+            membership = max(labels) + 1 + np.array(self.run_toobig_subPARC(data))
 
             if len(set(membership)) > 1:
-                PARC_labels_leiden[idx] = membership
+                labels[idx] = membership
                 too_big_clusters.extend(
                     [k for k, v in Counter(membership).items() if v > self.too_big_factor * self.nsamples])
             else:
                 print(f"{datetime.now()}\t\tCould not expand cluster {cluster}")
 
-        small_pop_list = []
-        small_cluster_list = []
-        small_pop_exist = False
+        # Search for clusters that are too small and merge them to non-small clusters based on neighbors' majority vote
+        print(f"{datetime.now()}\tMerging too small clusters (<{self.small_pop})")
+        too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
+        while len(too_small_clusters):
+            # membership of neighbours of samples in small clusters
+            idx = np.where(np.isin(labels, list(too_small_clusters)))[0]
+            neighbours_labels = labels[neighbors[idx]]
+            for i, nl in zip(*[idx, neighbours_labels]):
+                # Retrieve the first non small cluster, with highest number of neighbours
+                label = next((label for label, n in Counter(nl).most_common() if label not in too_small_clusters), None)
+                if label is not None:  # recall 0 is a valid label value
+                    labels[i] = label
 
-        root_user = self.root_user
-        small_pop = self.small_pop
+            # Update set of too small clusters, stopping if converged
+            too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
 
-        for cluster in set(PARC_labels_leiden):
-            population = len(np.where(PARC_labels_leiden == cluster)[0])
+        self.labels = labels
+        print(f"{datetime.now()}\tFinished detecting communities")
 
-            if population < small_pop:  # 10
-                small_pop_exist = True
-
-                small_pop_list.append(list(np.where(PARC_labels_leiden == cluster)[0]))
-                small_cluster_list.append(cluster)
-
-        for small_cluster in small_pop_list:
-
-            for single_cell in small_cluster:
-                old_neighbors = neighbors[single_cell, :]
-                group_of_old_neighbors = PARC_labels_leiden[old_neighbors]
-                group_of_old_neighbors = list(group_of_old_neighbors.flatten())
-                available_neighbours = set(group_of_old_neighbors) - set(small_cluster_list)
-                if len(available_neighbours) > 0:
-                    available_neighbours_list = [value for value in group_of_old_neighbors if
-                                                 value in list(available_neighbours)]
-                    best_group = max(available_neighbours_list, key=available_neighbours_list.count)
-                    PARC_labels_leiden[single_cell] = best_group
-        time_smallpop = time.time()
-        while (not small_pop_exist) & (time.time() - time_smallpop < 15):
-            small_pop_list = []
-            small_pop_exist = False
-            for cluster in set(list(PARC_labels_leiden.flatten())):
-                population = len(np.where(PARC_labels_leiden == cluster)[0])
-                if population < small_pop:
-                    small_pop_exist = True
-                    small_pop_list.append(np.where(PARC_labels_leiden == cluster)[0])
-            for small_cluster in small_pop_list:
-                for single_cell in small_cluster:
-                    old_neighbors = neighbors[single_cell, :]
-                    group_of_old_neighbors = PARC_labels_leiden[old_neighbors]
-                    group_of_old_neighbors = list(group_of_old_neighbors.flatten())
-                    best_group = max(set(group_of_old_neighbors), key=group_of_old_neighbors.count)
-                    PARC_labels_leiden[single_cell] = best_group
-
-        dummy, PARC_labels_leiden = np.unique(list(PARC_labels_leiden.flatten()), return_inverse=True)
-        PARC_labels_leiden = list(PARC_labels_leiden.flatten())
+        labels_list = list(labels)
         pop_list = []
         pop_list_raw = []
-        for item in range(len(set(PARC_labels_leiden))):
-            pop_item = PARC_labels_leiden.count(item)
+        for item in range(len(set(labels_list))):
+            pop_item = labels_list.count(item)
             pop_list.append((item, pop_item))
             pop_list_raw.append(pop_item)
-        # print('list of cluster labels and populations', len(pop_list), pop_list)
-        df_temporary_save = pd.DataFrame(PARC_labels_leiden, columns=['parc'])
-        # df_temporary_save.to_csv("/home/shobi/Trajectory/Datasets/2MOrgan/Figures/Parc_.csv")
-        self.labels = PARC_labels_leiden  # list
+
         n_clus = len(set(self.labels))
 
         # end community detection
@@ -2464,53 +2432,13 @@ class VIA:
             pop_list_raw.append(pop_item)
         '''
 
-        ## Make cluster-graph
-
-        vc_graph = ig.VertexClustering(ig_fullgraph,membership=PARC_labels_leiden)  # jaccard weights, bigger is better
-        vc_graph = vc_graph.cluster_graph(combine_edges='sum')
-
+        # Make cluster-graph
+        print(f"{datetime.now()}\tMaking cluster graph. Global pruning level: {self.cluster_graph_pruning_std}")
+        vc_graph = ig.VertexClustering(ig_fullgraph, membership=self.labels).cluster_graph(combine_edges='sum')
         reweighted_sparse_vc, edgelist = self.recompute_weights(vc_graph, pop_list_raw)
-        if self.dataset == 'toy':
-            global_pruning_std = 1  # kmeans for connected(2) proev 1.5/2
-            print('Toy: global cluster graph pruning level', global_pruning_std)
-        # toy data is usually simpler so we dont need to significantly prune the links as the clusters are usually well separated such that spurious links dont exist
-        elif self.dataset == 'bcell':
-            global_pruning_std = 0.15
-            print('Bcell: global cluster graph pruning level', global_pruning_std)
-        elif self.dataset == 'iPSC':
-            global_pruning_std = 0.15
-            print('iPSC: global cluster graph pruning level', global_pruning_std)
-        elif self.dataset == 'EB':
-            global_pruning_std = 0.15
-            print('EB: global cluster graph pruning level', global_pruning_std)
-        elif self.dataset == 'mESC':
-            global_pruning_std = 0.0
-            print('mESC: global cluster graph pruning level', global_pruning_std)
-        elif self.dataset == '2M':
-            global_pruning_std = 0.15  # 0 for the knn20ncomp30 and knn30ncomp30 run on Aug 12 and Aug11
-            print('2M: global cluster graph pruning level', global_pruning_std)
-        elif self.dataset == 'scATAC':
-            global_pruning_std = 0.15
-            print('scATAC: global cluster graph pruning level', global_pruning_std)
-        elif self.dataset == 'droso':
-            global_pruning_std = 0.15
-            print('droso: global cluster graph pruning level', global_pruning_std)
-        elif self.dataset == 'faced':
-            global_pruning_std = 1
-        elif self.dataset == 'pancreas':
-            global_pruning_std = 0
-            print(self.dataset, ': global cluster graph pruning level', global_pruning_std)
-        elif self.dataset == 'cardiac':
-            global_pruning_std = 0.15
-            print(self.dataset, ': global cluster graph pruning level', global_pruning_std)
-        elif self.dataset == 'cardiac_merge':
-            global_pruning_std = .6
-            print(self.dataset, ': global cluster graph pruning level', global_pruning_std)
-        else:
-            global_pruning_std = self.cluster_graph_pruning_std
-            print(self.dataset, ': global cluster graph pruning level', global_pruning_std)
+
         edgeweights, edgelist, comp_labels = pruning_clustergraph(reweighted_sparse_vc,
-                                                                  global_pruning_std=global_pruning_std,
+                                                                  global_pruning_std=self.cluster_graph_pruning_std,
                                                                   preserve_disconnected=self.preserve_disconnected,
                                                                   preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning)
         self.connected_comp_labels = comp_labels
@@ -2519,16 +2447,13 @@ class VIA:
         locallytrimmed_g = locallytrimmed_g.simplify(combine_edges='sum')
 
         locallytrimmed_sparse_vc = get_sparse_from_igraph(locallytrimmed_g, weight_attr='weight')
-        layout = locallytrimmed_g.layout_fruchterman_reingold(weights='weight')  ##final layout based on locally trimmed
-        # layout = locallytrimmed_g.layout_kamada_kawai()
-        # layout = locallytrimmed_g.layout_graphopt(niter=500, node_charge=0.001, node_mass=5, spring_length=0, spring_constant=1,max_sa_movement=5, seed=None)
+        layout = locallytrimmed_g.layout_fruchterman_reingold(weights='weight')
 
         # globally trimmed link
         sources, targets = locallytrimmed_sparse_vc.nonzero()
         edgelist_simple = list(zip(sources.tolist(), targets.tolist()))
         edgelist_unique = set(tuple(sorted(l)) for l in edgelist_simple)  # keep only one of (0,1) and (1,0)
         self.edgelist_unique = edgelist_unique
-        # print('edge list unique', edgelist_unique)
         self.edgelist = edgelist
 
         # print('edgelist', edgelist)
@@ -2546,9 +2471,11 @@ class VIA:
 
         df_graph['majority_truth'] = 'maj truth'
         df_graph['graph_node_label'] = 'node label'
+        PARC_labels_leiden = self.labels
         set_parc_labels = list(set(PARC_labels_leiden))
         set_parc_labels.sort()
 
+        root_user = self.root_user
         tsi_list = []
         print('root user', root_user)
         df_graph['markov_pt'] = float('NaN')

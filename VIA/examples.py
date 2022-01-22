@@ -802,22 +802,19 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
 
 
 def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1'],
-             foldername="/home/shobi/Trajectory/Datasets/"):
+             cluster_graph_pruning_std=1., foldername="/home/shobi/Trajectory/Datasets/"):
     print('dataset, ncomps, knn, seed', dataset, ncomps, knn, random_seed)
 
     if dataset == "Toy3":
-        df_counts = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000.csv",
-                                delimiter=",")
-        df_ids = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000_ids_with_truetime.csv",
-                             delimiter=",")
+        df_counts = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000.csv", delimiter=",")
+        df_ids = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000_ids.csv", delimiter=",")
 
         root_user = ['M1']
         paga_root = "M1"
     if dataset == "Toy4":  # 2 disconnected components
         print('inside toy4')
-        df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv",
-                                delimiter=",")
-        df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids_with_truetime.csv", delimiter=",")
+        df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv", delimiter=",")
+        df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids.csv", delimiter=",")
         root_user = ['T1_M1', 'T2_M1']  # 'T1_M1'
         paga_root = 'T1_M1'
 
@@ -850,6 +847,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     print('root user', root_user)
     v0 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=jac_std_global, dist_std_local=1,
              knn=knn,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset='toy',
              random_seed=random_seed, piegraph_arrow_head_width=0.4,
              piegraph_edgeweight_scalingfactor=1.0)  # *.4 root=2,
@@ -877,6 +875,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     v1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=jac_std_global, dist_std_local=1,
              knn=knn,
              too_big_factor=0.1,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root_user, is_coarse=False,
              x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='toy',
@@ -943,7 +942,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     plt.show()
 
 
-def main_Bcell(ncomps=50, knn=20, random_seed=0, path='/home/shobi/Trajectory/Datasets/Bcell/'):
+def main_Bcell(ncomps=50, knn=20, random_seed=0, cluster_graph_pruning_std=.15,path='/home/shobi/Trajectory/Datasets/Bcell/'):
     print('Input params: ncomp, knn, random seed', ncomps, knn, random_seed)
 
     # https://github.com/STATegraData/STATegraData
@@ -1175,7 +1174,7 @@ def main_Bcell(ncomps=50, knn=20, random_seed=0, path='/home/shobi/Trajectory/Da
     root_user = [42]
     v0 = VIA(input_via, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=0.3, dataset='bcell',
-
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              root_user=root_user, preserve_disconnected=True, random_seed=random_seed,
              do_impute_bool=True)  # *.4#root_user = 34
     v0.run_VIA()
@@ -1185,6 +1184,7 @@ def main_Bcell(ncomps=50, knn=20, random_seed=0, path='/home/shobi/Trajectory/Da
     tsi_list = get_loc_terminal_states(via0=v0, X_input=adata_counts.obsm['X_pca'][:, 0:ncomps])
     v1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=0.05, is_coarse=False,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root_user, full_neighbor_array=v0.full_neighbor_array,
              full_distance_array=v0.full_distance_array, ig_full_graph=v0.ig_full_graph,
@@ -1312,7 +1312,8 @@ def plot_EB():
     # sc.pl.matrixplot(adata, dict_subset, groupby='parc1', vmax=1, vmin=-1, dendrogram=False)
 
 
-def main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, foldername='/home/shobi/Trajectory/Datasets/EB_Phate/'):
+def main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, cluster_graph_pruning_std=.15,
+                  foldername='/home/shobi/Trajectory/Datasets/EB_Phate/'):
     marker_genes_dict = {'Hermang': ['TAL1', 'HOXB4', 'SOX17', 'CD34', 'PECAM1'],
                          'NP': ['NES', 'MAP2'],
                          'NS': ['KLF7', 'ISL1', 'DLX1', 'ONECUT1', 'ONECUT2', 'OLIG1', 'NPAS1', 'LHX2', 'NR2F1',
@@ -1391,6 +1392,7 @@ def main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, foldername='/home/shobi/
     print('do v0')
     root_user = [1]
     v0 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=v0_too_big, root_user=root_user, dataset='EB', random_seed=v0_random_seed,
              do_impute_bool=True, is_coarse=True, preserve_disconnected=True)  # *.4 root=1,
     v0.run_VIA()
@@ -1398,6 +1400,7 @@ def main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, foldername='/home/shobi/
     tsi_list = get_loc_terminal_states(v0, input_data)
 
     v1 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=v1_too_big, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root_user, is_coarse=False,
              full_neighbor_array=v0.full_neighbor_array,
@@ -1683,7 +1686,7 @@ def main_EB(ncomps=30, knn=20, v0_random_seed=24):
     plt.show()
 
 
-def main_mESC(knn=30, v0_random_seed=42, run_palantir_func=False):
+def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palantir_func=False):
     import random
     rand_str = 950  # random.randint(1, 999)
     print('rand string', rand_str)
@@ -1910,6 +1913,7 @@ def main_mESC(knn=30, v0_random_seed=42, run_palantir_func=False):
     print('finished saving for monocle3')
 
     v0 = VIA(adata.X, true_label_int, jac_std_global=0.3, dist_std_local=1, knn=knn,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=v0_too_big, resolution_parameter=2,
              root_user=root, dataset='mESC', random_seed=v0_random_seed,
              do_impute_bool=True, is_coarse=True, preserve_disconnected=False, pseudotime_threshold_TS=40, x_lazy=0.99,
@@ -1955,6 +1959,7 @@ def main_mESC(knn=30, v0_random_seed=42, run_palantir_func=False):
     '''
     tsi_list = get_loc_terminal_states(v0, adata.X)
     v1 = VIA(adata.X, true_label_int, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=p1_too_big, super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='mESC',
@@ -2012,7 +2017,7 @@ def main_mESC(knn=30, v0_random_seed=42, run_palantir_func=False):
     plt.show()
 
 
-def main_scATAC_zscores(knn=20, ncomps=30):
+def main_scATAC_zscores(knn=20, ncomps=30, cluster_graph_pruning_std=.15):
     # datasets can be downloaded from the link below
     # https://nbviewer.jupyter.org/github/pinellolab/STREAM/blob/master/tutorial/archives/v0.4.1_and_earlier_versions/4.STREAM_scATAC-seq_k-mers.ipynb?flush_cache=true
 
@@ -2168,6 +2173,7 @@ def main_scATAC_zscores(knn=20, ncomps=30):
 
     # palantir_scATAC_Hemato(X_in, knn, embedding, true_label, df_genes)
     v0 = VIA(X_in, true_label, jac_std_global=0.3, dist_std_local=1, knn=knn,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
              do_impute_bool=True, is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
     v0.run_VIA()
@@ -2182,6 +2188,7 @@ def main_scATAC_zscores(knn=20, ncomps=30):
     tsi_list = get_loc_terminal_states(v0, ad.obsm['X_pca'][:, start_ncomp:ncomps])
 
     v1 = VIA(X_in, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=0.05, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
              preserve_disconnected=True, dataset='scATAC',
@@ -2712,7 +2719,7 @@ def run_palantir_faced(ad, knn, tsne, str_true_label, cell_line, df_magic):
     plt.show()
 '''
 
-def main_faced(cell_line='mcf7'):
+def main_faced(cell_line='mcf7', cluster_graph_pruning_std=1.):
     def faced_histogram():
         import seaborn as sns
         # penguins = sns.load_dataset('penguins')
@@ -2964,6 +2971,7 @@ def main_faced(cell_line='mcf7'):
     plt.show()
 
     v0 = VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=3, knn=knn, resolution_parameter=1,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=0.3, root_user=root_user, dataset='faced', random_seed=random_seed,
              do_impute_bool=True, is_coarse=True, preserve_disconnected=True, preserve_disconnected_after_pruning=True,
              pseudotime_threshold_TS=40)  # *.4 root=1,
@@ -3012,6 +3020,7 @@ def main_faced(cell_line='mcf7'):
     tsi_list = get_loc_terminal_states(v0, X_in)
 
     v1 = VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=0.05, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
              preserve_disconnected=True, dataset='faced',
