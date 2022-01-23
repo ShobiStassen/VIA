@@ -21,80 +21,41 @@ import pygam as pg
 from termcolor import colored
 from collections import Counter
 
-def prob_reaching_terminal_state1(terminal_state, all_terminal_states, A, root, pt, num_sim, q,
+
+def prob_reaching_terminal_state1(terminal_state, all_terminal_states, A, root, pt, n_simulations, q,
                                   cumstateChangeHist, cumstateChangeHist_all, seed):
     # this function is defined outside the VIA class to enable smooth parallel processing in Windows
     np.random.seed(seed)
+    n = A.shape[0]
 
-    n_states = A.shape[0]
+    A /= np.max(A)
+    for i, r in enumerate(A):
+        if np.all(r == 0):
+            A[i, i] = 1
+    P = A / A.sum(axis=1).reshape((n, 1))
 
-    A = A / (np.max(A))
+    n_steps, count_reach_terminal_state = 2*n, 0
+    for _ in range(n_simulations):
+        cur_state = root
+        change_hist = np.zeros((n, n))
+        change_hist[root, root] = 1
 
-    jj = 0
-    for row in A:
-        if np.all(row == 0): A[jj, jj] = 1
-        jj = jj + 1
-
-    P = A / A.sum(axis=1).reshape((n_states, 1))
-
-    n_steps = int(2 * n_states)  # 2
-    currentState = root
-    state = np.zeros((1, n_states))
-    state[0, currentState] = 1
-    currentState = root
-    state = np.zeros((1, n_states))
-    state[0, currentState] = 1
-    state_root = state.copy()
-    neigh_terminal = np.where(A[:, terminal_state] > 0)[0]
-    non_nn_terminal_state = []
-    for ts_i in all_terminal_states:
-        if pt[ts_i] > pt[terminal_state]: non_nn_terminal_state.append(ts_i)
-
-    for ts_i in all_terminal_states:
-        if np.all(neigh_terminal != ts_i): non_nn_terminal_state.append(ts_i)
-
-    count_reach_terminal_state = 0
-    count_r = 0
-    for i in range(num_sim):
-        stateChangeHist = np.zeros((n_states, n_states))
-        stateChangeHist[root, root] = 1
-        state = state_root
-        currentState = root
-        stateHist = state
-        terminal_state_found = False
-
-        x = 0
-        while (x < n_steps) & (
-                (terminal_state_found == False)):  # & (non_neighbor_terminal_state_reached == False)):
-            currentRow = np.ma.masked_values((P[currentState]), 0.0)
-            nextState = simulate_multinomial(currentRow)
-            # print('next state', nextState)
-            if nextState == terminal_state:
+        x, terminal_state_found = 0, False
+        while x < n_steps and not terminal_state_found:
+            next_state = np.random.choice(range(P.shape[0]), p=P[cur_state])
+            if next_state == terminal_state:
                 terminal_state_found = True
-                count_r = count_r + 1
 
-            # Keep track of state changes
-            stateChangeHist[currentState, nextState] += 1
-            # Keep track of the state vector itself
-            state = np.zeros((1, n_states))
-            state[0, nextState] = 1.0
-            # Keep track of state history
-            stateHist = np.append(stateHist, state, axis=0)
-            currentState = nextState
-            x = x + 1
+            change_hist[cur_state, next_state] += 1
+            cur_state = next_state
+            x += 1
 
-        if (terminal_state_found == True):
-            cumstateChangeHist = cumstateChangeHist + np.any(
-                stateChangeHist > 0, axis=0)
-            count_reach_terminal_state = count_reach_terminal_state + 1
-        cumstateChangeHist_all = cumstateChangeHist_all + np.any(
-            stateChangeHist > 0, axis=0)
-        # avoid division by zero on states that were never reached (e.g. terminal states that come after the target terminal state)
+        if terminal_state_found:
+            cumstateChangeHist += np.any(change_hist > 0, axis=0)
+            count_reach_terminal_state += 1
+        cumstateChangeHist_all += np.any(change_hist > 0, axis=0)
 
     cumstateChangeHist_all[cumstateChangeHist_all == 0] = 1
-    # prob_ = cumstateChangeHist / cumstateChangeHist_all
-
-    np.set_printoptions(precision=3)
     q.append([cumstateChangeHist, cumstateChangeHist_all])
 
 
@@ -112,28 +73,17 @@ def simulate_markov_sub(A, num_sim, hitting_array, q, root):
     state_root = state.copy()
     for i in range(num_sim):
         dist_list = []
-        # print(i, 'th simulation in Markov')
-        # if i % 10 == 0: print(i, 'th simulation in Markov', time.ctime())
         state = state_root
         currentState = root
         stateHist = state
         for x in range(n_steps):
-            currentRow = np.ma.masked_values((P[currentState]), 0.0)
-            nextState = simulate_multinomial(currentRow)
+            nextState = np.random.choice(range(P.shape[0]), p=P[currentState])
             dist = A[currentState, nextState]
+            dist_list.append(1. / (1 + math.exp(dist - 1)))
 
-            dist = (1 / ((1 + math.exp((dist - 1)))))
-
-            dist_list.append(dist)
-            # print('next state', nextState)
-            # Keep track of state changes
-            # stateChangeHist[currentState,nextState]+=1
-            # Keep track of the state vector itself
             state = np.zeros((1, n_states))
             state[0, nextState] = 1.0
-
             currentState = nextState
-
             # Keep track of state history
             stateHist = np.append(stateHist, state, axis=0)
 
@@ -238,13 +188,6 @@ def get_loc_terminal_states(via0, X_input):
         # print(labelsq[0])
         tsi_list.append(labelsq[0][0])
     return tsi_list
-
-
-def simulate_multinomial(vmultinomial):
-    # used in Markov Simulations
-    sc = np.insert(np.cumsum(vmultinomial), 0, 0)
-    m = (np.where(sc < np.random.uniform()))[0]
-    return m[len(m) - 1]
 
 
 def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
@@ -1277,70 +1220,32 @@ class VIA:
         return terminal_clusters
 
     def compute_hitting_time(self, sparse_graph, root, x_lazy, alpha_teleport, number_eig=0):
-        # 1- alpha is the probabilty of teleporting
+        # 1- alpha is the probability of teleporting
         # 1- x_lazy is the probability of staying in current state (be lazy)
-
         beta_teleport = 2 * (1 - alpha_teleport) / (2 - alpha_teleport)
         N = sparse_graph.shape[0]
 
-        print('start computing lazy-teleporting Expected Hitting Times')
-        A = scipy.sparse.csr_matrix.todense(sparse_graph)  # A is the adjacency matrix
-        # print('is undirected graph symmetric', (A.transpose() == A).all())
-        lap = csgraph.laplacian(sparse_graph,
-                                normed=False)  # compute regular laplacian (normed = False) to infer the degree matrix where D = L+A
-        # see example and definition in the SciPy ref https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csgraph.laplacian.html
-        A = scipy.sparse.csr_matrix.todense(lap)
-        # print('is laplacian symmetric', (A.transpose() == A).all())
-        deg = sparse_graph + lap  # Recall that L=D-A (modified for weighted where D_ii is sum of edge weights and A_ij is the weight of particular edge)
-        deg.data = 1 / np.sqrt(deg.data)  ##inv sqrt of degree matrix
-        deg[deg == np.inf] = 0
-        norm_lap = csgraph.laplacian(sparse_graph, normed=True)  # returns symmetric normalized D^-.5 xL x D^-.5
-        Id = np.zeros((N, N), float)
-        np.fill_diagonal(Id, 1)
-        norm_lap = scipy.sparse.csr_matrix.todense(norm_lap)
+        Lsym = csgraph.laplacian(sparse_graph, normed=True)
+        eigval, eigvec = scipy.sparse.linalg.eigsh(Lsym, number_eig or Lsym.shape[0]-1)
 
-        eig_val, eig_vec = np.linalg.eig(
-            norm_lap)  # eig_vec[:,i] is eigenvector for eigenvalue eig_val[i] not eigh as this is only for symmetric. the eig vecs are not in decsending order
-
-        if number_eig == 0: number_eig = eig_vec.shape[1]
-
-        Greens_matrix = np.zeros((N, N), float)
-        beta_norm_lap = np.zeros((N, N), float)
+        Greens, beta_norm_lap = np.zeros((N, N), float), np.zeros((N, N), float)
         Xu = np.zeros((N, N))
         Xu[:, root] = 1
-        Id_Xv = np.zeros((N, N), int)
-        np.fill_diagonal(Id_Xv, 1)
-        Xv_Xu = Id_Xv - Xu
-        start_ = 0
-        if alpha_teleport == 1:
-            start_ = 1  # if there are no jumps (alph_teleport ==1), then the first term in beta-normalized Green's function will have 0 in denominator (first eigenvalue==0)
+        Xv_Xu = np.eye(N) - Xu
 
-        for i in range(start_, number_eig):  # 0 instead of 1th eg
+        for i in range(1 if alpha_teleport == 1 else 0, len(eigval)):
+            vv = np.outer(eigvec[:, i], eigvec[:, i])
+            factor = beta_teleport + 2 * eigval[i] * x_lazy * (1 - beta_teleport)
 
-            vec_i = eig_vec[:, i]
-            factor = beta_teleport + 2 * eig_val[i] * x_lazy * (1 - beta_teleport)
+            Greens += vv / factor
+            beta_norm_lap += vv * factor
 
-            vec_i = np.reshape(vec_i, (-1, 1))
-            eigen_vec_mult = vec_i.dot(vec_i.T)
-            Greens_matrix = Greens_matrix + (
-                    eigen_vec_mult / factor)  # Greens function is the inverse of the beta-normalized laplacian
-            beta_norm_lap = beta_norm_lap + (eigen_vec_mult * factor)  # beta-normalized laplacian
+        D = np.diag(np.nan_to_num(np.array(sparse_graph.sum(axis=1)).reshape(-1) ** -.5, posinf=0))
+        t = D @ Greens @ D * beta_teleport
 
-        deg = scipy.sparse.csr_matrix.todense(deg)
-
-        temp = Greens_matrix.dot(deg)
-        temp = deg.dot(temp) * beta_teleport
-        hitting_matrix = np.zeros((N, N), float)
-        diag_row = np.diagonal(temp)
-        for i in range(N):
-            hitting_matrix[i, :] = diag_row - temp[i, :]
-
-        roundtrip_commute_matrix = hitting_matrix + hitting_matrix.T
-        temp = Xv_Xu.dot(temp)
-        final_hitting_times = np.diagonal(
-            temp)  ## number_eig x 1 vector of hitting times from root (u) to number_eig of other nodes
-        roundtrip_times = roundtrip_commute_matrix[root, :]
-        return abs(final_hitting_times), roundtrip_times
+        hitting_matrix = np.diagonal(t)[np.newaxis, :] - t
+        # Calculate only diagonal elements of Xv_Xu @ t
+        return np.abs((Xv_Xu * t.T).sum(-1)), (hitting_matrix + hitting_matrix.T)[root]
 
     def simulate_branch_probability(self, terminal_state, all_terminal_states, A, root, pt, num_sim=500):
 
@@ -1540,6 +1445,27 @@ class VIA:
             for c in set(clusters):
                 weights[r, c] = np.sum(clusters == c) / knn_sc
 
+
+        row_list = []
+        col_list = []
+        weight_list = []
+        irow = 0
+        # print('filling in weight array', time.ctime())
+        for row in neighbors:
+            neighboring_clus = self.labels[row]
+
+            for clus_i in set(list(neighboring_clus)):
+                num_clus_i = np.sum(neighboring_clus == clus_i)
+                wi = num_clus_i / knn_sc
+                weight_list.append(wi)
+                row_list.append(irow)
+                col_list.append(clus_i)
+                # weight_array[irow, clus_i] = wi
+            irow = irow + 1
+        # print('start dot product', time.ctime())
+        weight_array = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
+                                  shape=(self.data.shape[0], len(set(self.labels))))
+
         bp = weights @ brach_probabilities
         bp = bp * 1. / np.max(bp, axis=0)  # divide cell by max value in that column
 
@@ -1550,6 +1476,62 @@ class VIA:
 
         pt = weights @ pt
         return bp, pt / np.amax(pt)
+
+    def project_branch_probability_sc2(self, bp_array_clus, pt):
+        print('start single cell projections of pseudotime and lineage likelihood')
+        n_clus = len(list(set(self.labels)))
+        labels = np.asarray(self.labels)
+        n_cells = self.data.shape[0]
+
+        if self.data.shape[0] > 1000:
+            knn_sc = 3
+        else:
+            knn_sc = 10
+
+        neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=knn_sc)
+        # print('shape of neighbor in project onto sc', neighbor_array.shape)
+        # print('start initalize coo', time.ctime())
+        # weight_array = coo_matrix((n_cells, n_clus)).tocsr()  # csr_matrix
+
+        row_list = []
+        col_list = []
+        weight_list = []
+        irow = 0
+        # print('filling in weight array', time.ctime())
+        for row in neighbor_array:
+            neighboring_clus = labels[row]
+
+            for clus_i in set(list(neighboring_clus)):
+                num_clus_i = np.sum(neighboring_clus == clus_i)
+                wi = num_clus_i / knn_sc
+                weight_list.append(wi)
+                row_list.append(irow)
+                col_list.append(clus_i)
+                # weight_array[irow, clus_i] = wi
+            irow = irow + 1
+        # print('start dot product', time.ctime())
+        weight_array = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
+                                  shape=(n_cells, n_clus))
+        bp_array_sc = weight_array.dot(bp_array_clus)
+        bp_array_sc = bp_array_sc * 1. / np.max(bp_array_sc, axis=0)  # divide cell by max value in that column
+        # print('column max:',np.max(bp_array_sc, axis=0))
+        # print('sc bp array max', np.max(bp_array_sc))
+        # bp_array_sc = bp_array_sc/np.max(bp_array_sc)
+        for i, label_ts in enumerate(list(self.terminal_clusters)):
+
+            loc_i = np.where(np.asarray(self.labels) == label_ts)[0]
+            loc_noti = np.where(np.asarray(self.labels) != label_ts)[0]
+            if np.max(bp_array_sc[loc_noti, i]) > 0.8: bp_array_sc[loc_i, i] = 1.2
+        pt = np.asarray(pt)
+        pt = np.reshape(pt, (n_clus, 1))
+        pt_sc = weight_array.dot(pt)
+        pt_sc = pt_sc / np.amax(pt_sc)
+
+        self.single_cell_bp = bp_array_sc
+        self.single_cell_pt_markov = pt_sc.flatten()
+        df_via_pt = pd.DataFrame(self.single_cell_pt_markov)
+
+        return
 
     def construct_knn(self, data: np.ndarray, too_big: bool = False) -> hnswlib.Index:
         """
@@ -2474,8 +2456,9 @@ class VIA:
                 print('cannot find the new root index')
                 new_root_index = 0
 
-            hitting_times, roundtrip_times = self.compute_hitting_time(
-                a_i, root=new_root_index, x_lazy=self.x_lazy, alpha_teleport=self.alpha_teleport)
+            print(f"{datetime.now()}\tComputing lazy-teleporting expected hitting times")
+            hitting_times, roundtrip_times = self.compute_hitting_time(a_i, new_root_index, self.x_lazy, self.alpha_teleport)
+
             # rescale hitting times
             very_high = np.mean(hitting_times) + 1.5 * np.std(hitting_times)
             without_very_high_pt = [iii for iii in hitting_times if iii < very_high]
@@ -2483,20 +2466,19 @@ class VIA:
             # print('very high, and new very high', very_high, new_very_high)
             new_hitting_times = [x if x < very_high else very_high for x in hitting_times]
             hitting_times = np.asarray(new_hitting_times)
-            scaling_fac = 10. / max(hitting_times)
+            scaling_fac = 10 / max(hitting_times)
             hitting_times = hitting_times * scaling_fac
-            edgelist_ai = list(zip(*a_i.nonzero()))
+            s_ai, t_ai = a_i.nonzero()
+            edgelist_ai = list(zip(s_ai, t_ai))
             edgeweights_ai = a_i.data
             biased_edgeweights_ai = get_biased_weights(edgelist_ai, edgeweights_ai, hitting_times)
-
             adjacency_matrix_ai = np.zeros((a_i.shape[0], a_i.shape[0]))
-
             for i, (start, end) in enumerate(edgelist_ai):
                 adjacency_matrix_ai[start, end] = biased_edgeweights_ai[i]
 
-            markov_hitting_times_ai = self.simulate_markov(adjacency_matrix_ai, new_root_index)  # +adjacency_matrix.T))
+            markov_hitting_times_ai = self.simulate_markov(adjacency_matrix_ai, new_root_index)
 
-            very_high = np.mean(markov_hitting_times_ai) + 1.5 * np.std(markov_hitting_times_ai)  # 1.5
+            very_high = np.mean(markov_hitting_times_ai) + 1.5 * np.std(markov_hitting_times_ai)
             very_high = min(very_high, max(markov_hitting_times_ai))
             without_very_high_pt = [iii for iii in markov_hitting_times_ai if iii < very_high]
             new_very_high = min(np.mean(without_very_high_pt) + np.std(without_very_high_pt), very_high)
@@ -2654,8 +2636,10 @@ class VIA:
         self.terminal_clusters = terminal_clus
         print('terminal clusters', terminal_clus)
         self.node_degree_list = node_deg_list
-        print(colored(f"{datetime.now()}\tBegin projection of pseudotime and lineage likelihood","red"))
-        self.single_cell_bp, self.single_cell_pt_markov = self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
+        print(colored(f"{datetime.now()}\tBegin projection of pseudotime and lineage likelihood", "red"))
+        a, b = self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
+        # self.single_cell_bp, self.single_cell_pt_markov
+        self.project_branch_probability_sc2(bp_array, df_graph['markov_pt'].values)
         self.dict_terminal_super_sub_pairs = dict_terminal_super_sub_pairs
         hitting_times = self.markov_hitting_times
 
