@@ -1,32 +1,25 @@
-import igraph
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix, csgraph
 import scipy
+from scipy import sparse
+from scipy.sparse import csr_matrix, csgraph
+from scipy.sparse.csgraph import minimum_spanning_tree, connected_components
+import igraph
 import igraph as ig
 import leidenalg
 import time
 from datetime import datetime
 import hnswlib
-
 import matplotlib
 import matplotlib.pyplot as plt
-import math
-import multiprocessing
-from scipy.sparse.csgraph import minimum_spanning_tree
-from scipy import sparse
-from scipy.sparse.csgraph import connected_components
-import pygam as pg
 import matplotlib.colors as colors
 import matplotlib.cm as cm
+from matplotlib.path import get_path_collection_extents
+import math
+import multiprocessing
+import pygam as pg
 from termcolor import colored
 from collections import Counter
-
-from matplotlib.path import get_path_collection_extents
-#import palantir  # /home/shobi/anaconda3/envs/ViaEnv/lib/python3.7/site-packages/palantir
-
-
-# #07-Nov-2021,upload this version to github/pypip
 
 def prob_reaching_terminal_state1(terminal_state, all_terminal_states, A, root, pt, num_sim, q,
                                   cumstateChangeHist, cumstateChangeHist_all, seed):
@@ -910,26 +903,22 @@ def csr_mst(adjacency_matrix):
     return (Tcsr + Tcsr.T) * 0.5  # make symmetric
 
 
-def connect_all_components(MSTcsr, cluster_graph_csr, adjacency_matrix):
+def connect_all_components(MSTcsr, cluster_graph_csr, adjacency):
     # connect forest of MSTs (csr)
-
-    n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
-    while n_components > 1:
-        sub_td = MSTcsr[comp_labels == 0, :][:, comp_labels != 0]
-        # print('minimum value of link connecting components', np.min(sub_td.data))
+    n, labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+    while n > 1:
+        sub_td = MSTcsr[labels == 0, :][:, labels != 0]
         locxy = scipy.sparse.find(MSTcsr == np.min(sub_td.data))
         for i in range(len(locxy[0])):
-            if (comp_labels[locxy[0][i]] == 0) & (comp_labels[locxy[1][i]] != 0):
+            if (labels[locxy[0][i]] == 0) & (labels[locxy[1][i]] != 0):
                 x, y = locxy[0][i], locxy[1][i]
 
-        minval = adjacency_matrix[x, y]
-        cluster_graph_csr[x, y] = minval
-        n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
-        # print('number of connected components after reconnecting ', n_components)
+        cluster_graph_csr[x, y] = adjacency[x, y]
+        n, labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
     return cluster_graph_csr
 
 
-def pruning_clustergraph(adjacency_matrix, global_pruning_std=1, max_outgoing=30, preserve_disconnected=True,
+def pruning_clustergraph(adjacency, global_pruning_std=1., max_outgoing=30, preserve_disconnected=True,
                          preserve_disconnected_after_pruning=False):
     # neighbors in the adjacency matrix (neighbor-matrix) are not listed in in any order of proximity
     # larger pruning_std factor means less pruning
@@ -937,21 +926,20 @@ def pruning_clustergraph(adjacency_matrix, global_pruning_std=1, max_outgoing=30
     # print('global pruning std', global_pruning_std, 'max outoing', max_outgoing)
     from scipy.sparse.csgraph import minimum_spanning_tree
 
-    Tcsr = csr_mst(adjacency_matrix)
-    initial_links_n = len(adjacency_matrix.data)
+    Tcsr = csr_mst(adjacency)
+    initial_links_n = len(adjacency.data)
 
-    n_components_0, comp_labels_0 = connected_components(csgraph=adjacency_matrix, directed=False, return_labels=True)
-    print('number of components before pruning', n_components_0)  # , comp_labels_0)
-    adjacency_matrix = scipy.sparse.csr_matrix.todense(adjacency_matrix)
+    n_comp, comp_labels = connected_components(csgraph=adjacency, directed=False, return_labels=True)
+    print(f"{datetime.now()}\tGraph has {n_comp} connected components before pruning")
+    adjacency = scipy.sparse.csr_matrix.todense(adjacency)
     row_list = []
     col_list = []
     weight_list = []
 
-    n_cells = adjacency_matrix.shape[0]
     rowi = 0
 
-    for i in range(adjacency_matrix.shape[0]):
-        row = np.asarray(adjacency_matrix[i, :]).flatten()
+    for i in range(adjacency.shape[0]):
+        row = np.asarray(adjacency[i, :]).flatten()
         n_nonz = min(np.sum(row > 0), max_outgoing)
         to_keep_index = np.argsort(row)[::-1][0:n_nonz]  # np.where(row>np.mean(row))[0]#
         # print('to keep', to_keep_index)
@@ -964,37 +952,29 @@ def pruning_clustergraph(adjacency_matrix, global_pruning_std=1, max_outgoing=30
         rowi = rowi + 1
     final_links_n = len(weight_list)
 
-    cluster_graph_csr = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
-                                   shape=(n_cells, n_cells))
-
+    cluster_graph_csr = csr_matrix((weight_list, (row_list, col_list)), shape=adjacency.shape)
     sources, targets = cluster_graph_csr.nonzero()
     mask = np.zeros(len(sources), dtype=bool)
 
     cluster_graph_csr.data = cluster_graph_csr.data / (np.std(cluster_graph_csr.data))  # normalize
     threshold_global = np.mean(cluster_graph_csr.data) - global_pruning_std * np.std(cluster_graph_csr.data)
-    # print('threshold global', threshold_global, ' mean:', np.mean(cluster_graph_csr.data))
-    mask |= (cluster_graph_csr.data < (threshold_global))  # smaller Jaccard weight means weaker edge
+    mask |= (cluster_graph_csr.data < threshold_global)  # smaller Jaccard weight means weaker edge
 
     cluster_graph_csr.data[mask] = 0
     cluster_graph_csr.eliminate_zeros()
-    # print('shape of cluster graph', cluster_graph_csr.shape)
 
-    n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
-    # print('number of connected components after pruning', n_components)
-    # print('number of connected components after pruning', comp_labels)
-    # print('n_components_0', n_components_0)
-    n_components_preserve = n_components_0
-    if preserve_disconnected_after_pruning == True: n_components_preserve = n_components
-    # if (n_components > n_components_0): print('n_components > n_components_0',n_components ,'is bigger than', n_components_0)
-    if (preserve_disconnected == True) & (n_components > n_components_0):  # preserve initial disconnected components
+    prev_n_comp, prev_comp_labels = n_comp, comp_labels
+    n_comp, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+    n_comp_preserve = n_comp if preserve_disconnected_after_pruning else prev_n_comp
 
+    # preserve initial disconnected components
+    if preserve_disconnected and n_comp > prev_n_comp:
         Td = Tcsr.todense()
         Td[Td == 0] = 999.999
-        n_components_ = n_components
-        while n_components_ > n_components_preserve:
-            for i in range(n_components_preserve):
-                loc_x = np.where(comp_labels_0 == i)[0]
-
+        n_comp_ = n_comp
+        while n_comp_ > n_comp_preserve:
+            for i in range(n_comp_preserve):
+                loc_x = np.where(prev_comp_labels == i)[0]
                 len_i = len(set(comp_labels[loc_x]))
 
                 while len_i > 1:
@@ -1004,31 +984,28 @@ def pruning_clustergraph(adjacency_matrix, global_pruning_std=1, max_outgoing=30
                     sub_td = Td[loc_xx, :][:, loc_notxx]
                     locxy = np.where(Td == np.min(sub_td))
                     for i in range(len(locxy[0])):
-                        if (comp_labels[locxy[0][i]] != comp_labels[locxy[1][i]]):
-                            x,y = locxy[0][i], locxy[1][i]
+                        if comp_labels[locxy[0][i]] != comp_labels[locxy[1][i]]:
+                            x, y = locxy[0][i], locxy[1][i]
 
-                    minval = adjacency_matrix[x, y]
-                    cluster_graph_csr[x, y] = minval
-                    n_components_, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False,
-                                                                      return_labels=True)
-                    loc_x = np.where(comp_labels_0 == i)[0]
+                    cluster_graph_csr[x, y] = adjacency[x, y]
+                    n_comp_, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+                    loc_x = np.where(prev_comp_labels == i)[0]
                     len_i = len(set(comp_labels[loc_x]))
-        print('number of connected componnents after reconnecting ', n_components_)
+        print(f"{datetime.now()}\tGraph has {n_comp_} connected components after reconnecting")
 
-    if (n_components > 1) & (preserve_disconnected == False):
-        cluster_graph_csr = connect_all_components(Tcsr, cluster_graph_csr, adjacency_matrix)
-        n_components, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+    elif not preserve_disconnected and n_comp > 1:
+        cluster_graph_csr = connect_all_components(Tcsr, cluster_graph_csr, adjacency)
+        n_comp, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
 
-    sources, targets = cluster_graph_csr.nonzero()
-    edgelist = list(zip(sources, targets))
-    edgeweights = cluster_graph_csr.data / (np.std(cluster_graph_csr.data))
+    edges = list(zip(*cluster_graph_csr.nonzero()))
+    weights = cluster_graph_csr.data / (np.std(cluster_graph_csr.data))
 
-    trimmed_n = (initial_links_n - final_links_n) * 100 / initial_links_n
-    trimmed_n_glob = (initial_links_n - len(edgeweights)) * 100 / initial_links_n
+    trimmed_n = (initial_links_n - final_links_n) * 100. / initial_links_n
+    trimmed_n_glob = (initial_links_n - len(weights)) * 100. / initial_links_n
     if global_pruning_std < 0.5:
-        print("percentage links trimmed from local pruning relative to start {:.1f}".format(trimmed_n))
-        print("percentage links trimmed from global pruning relative to start {:.1f}".format(trimmed_n_glob))
-    return edgeweights, edgelist, comp_labels
+        print(f"{datetime.now()}\t{round(trimmed_n, 1)}% links trimmed from local pruning relative to start")
+        print(f"{datetime.now()}\t{round(trimmed_n_glob, 1)}% links trimmed from local pruning relative to start")
+    return weights, edges, comp_labels
 
 
 def get_sparse_from_igraph(graph: igraph.Graph, weight_attr=None):
@@ -1044,6 +1021,21 @@ def get_sparse_from_igraph(graph: igraph.Graph, weight_attr=None):
     if len(edges) > 0:
         return csr_matrix((weights, zip(*edges)), shape=shape)
     return csr_matrix(shape)
+
+
+def recompute_weights(graph: igraph.Graph, label_counts: Counter):
+    graph = get_sparse_from_igraph(graph, weight_attr='weight')
+    weights, scale_factor, w_min = [], 1., 0
+    for s, t, w in zip(*[*graph.nonzero(), graph.data]):
+        ns, nt = label_counts[s], label_counts[t]
+        nw = w * (ns + nt) / (1. * ns * nt)
+        weights.append(nw)
+
+        scale_factor = max(weights) - min(weights)
+        if w_min > nw: w_min = nw
+
+    weights = [(w + w_min) / scale_factor for w in weights]
+    return csr_matrix((weights, graph.nonzero()), shape=graph.shape)
 
 
 class VIA:
@@ -1069,6 +1061,9 @@ class VIA:
 
         self.knn_struct = None
         self.labels = None
+        self.connected_comp_labels = None
+        self.edgelist = None
+        self.edgelist_unique = None
 
         # higher dist_std_local means more edges are kept
         # highter jac_std_global means more edges are kept
@@ -1535,98 +1530,26 @@ class VIA:
         roundtrip_times = roundtrip_commute_matrix[root, :]
         return abs(final_hitting_times), roundtrip_times
 
-    def project_branch_probability_sc(self, bp_array_clus, pt):
-        print('start single cell projections of pseudotime and lineage likelihood')
-        n_clus = len(list(set(self.labels)))
-        labels = np.asarray(self.labels)
-        n_cells = self.data.shape[0]
+    def project_branch_probability_sc(self, brach_probabilities, pt):
+        knn_sc = 3 if self.data.shape[0] > 1000 else 10
+        neighbors, _ = self.knn_struct.knn_query(self.data, k=knn_sc)
 
-        if self.data.shape[0] > 1000:
-            knn_sc = 3
-        else:
-            knn_sc = 10
+        weights = csr_matrix(([0], ([0], [0])), shape=(self.data.shape[0], len(set(self.labels))))
+        for r, sn in enumerate(neighbors):
+            clusters = self.labels[sn]
+            for c in set(clusters):
+                weights[r, c] = np.sum(clusters == c) / knn_sc
 
-        neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=knn_sc)
-        # print('shape of neighbor in project onto sc', neighbor_array.shape)
-        # print('start initalize coo', time.ctime())
-        # weight_array = coo_matrix((n_cells, n_clus)).tocsr()  # csr_matrix
-
-        row_list = []
-        col_list = []
-        weight_list = []
-        irow = 0
-        # print('filling in weight array', time.ctime())
-        for row in neighbor_array:
-            neighboring_clus = labels[row]
-
-            for clus_i in set(list(neighboring_clus)):
-                num_clus_i = np.sum(neighboring_clus == clus_i)
-                wi = num_clus_i / knn_sc
-                weight_list.append(wi)
-                row_list.append(irow)
-                col_list.append(clus_i)
-                # weight_array[irow, clus_i] = wi
-            irow = irow + 1
-        # print('start dot product', time.ctime())
-        weight_array = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
-                                  shape=(n_cells, n_clus))
-        bp_array_sc = weight_array.dot(bp_array_clus)
-        bp_array_sc = bp_array_sc * 1. / np.max(bp_array_sc, axis=0)  # divide cell by max value in that column
-        # print('column max:',np.max(bp_array_sc, axis=0))
-        # print('sc bp array max', np.max(bp_array_sc))
-        # bp_array_sc = bp_array_sc/np.max(bp_array_sc)
-        for i, label_ts in enumerate(list(self.terminal_clusters)):
-
-            loc_i = np.where(np.asarray(self.labels) == label_ts)[0]
-            loc_noti = np.where(np.asarray(self.labels) != label_ts)[0]
-            if np.max(bp_array_sc[loc_noti, i]) > 0.8: bp_array_sc[loc_i, i] = 1.2
-        pt = np.asarray(pt)
-        pt = np.reshape(pt, (n_clus, 1))
-        pt_sc = weight_array.dot(pt)
-        pt_sc = pt_sc / np.amax(pt_sc)
-
-        self.single_cell_bp = bp_array_sc
-        self.single_cell_pt_markov = pt_sc.flatten()
-        df_via_pt = pd.DataFrame(self.single_cell_pt_markov)
-
-        return
-
-    def project_branch_probability_sc_old(self, bp_array_clus, pt):
-        labels = np.asarray(self.labels)
-        n_cells = self.data.shape[0]
-        if n_cells > 1000:
-            knn_sc = 3
-        else:
-            knn_sc = 10
-
-        neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=knn_sc)
-        print('shape of neighbor in project onto single cell', neighbor_array.shape)
-
-        n_clus = len(list(set(labels)))
-        print('initialize csr')
-        weight_array = csr_matrix((n_cells, n_clus))  # np.zeros((len(labels), n_clus))
-        print('filling in weight array')
-        for irow, row in enumerate(neighbor_array):
-            neighboring_clus = labels[row]
-            for clus_i in set(list(neighboring_clus)):
-                num_clus_i = np.sum(neighboring_clus == clus_i)
-                wi = num_clus_i / knn_sc
-                weight_array[irow, clus_i] = wi
-        print('convert weight array in sc_project_bp to csr_matrix')
-        bp_array_sc = weight_array.dot(bp_array_clus)
-        bp_array_sc = bp_array_sc * 1. / np.max(bp_array_sc, axis=0)  # divide cell by max value in that column
+        bp = weights @ brach_probabilities
+        bp = bp * 1. / np.max(bp, axis=0)  # divide cell by max value in that column
 
         for i, label_ts in enumerate(list(self.terminal_clusters)):
-            loc_i = np.where(np.asarray(self.labels) == label_ts)[0]
-            loc_noti = np.where(np.asarray(self.labels) != label_ts)[0]
-            if np.max(bp_array_sc[loc_noti, i]) > 0.8: bp_array_sc[loc_i, i] = 1.2
-        pt = np.asarray(pt)
-        pt = np.reshape(pt, (n_clus, 1))
-        pt_sc = weight_array.dot(pt)
+            loc = self.labels == label_ts
+            if np.max(bp[~loc, i]) > 0.8:
+                bp[loc, i] = 1.2
 
-        self.single_cell_bp = bp_array_sc
-        self.single_cell_pt_markov = pt_sc.flatten()
-        return
+        pt = weights @ pt
+        return bp, pt / np.amax(pt)
 
     def construct_knn(self, data: np.ndarray, too_big: bool = False) -> hnswlib.Index:
         """
@@ -1874,31 +1797,6 @@ class VIA:
         dummy, PARC_labels_leiden = np.unique(list(PARC_labels_leiden.flatten()), return_inverse=True)
         self.labels = PARC_labels_leiden
         return PARC_labels_leiden
-
-    def recompute_weights(self, graph: igraph.Graph, pop_list_raw):
-        graph = get_sparse_from_igraph(graph, weight_attr='weight')
-        n = graph.shape[0]
-        sources, targets = graph.nonzero()
-        edgelist = list(zip(sources, targets))
-        weights = graph.data
-
-        new_weights = []
-        i = 0
-        for s, t in edgelist:
-            pop_s = pop_list_raw[s]
-            pop_t = pop_list_raw[t]
-            w = weights[i]
-            nw = w * (pop_s + pop_t) / (pop_s * pop_t)  # *
-            new_weights.append(nw)
-
-            i = i + 1
-            scale_factor = max(new_weights) - min(new_weights)
-            wmin = min(new_weights)
-
-        new_weights = [(wi + wmin) / scale_factor for wi in new_weights]
-
-        graph = csr_matrix((np.array(new_weights), graph.nonzero()), shape=(n, n))
-        return graph, list(zip(graph.nonzero()))
 
     def find_root_iPSC(self, graph_dense, PARC_labels_leiden, root_user, true_labels, super_cluster_labels_sub,
                        super_node_degree_list):
@@ -2339,8 +2237,7 @@ class VIA:
         print(f"{datetime.now()}\tFinished running Leiden algorithm. Found {len(set(labels))} clusters.")
 
         # Searching for clusters that are too big and split them
-        too_big_clusters = [k for k, v in Counter(labels).items() if
-                            v > self.too_big_factor * self.nsamples]
+        too_big_clusters = [k for k, v in Counter(labels).items() if v > self.too_big_factor * self.nsamples]
         if len(too_big_clusters):
             print(colored(f"{datetime.now()}\tFound {len(too_big_clusters)} clusters that are too big", "blue"))
         else:
@@ -2379,7 +2276,8 @@ class VIA:
             # Update set of too small clusters, stopping if converged
             too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
 
-        self.labels = labels
+        # Reset labels to begin from zero and with no missing numbers
+        self.labels = labels = np.unique(labels, return_inverse=True)[1]
         print(f"{datetime.now()}\tFinished detecting communities")
 
         # end community detection
@@ -2401,50 +2299,28 @@ class VIA:
 
         # Make cluster-graph
         print(f"{datetime.now()}\tMaking cluster graph. Global pruning level: {self.cluster_graph_pruning_std}")
-        vc_graph = ig.VertexClustering(ig_fullgraph, membership=self.labels).cluster_graph(combine_edges='sum')
-
-
-        labels_list = list(labels)
-        pop_list = []
-        pop_list_raw = []
-        for item in range(len(set(labels_list))):
-            pop_item = labels_list.count(item)
-            pop_list.append((item, pop_item))
-            pop_list_raw.append(pop_item)
-        reweighted_sparse_vc, edgelist = self.recompute_weights(vc_graph, pop_list_raw)
-
-        edgeweights, edgelist, comp_labels = pruning_clustergraph(reweighted_sparse_vc,
-                                                                  global_pruning_std=self.cluster_graph_pruning_std,
-                                                                  preserve_disconnected=self.preserve_disconnected,
-                                                                  preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning)
+        graph = ig.VertexClustering(ig_fullgraph, membership=self.labels).cluster_graph(combine_edges='sum')
+        graph = recompute_weights(graph, Counter(labels))
+        edgeweights, edges, comp_labels = pruning_clustergraph(graph,
+            global_pruning_std=self.cluster_graph_pruning_std,
+            preserve_disconnected=self.preserve_disconnected,
+            preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning)
         self.connected_comp_labels = comp_labels
 
-        locallytrimmed_g = ig.Graph(edgelist, edge_attrs={'weight': edgeweights.tolist()})
-        locallytrimmed_g = locallytrimmed_g.simplify(combine_edges='sum')
-
+        locallytrimmed_g = ig.Graph(edges, edge_attrs={'weight': edgeweights}).simplify(combine_edges='sum')
         locallytrimmed_sparse_vc = get_sparse_from_igraph(locallytrimmed_g, weight_attr='weight')
         layout = locallytrimmed_g.layout_fruchterman_reingold(weights='weight')
 
         # globally trimmed link
-        sources, targets = locallytrimmed_sparse_vc.nonzero()
-        edgelist_simple = list(zip(sources.tolist(), targets.tolist()))
-        edgelist_unique = set(tuple(sorted(l)) for l in edgelist_simple)  # keep only one of (0,1) and (1,0)
-        self.edgelist_unique = edgelist_unique
-        self.edgelist = edgelist
-
-        # print('edgelist', edgelist)
-        x_lazy = self.x_lazy
-        alpha_teleport = self.alpha_teleport
+        self.edgelist_unique = set(tuple(sorted(l)) for l in zip(*locallytrimmed_sparse_vc.nonzero()))  # keep only one of (0,1) and (1,0)
+        self.edgelist = edges
 
         # number of components
+        n_components, labels_cc = connected_components(csgraph=locallytrimmed_sparse_vc, directed=False, return_labels=True)
 
-        n_components, labels_cc = connected_components(csgraph=locallytrimmed_sparse_vc, directed=False,
-                                                       return_labels=True)
-        print('there are ', n_components, 'components in the graph')
         df_graph = pd.DataFrame(locallytrimmed_sparse_vc.todense())
         df_graph['cc'] = labels_cc
         df_graph['pt'] = float('NaN')
-
         df_graph['majority_truth'] = 'maj truth'
         df_graph['graph_node_label'] = 'node label'
         PARC_labels_leiden = self.labels
@@ -2479,6 +2355,7 @@ class VIA:
             sc_truelabels_subi = [self.true_label[i] for i in range(len(PARC_labels_leiden)) if
                                   (PARC_labels_leiden[i] in cluster_labels_subi)]
 
+            # TODO - remove this code and dataset specific `find_root` methods to external file
             if ((self.dataset == 'toy') | (self.dataset == 'faced')):
 
                 if self.super_cluster_labels != False:
@@ -2494,9 +2371,6 @@ class VIA:
 
                     super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if
                                          (PARC_labels_leiden[i] in cluster_labels_subi)]
-                    # print('super node degree', self.super_node_degree_list)
-                    # print('component', comp_i, 'has root', root_user[comp_i])
-                    # print('super_labels_subi', super_labels_subi)
 
                     graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_toy(a_i,
                                                                                                           sc_labels_subi,
@@ -2588,19 +2462,20 @@ class VIA:
 
             for item in node_deg_list_i:
                 node_deg_list.append(item)
-            # print('a_i shape, true labels shape', a_i.shape, len(sc_truelabels_subi), len(sc_labels_subi))
+
 
             new_root_index_found = False
             for ii, llabel in enumerate(cluster_labels_subi):
                 if root_i == llabel:
                     new_root_index = ii
                     new_root_index_found = True
-                    # print('new root index', new_root_index, ' original root cluster was', root_i)
+
             if not new_root_index_found:
                 print('cannot find the new root index')
                 new_root_index = 0
+
             hitting_times, roundtrip_times = self.compute_hitting_time(
-                a_i, root=new_root_index, x_lazy=x_lazy, alpha_teleport=alpha_teleport)
+                a_i, root=new_root_index, x_lazy=self.x_lazy, alpha_teleport=self.alpha_teleport)
             # rescale hitting times
             very_high = np.mean(hitting_times) + 1.5 * np.std(hitting_times)
             without_very_high_pt = [iii for iii in hitting_times if iii < very_high]
@@ -2608,25 +2483,18 @@ class VIA:
             # print('very high, and new very high', very_high, new_very_high)
             new_hitting_times = [x if x < very_high else very_high for x in hitting_times]
             hitting_times = np.asarray(new_hitting_times)
-            scaling_fac = 10 / max(hitting_times)
+            scaling_fac = 10. / max(hitting_times)
             hitting_times = hitting_times * scaling_fac
-            s_ai, t_ai = a_i.nonzero()
-            edgelist_ai = list(zip(s_ai, t_ai))
+            edgelist_ai = list(zip(*a_i.nonzero()))
             edgeweights_ai = a_i.data
-            # print('edgelist ai', edgelist_ai)
-            # print('edgeweight ai', edgeweights_ai)
             biased_edgeweights_ai = get_biased_weights(edgelist_ai, edgeweights_ai, hitting_times)
 
-            # biased_sparse = csr_matrix((biased_edgeweights, (row, col)))
             adjacency_matrix_ai = np.zeros((a_i.shape[0], a_i.shape[0]))
 
             for i, (start, end) in enumerate(edgelist_ai):
                 adjacency_matrix_ai[start, end] = biased_edgeweights_ai[i]
 
-            markov_hitting_times_ai = self.simulate_markov(adjacency_matrix_ai,
-                                                           new_root_index)  # +adjacency_matrix.T))
-
-            # for eee, ttt in enumerate(markov_hitting_times_ai):print('cluster ', eee, ' had markov time', ttt)
+            markov_hitting_times_ai = self.simulate_markov(adjacency_matrix_ai, new_root_index)  # +adjacency_matrix.T))
 
             very_high = np.mean(markov_hitting_times_ai) + 1.5 * np.std(markov_hitting_times_ai)  # 1.5
             very_high = min(very_high, max(markov_hitting_times_ai))
@@ -2634,16 +2502,10 @@ class VIA:
             new_very_high = min(np.mean(without_very_high_pt) + np.std(without_very_high_pt), very_high)
 
             new_markov_hitting_times_ai = [x if x < very_high else very_high for x in markov_hitting_times_ai]
-            # for eee, ttt in enumerate(new_markov_hitting_times_ai):      print('cluster ', eee, ' had markov time', ttt)
 
             markov_hitting_times_ai = np.asarray(new_markov_hitting_times_ai)
-            scaling_fac = 10 / max(markov_hitting_times_ai)
+            scaling_fac = 10. / max(markov_hitting_times_ai)
             markov_hitting_times_ai = markov_hitting_times_ai * scaling_fac
-            # for eee, ttt in enumerate(markov_hitting_times_ai):print('cluster ', eee, ' had markov time', ttt)
-
-            # print('markov hitting times', [(i, j) for i, j in enumerate(markov_hitting_times_ai)])
-            # print('hitting times', [(i, j) for i, j in enumerate(hitting_times)])
-            markov_hitting_times_ai = (markov_hitting_times_ai)  # + hitting_times)*.5 #consensus
             adjacency_matrix_csr_ai = sparse.csr_matrix(adjacency_matrix_ai)
             (sources, targets) = adjacency_matrix_csr_ai.nonzero()
             edgelist_ai = list(zip(sources, targets))
@@ -2653,6 +2515,7 @@ class VIA:
 
             for i, (start, end) in enumerate(edgelist_ai):
                 adjacency_matrix2_ai[start, end] = bias_weights_2_ai[i]
+
             if self.super_terminal_cells == False:
                 # print('new_root_index', new_root_index, ' before get terminal')
                 terminal_clus_ai = self.get_terminal_clusters(adjacency_matrix2_ai, markov_hitting_times_ai,
@@ -2665,7 +2528,6 @@ class VIA:
                         terminal_clus.append(cluster_labels_subi[i])
                         temp_terminal_clus_ai.append(i)
                 terminal_clus_ai = temp_terminal_clus_ai
-
 
             elif len(self.super_terminal_clusters) > 0:  # round2 of PARC
                 print('super_terminal_clusters', self.super_terminal_clusters)
@@ -2743,7 +2605,6 @@ class VIA:
                             print('the sub terminal cluster that best captures the super terminal', i, 'is',
                                   most_likely_sub_terminal, 'but the pseudotime is too low')
 
-
             else:
                 print('super terminal cells', self.super_terminal_cells)
 
@@ -2762,7 +2623,7 @@ class VIA:
                 prob_ai = self.simulate_branch_probability(target_terminal, terminal_clus_ai,
                                                            adjacency_matrix2_ai,
                                                            new_root_index, pt=markov_hitting_times_ai,
-                                                           num_sim=500)  # 50 ToDO change back to 500 = numsim
+                                                           num_sim=500)
                 df_graph['terminal_clus' + str(cluster_labels_subi[target_terminal])] = 0.0000000
 
                 pd_columnnames_terminal.append('terminal_clus' + str(cluster_labels_subi[target_terminal]))
@@ -2771,21 +2632,17 @@ class VIA:
                     df_graph.at[cluster_labels_subi[k], 'terminal_clus' + str(
                         cluster_labels_subi[target_terminal])] = prob_ii
             bp_array = df_graph[pd_columnnames_terminal].values
-            bp_array[np.isnan(bp_array)] = 0.00000001
-
+            bp_array[np.isnan(bp_array)] = 1e-8
             bp_array = bp_array / bp_array.sum(axis=1)[:, None]
-            bp_array[np.isnan(bp_array)] = 0.00000001
+            bp_array[np.isnan(bp_array)] = 1e-8
 
             for ei, ii in enumerate(loc_compi):
                 df_graph.at[ii, 'pt'] = hitting_times[ei]
                 df_graph.at[ii, 'graph_node_label'] = graph_node_label[ei]
-
                 df_graph.at[ii, 'majority_truth'] = graph_node_label[ei]
-
                 df_graph.at[ii, 'markov_pt'] = markov_hitting_times_ai[ei]
 
             locallytrimmed_g.vs["label"] = df_graph['graph_node_label'].values
-
             hitting_times = df_graph['pt'].values
 
         if len(super_terminal_clus_revised) > 0:
@@ -2797,67 +2654,24 @@ class VIA:
         self.terminal_clusters = terminal_clus
         print('terminal clusters', terminal_clus)
         self.node_degree_list = node_deg_list
-        print(colored('project onto single cell', 'red'))
-        # self.project_branch_probability_sc(bp_array, df_graph['pt'].values) #testing to see what the effect of not doing MCMC is
-        self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
+        print(colored(f"{datetime.now()}\tBegin projection of pseudotime and lineage likelihood","red"))
+        self.single_cell_bp, self.single_cell_pt_markov = self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
         self.dict_terminal_super_sub_pairs = dict_terminal_super_sub_pairs
         hitting_times = self.markov_hitting_times
 
-        bias_weights_2_all = get_biased_weights(edgelist, edgeweights, self.markov_hitting_times, round_no=2)
-
-        row_list = []
-        col_list = []
-        for (rowi, coli) in edgelist:
-            row_list.append(rowi)
-            col_list.append(coli)
+        bias_weights_2_all = get_biased_weights(self.edgelist, edgeweights, self.markov_hitting_times, round_no=2)
 
         n_clus = len(set(self.labels))
-        temp_csr = csr_matrix((np.array(bias_weights_2_all), (np.array(row_list), np.array(col_list))),
-                              shape=(n_clus, n_clus))
-        if (self.dataset == '2M') | (self.dataset == 'mESC'):
-            visual_global_pruning_std = 1
-            max_outgoing = 3  # 4
-        elif self.dataset == 'scATAC':
-            visual_global_pruning_std = 0.15
-            max_outgoing = 2  # 4
-        elif self.dataset == 'faced':
-            visual_global_pruning_std = 1
-            max_outgoing = 2  # 4
-        elif self.dataset == 'droso':
-            visual_global_pruning_std = 0.15  # -0.1 # 1 (2-4hrs use 0.15
-            max_outgoing = 2  # 3  # 4
-        elif self.dataset == 'pancreas':
-            visual_global_pruning_std = 0.15  # 0.15#0  # 1
-            max_outgoing = 2  # 3  # 4
-        elif self.dataset == 'cardiac':
-            visual_global_pruning_std = .3  # .15  # 1
-            max_outgoing = 2  # 3  # 4
-        elif self.dataset == 'cardiac_merge':
-            visual_global_pruning_std = .15  # .15#.15  # 1
-            max_outgoing = 3  # 3  # 4
-        elif self.dataset == 'toy':
-            visual_global_pruning_std = 1  # 1 for conn2
-            max_outgoing = 2
-        elif self.dataset == 'hc':
-            visual_global_pruning_std = 1  # 0.15 for control1  # 1 for conn2
-            max_outgoing = 2
-        else:
-            visual_global_pruning_std = self.visual_cluster_graph_pruning  # 0.15
-            max_outgoing = self.max_visual_outgoing_edges  # 2
+        temp_csr = csr_matrix((bias_weights_2_all, tuple(zip(*self.edgelist))), shape=(n_clus, n_clus))
 
         # glob_std_pruning =0 and max_out = 2 for HumanCD34 to simplify structure
-        edgeweights_maxout_2, edgelist_maxout_2, comp_labels_2 = pruning_clustergraph(temp_csr,
-                                                                                      global_pruning_std=visual_global_pruning_std,
-                                                                                      max_outgoing=max_outgoing,
-                                                                                      preserve_disconnected=self.preserve_disconnected)
+        edgeweights_maxout_2, edgelist_maxout_2, comp_labels_2 = \
+            pruning_clustergraph(temp_csr,
+                                 global_pruning_std=self.visual_cluster_graph_pruning,
+                                 max_outgoing=self.max_visual_outgoing_edges,
+                                 preserve_disconnected=self.preserve_disconnected)
 
-        row_list = []
-        col_list = []
-        for (rowi, coli) in edgelist_maxout_2:
-            row_list.append(rowi)
-            col_list.append(coli)
-        temp_csr = csr_matrix((np.array(edgeweights_maxout_2), (np.array(row_list), np.array(col_list))),
-                              shape=(n_clus, n_clus))
+        temp_csr = csr_matrix((np.array(edgeweights_maxout_2), tuple(zip(*edgelist_maxout_2))), shape=(n_clus, n_clus))
         temp_csr = temp_csr.transpose().todense() + temp_csr.todense()
         temp_csr = np.tril(temp_csr, -1)  # elements along the main diagonal and above are set to zero
         temp_csr = csr_matrix(temp_csr)
@@ -2868,51 +2682,28 @@ class VIA:
         sources, targets = temp_csr.nonzero()
         edgelist_maxout_2 = list(zip(sources.tolist(), targets.tolist()))
         self.edgelist_maxout = edgelist_maxout_2
-        # print('edgelist_maxout_2', edgelist_maxout_2)
         self.edgeweights_maxout = edgeweights_maxout_2
 
         remove_outliers = hitting_times
-
         threshold = np.percentile(remove_outliers, 95)  # np.mean(remove_outliers) + 1* np.std(remove_outliers)
-
         th_hitting_times = [x if x < threshold else threshold for x in hitting_times]
-
         remove_outliers_low = hitting_times[hitting_times < (np.mean(hitting_times) - 0.3 * np.std(hitting_times))]
-
-        # threshold_low = np.mean(remove_outliers_low) - 0.3 * np.std(remove_outliers_low)
-        if remove_outliers_low.size == 0:
-            threshold_low = 0
-        else:
-            threshold_low = np.percentile(remove_outliers_low, 5)
-
+        threshold_low = 0 if remove_outliers_low.size else np.percentile(remove_outliers_low, 5)
         th_hitting_times = [x if x > threshold_low else threshold_low for x in th_hitting_times]
 
         scaled_hitting_times = (th_hitting_times - np.min(th_hitting_times))
-        if np.max(scaled_hitting_times) == 0:
-            npmax = 1
-        else:
-            npmax = np.max(scaled_hitting_times)
+        npmax = np.max(scaled_hitting_times) or 1
         scaled_hitting_times = scaled_hitting_times * (1000 / npmax)
 
         self.scaled_hitting_times = scaled_hitting_times
-        # self.project_branch_probability_sc(bp_array, self.scaled_hitting_times)
-        # self.single_cell_pt = self.project_hittingtimes_sc(self.hitting_times)
-        # self.single_cell_pt_stationary_bias = self.project_hittingtimes_sc(self.stationary_hitting_times.flatten())
-        # self.dijkstra_hitting_times = self.path_length_onbias(edgelist, biased_edgeweights)
-        # print('dijkstra hitting times', [(i,j) for i,j in enumerate(self.dijkstra_hitting_times)])
-        # self.single_cell_pt_dijkstra_bias = self.project_hittingtimes_sc(self.dijkstra_hitting_times)
-
         scaled_hitting_times = scaled_hitting_times.astype(int)
-
         pal = ig.drawing.colors.AdvancedGradientPalette(['yellow', 'green', 'blue'], n=1001)
 
         all_colors = []
-
         for i in scaled_hitting_times:
             all_colors.append(pal.get(int(i))[0:3])
 
         locallytrimmed_g.vs['hitting_times'] = scaled_hitting_times
-
         locallytrimmed_g.vs['color'] = [pal.get(i)[0:3] for i in scaled_hitting_times]
 
         self.group_color = [colors.to_hex(v) for v in locallytrimmed_g.vs['color']]  # based on ygb scale

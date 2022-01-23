@@ -686,6 +686,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
     v0 = VIA(Xin, true_label, jac_std_global=jac_std_global, dist_std_local=1,
              knn=knn,
              too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset='toy',
+             visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              random_seed=random_seed)  # *.4 root=2,
     v0.run_VIA()
     super_labels = v0.labels
@@ -714,6 +715,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
              super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root_user, is_coarse=False,
              x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='toy',
+             visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              super_terminal_clusters=v0.terminal_clusters,
              full_neighbor_array=v0.full_neighbor_array,
              ig_full_graph=v0.ig_full_graph, full_distance_array=v0.full_distance_array,
@@ -849,6 +851,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
              knn=knn,
              cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset='toy',
+             visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              random_seed=random_seed, piegraph_arrow_head_width=0.4,
              piegraph_edgeweight_scalingfactor=1.0)  # *.4 root=2,
     v0.run_VIA()
@@ -879,6 +882,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
              super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root_user, is_coarse=False,
              x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='toy',
+             visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              super_terminal_clusters=v0.terminal_clusters,
              full_neighbor_array=v0.full_neighbor_array,
              ig_full_graph=v0.ig_full_graph, full_distance_array=v0.full_distance_array,
@@ -1916,6 +1920,7 @@ def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palan
              cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=v0_too_big, resolution_parameter=2,
              root_user=root, dataset='mESC', random_seed=v0_random_seed,
+             visual_cluster_graph_pruning=1, max_visual_outgoing_edges=3,
              do_impute_bool=True, is_coarse=True, preserve_disconnected=False, pseudotime_threshold_TS=40, x_lazy=0.99,
              alpha_teleport=0.99)  # *.4 root=1,
     v0.run_VIA()
@@ -1963,6 +1968,7 @@ def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palan
              too_big_factor=p1_too_big, super_cluster_labels=super_labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='mESC',
+             visual_cluster_graph_pruning=1, max_visual_outgoing_edges=3,
              super_terminal_clusters=v0.terminal_clusters, random_seed=v0_random_seed,
              full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
              ig_full_graph=v0.ig_full_graph, csr_array_locally_pruned=v0.csr_array_locally_pruned,
@@ -2175,6 +2181,7 @@ def main_scATAC_zscores(knn=20, ncomps=30, cluster_graph_pruning_std=.15):
     v0 = VIA(X_in, true_label, jac_std_global=0.3, dist_std_local=1, knn=knn,
              cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
+             visual_cluster_graph_pruning=.15, max_visual_outgoing_edges=2,
              do_impute_bool=True, is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
     v0.run_VIA()
     f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True, dpi=330)
@@ -2192,6 +2199,7 @@ def main_scATAC_zscores(knn=20, ncomps=30, cluster_graph_pruning_std=.15):
              too_big_factor=0.05, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
              preserve_disconnected=True, dataset='scATAC',
+             visual_cluster_graph_pruning=.15, max_visual_outgoing_edges=2,
              super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed,
              full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
              ig_full_graph=v0.ig_full_graph,
@@ -2371,6 +2379,7 @@ def main_scATAC_Hemato(knn=20):
 
     v0 = VIA(X_in, true_label, jac_std_global=0.5, dist_std_local=1, knn=knn,
              too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
+             visual_cluster_graph_pruning=.15, max_visual_outgoing_edges=2,
              do_impute_bool=True, is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
     v0.run_VIA()
     v0.make_JSON(filename='scATAC_BuenrostroPC_temp.js')
@@ -2406,6 +2415,7 @@ def main_scATAC_Hemato(knn=20):
              too_big_factor=0.1, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
              preserve_disconnected=True, dataset='scATAC',
+             visual_cluster_graph_pruning=.15, max_visual_outgoing_edges=2,
              super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed,
              full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
              ig_full_graph=v0.ig_full_graph,
@@ -2973,6 +2983,7 @@ def main_faced(cell_line='mcf7', cluster_graph_pruning_std=1.):
     v0 = VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=3, knn=knn, resolution_parameter=1,
              cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=0.3, root_user=root_user, dataset='faced', random_seed=random_seed,
+             visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              do_impute_bool=True, is_coarse=True, preserve_disconnected=True, preserve_disconnected_after_pruning=True,
              pseudotime_threshold_TS=40)  # *.4 root=1,
     v0.run_VIA()
@@ -3024,6 +3035,7 @@ def main_faced(cell_line='mcf7', cluster_graph_pruning_std=1.):
              too_big_factor=0.05, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
              super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
              preserve_disconnected=True, dataset='faced',
+             visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed,
              full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
              ig_full_graph=v0.ig_full_graph,
