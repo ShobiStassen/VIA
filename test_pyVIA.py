@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-import VIA.examples as via
+import pyVIA.examples as via#examples as via
 import pandas as pd
 import umap
 import scanpy as sc
@@ -46,7 +46,7 @@ def run_generic_wrapper(foldername = "/home/shobi/Trajectory/Datasets/Bcell/", k
     marker_genes = ['Igll1', 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4', 'Sp7']  # irf4 down-up
     # call VIA. We identify an early (suitable) start cell root = [42]. Can also set an arbitrary value
     via.via_wrapper(adata, true_label, embedding, knn=knn, ncomps=ncomps, jac_std_global=0.15, root=[42], dataset='',
-                random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes)
+                random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes, piegraph_edgeweight_scalingfactor=1, piegraph_arrow_head_width=.2)
 
 def run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/'):
     #FACED imaging cytometry based biophysical features
@@ -100,7 +100,7 @@ def run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/'):
     root_user = ['T1_M1']
     v0 = via.VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
                  too_big_factor=0.3, root_user=root_user, dataset='faced', random_seed=random_seed,
-                 do_magic_bool=True, is_coarse=True, preserve_disconnected=True,
+                 do_impute_bool=True, is_coarse=True, preserve_disconnected=True,
                  preserve_disconnected_after_pruning=True,
                  pseudotime_threshold_TS=40)
     v0.run_VIA()
@@ -209,7 +209,7 @@ def run_scATAC_Buenrostro_Hemato(foldername = '/home/shobi/Trajectory/Datasets/s
 
     v0 = via.VIA(X_in, true_label, jac_std_global=0.5, dist_std_local=1, knn=knn,
                  too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
-                 do_magic_bool=True, is_coarse=True, preserve_disconnected=False)
+                 do_impute_bool=True, is_coarse=True, preserve_disconnected=False)
     v0.run_VIA()
 
     tsi_list = via.get_loc_terminal_states(v0, X_in)
@@ -240,7 +240,7 @@ def run_scATAC_Buenrostro_Hemato(foldername = '/home/shobi/Trajectory/Datasets/s
                              v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, true_label, knn=v0.knn,
                              final_super_terminal=v1.revised_super_terminal_clusters,
                              sub_terminal_clusters=v1.terminal_clusters,
-                             title_str='Pseudotime', ncomp=5)
+                             title_str='Pseudotime', ncomp=5 )
     plt.show()
     # draw trajectory and evolution probability for each lineage
     via.draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath,
@@ -250,7 +250,7 @@ def run_scATAC_Buenrostro_Hemato(foldername = '/home/shobi/Trajectory/Datasets/s
 def run_generic_discon(foldername ="/home/shobi/Trajectory/Datasets/Toy4/"):
     df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv",
                             delimiter=",")
-    df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids_with_truetime.csv", delimiter=",")
+    df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids.csv", delimiter=",")
 
 
 
@@ -259,13 +259,13 @@ def run_generic_discon(foldername ="/home/shobi/Trajectory/Datasets/Toy4/"):
     df_counts = df_counts.drop('Unnamed: 0', 1)
     df_ids = df_ids.sort_values(by=['cell_id_num'])
     df_ids = df_ids.reset_index(drop=True)
-    true_label = df_ids['group_id']
-    true_label =['a' for i in true_label] #testing dummy true_label and overwriting the real true_labels
-    true_time = df_ids['true_time']
+    #true_label = df_ids['group_id']
+    #true_label =['a' for i in true_label] #testing dummy true_label and overwriting the real true_labels
+    #true_time = df_ids['true_time']
     adata_counts = sc.AnnData(df_counts, obs=df_ids)
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=100)
 
-    via.via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[23, 902],
+    via.via_wrapper_disconnected(adata_counts, true_label=None, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[23, 902],
                              preserve_disconnected=True, knn=10, ncomps=30, cluster_graph_pruning_std=1, random_seed=41)
 
 if __name__ == '__main__':
@@ -274,8 +274,8 @@ if __name__ == '__main__':
 
     #run_Toy_multi(foldername="/home/shobi/Trajectory/Datasets/Toy3/")
     #run_Toy_discon()
-    run_generic_discon()
+    #run_generic_discon()
     #run_EB(foldername = "/home/shobi/Trajectory/Datasets/EB_Phate/") #folder containing relevant data files
     #run_scATAC_Buenrostro_Hemato() #shows the main function calls within a typical VIA wrapper function
     #run_generic_wrapper(foldername = "/home/shobi/Trajectory/Datasets/Bcell/", knn=20, ncomps = 20)
-    #run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/')
+    run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/')
