@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 import umap
 import phate
 import seaborn as sns
-from VIA.core import *
+from pyVIA.core import *
 
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
     import scvelo as scv
@@ -479,7 +479,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
         df_counts = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000.csv",
                                 delimiter=",")
 
-        df_counts = pd.read_csv(foldername + "Toy3_noise_100genes_thinfactor8.csv", delimiter=",")
+        #df_counts = pd.read_csv(foldername + "Toy3_noise_100genes_thinfactor8.csv", delimiter=",")
         df_ids = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000_ids_with_truetime.csv",
                              delimiter=",")
         #counts = palantir.io.from_csv("/home/shobi/Trajectory/Datasets/Toy3/toy_multifurcating_M8_n1000d1000.csv")
@@ -590,8 +590,8 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
     # df_counts = df_counts[df_counts['main_Traj']=='T2']#to split Toy4
     # df_ids = df_ids[df_ids['main_Traj'] == 'T2']#to split Toy4
 
-    true_time = df_ids['true_time']
-    true_label = df_ids['group_id']
+    #true_time = df_ids['true_time']
+    true_label = df_ids['group_id'].tolist()
     # df_counts = df_counts.drop('main_Traj', 1)#to split Toy4
     # df_counts = df_counts.drop('group_id', 1)#to split Toy4
 
@@ -737,7 +737,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
         print('len idx', len(idx))
         super_labels = np.asarray(super_labels)[idx]
         labels = list(np.asarray(labels)[idx])
-        true_label = list(np.asarray(true_label[idx]))
+        true_label = list(np.asarray(true_label)[idx])
         sc_pt_markov = list(np.asarray(v1.single_cell_pt_markov[idx]))
 
         # embedding = v0.run_umap_hnsw(adata_counts.obsm['X_pca'][idx, :], graph)
@@ -746,7 +746,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
         # embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'][idx, :])
         print('tsne downsampled size', embedding.shape)
     else:
-        embedding = umap.UMAP().fit_transform(pc)  # (adata_counts.obsm['X_pca'])
+        embedding = umap.UMAP().fit_transform(Xin)  # (adata_counts.obsm['X_pca'])
         print('tsne input size', adata_counts.obsm['X_pca'].shape)
         # embedding = umap.UMAP().fit_transform(adata_counts.obsm['X_pca'])
         idx = np.random.randint(len(labels), size=len(labels))
@@ -782,7 +782,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
     ax1.legend(fontsize=6)
     ax1.set_title('true labels')
 
-    ax3.set_title("Markov Sim PT ncomps:" + str(pc.shape[1]) + '. knn:' + str(knn))
+    ax3.set_title("Markov Sim PT ncomps:" + str(Xin.shape[1]) + '. knn:' + str(knn))
     ax3.scatter(embedding[:, 0], embedding[:, 1], c=sc_pt_markov, cmap='viridis_r')
     plt.show()
     df_subset = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
@@ -826,8 +826,8 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     df_counts = df_counts.drop('Unnamed: 0', 1)
     df_ids = df_ids.sort_values(by=['cell_id_num'])
     df_ids = df_ids.reset_index(drop=True)
-    true_label = df_ids['group_id']
-    true_time = df_ids['true_time']
+    true_label = df_ids['group_id'].tolist()
+    #true_time = df_ids['true_time']
     adata_counts = sc.AnnData(df_counts, obs=df_ids)
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
     # true_label =['a' for i in true_label] #testing dummy true_label
@@ -898,7 +898,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
         print('len idx', len(idx))
         super_labels = np.asarray(super_labels)[idx]
         labels = list(np.asarray(labels)[idx])
-        true_label = list(np.asarray(true_label[idx]))
+        true_label = list(np.asarray(true_label)[idx])
         sc_pt_markov = list(np.asarray(v1.single_cell_pt_markov[idx]))
         embedding = embedding[idx, :]
         # embedding = v0.run_umap_hnsw(adata_counts.obsm['X_pca'][idx, :], graph)
@@ -2428,7 +2428,7 @@ def main_scATAC_Hemato(knn=20):
     return
 
 
-def via_wrapper(adata, true_label, embedding, knn=20, jac_std_global=0.15, root=0, dataset='', random_seed=42,
+def via_wrapper(adata, true_label=None, embedding=None, knn=20, jac_std_global=0.15, root=0, dataset='', random_seed=42,
                 v0_toobig=0.3, v1_toobig=0.1, marker_genes=[], ncomps=20, preserve_disconnected=False,
                 cluster_graph_pruning_std=0.15, draw_all_curves=True, piegraph_edgeweight_scalingfactor=1.5,
                 piegraph_arrow_head_width=0.4):
@@ -2439,7 +2439,8 @@ def via_wrapper(adata, true_label, embedding, knn=20, jac_std_global=0.15, root=
              piegraph_edgeweight_scalingfactor=piegraph_edgeweight_scalingfactor, visual_cluster_graph_pruning=0.15,
              max_visual_outgoing_edges=2)  # *.4 root=1,
     v0.run_VIA()
-
+    if true_label is None:
+        true_label = v0.true_label
     # plot coarse cluster heatmap
     if len(marker_genes) > 0:
         adata.obs['via0'] = [str(i) for i in v0.labels]
@@ -2470,6 +2471,7 @@ def via_wrapper(adata, true_label, embedding, knn=20, jac_std_global=0.15, root=
     knn_hnsw = make_knn_embeddedspace(embedding)
     super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v0.labels)))
     # draw overall pseudotime and main trajectories
+
     draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
                          v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, true_label, knn=v0.knn,
                          final_super_terminal=v1.revised_super_terminal_clusters,
@@ -2494,7 +2496,7 @@ def via_wrapper(adata, true_label, embedding, knn=20, jac_std_global=0.15, root=
     return
 
 
-def via_wrapper_disconnected(adata, true_label, embedding, knn=20, jac_std_global=0.15, root=[1], dataset='',
+def via_wrapper_disconnected(adata, true_label=None, embedding=None, knn=20, jac_std_global=0.15, root=[1], dataset='',
                              random_seed=42, v0_toobig=0.3, marker_genes=[], ncomps=20, preserve_disconnected=True,
                              cluster_graph_pruning_std=0.15):
     v0 = VIA(adata.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
@@ -2502,7 +2504,7 @@ def via_wrapper_disconnected(adata, true_label, embedding, knn=20, jac_std_globa
              do_impute_bool=True, is_coarse=True, preserve_disconnected=preserve_disconnected,
              cluster_graph_pruning_std=cluster_graph_pruning_std)  # *.4 root=1,
     v0.run_VIA()
-
+    if true_label is None: true_label = v0.true_label
     # plot coarse cluster heatmap
     if len(marker_genes) > 0:
         adata.obs['via0'] = [str(i) for i in v0.labels]
@@ -3134,9 +3136,8 @@ def main():
         main_scATAC_Hemato(knn=20)
         # main_scATAC_zscores(knn=30, ncomps =10) #knn=20, ncomps = 30)
     elif dataset == 'Toy':
-        # main_Toy_comparisons(ncomps=20, knn=30, random_seed=2, dataset='Toy3',  foldername="/home/shobi/Trajectory/Datasets/Toy3/")
-        main_Toy(ncomps=10, knn=30, random_seed=2, dataset='Toy4',
-                 foldername="/home/shobi/Trajectory/Datasets/Toy4/")  # pc10/knn30 for Toy4
+        main_Toy_comparisons(ncomps=10, knn=30, random_seed=2, dataset='Toy3',  foldername="/home/shobi/Trajectory/Datasets/Toy3/")
+        #main_Toy(ncomps=10, knn=30, random_seed=2, dataset='Toy4',foldername="/home/shobi/Trajectory/Datasets/Toy4/")  # pc10/knn30 for Toy4
         # main_Toy(ncomps=20, knn=30, random_seed=2, dataset='Toy3',     foldername="/home/shobi/Trajectory/Datasets/Toy3/")  # pc10/knn30/rs2 for Toy4
         # main_Toy_comparisons(ncomps=10, knn=10, random_seed=2, dataset='ToyMultiM11',              foldername="/home/shobi/Trajectory/Datasets/ToyMultifurcating_M11/")
         # main_Toy_comparisons(ncomps=10, knn=20, random_seed=2, dataset='Toy3',                             foldername="/home/shobi/Trajectory/Datasets/Toy3/")

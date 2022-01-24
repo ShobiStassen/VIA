@@ -1080,7 +1080,10 @@ class VIA:
 
         self.data = data
         self.nsamples, self.ncomp = data.shape
-        self.true_label = true_label or [1] * self.nsamples
+        print('true labels')
+        if true_label is not None:
+            self.true_label = true_label
+        else: self.true_label = [1] * self.nsamples
 
         self.knn_struct = None
 
@@ -2320,16 +2323,16 @@ class VIA:
             adjacency = self.csr_array_locally_pruned
 
         edges = np.array(list(zip(*adjacency.nonzero())))
-        sim = np.array(ig.Graph(n=self.nsamples, edges=edges, edge_attrs={'weight': adjacency.data})\
+        sim = np.array(ig.Graph(n=self.nsamples, edges=edges.tolist(), edge_attrs={'weight': adjacency.data})\
                        .similarity_jaccard(pairs=edges))
         tot = len(sim)
 
         # Prune edges off graph
         threshold = np.median(sim) if self.jac_std_global == 'median' else sim.mean() - self.jac_std_global * sim.std()
-        strong_locs = np.where(sim > threshold)[0]
-        pruned_similarities = ig.Graph(n=self.nsamples, edges=edges[strong_locs],
-                                       edge_attrs={'weight': sim[strong_locs]})\
-            .simplify(combine_edges='sum')
+        strong_locs = np.asarray(np.where(sim > threshold)[0])
+        print('strong locs', strong_locs)
+        pruned_similarities = ig.Graph(n=self.nsamples, edges=list(edges[strong_locs]),
+                                       edge_attrs={'weight': list(sim[strong_locs])}).simplify(combine_edges='sum')
         print(f"{time.ctime()}\tFinished global pruning. Kept {round(100 * len(strong_locs) / tot, 2)} of edges. "
               f"Took {(time.time() - st) * 1000}")
 
@@ -2338,7 +2341,7 @@ class VIA:
             csr_full_graph = self.make_csrmatrix_noselfloop(neighbors, distances, auto_=False, distance_factor=0.05)
             n_original_comp, n_original_comp_labels = connected_components(csr_full_graph, directed=False)
 
-            edges = np.array(list(zip(*adjacency.nonzero())))
+            edges = list(zip(*adjacency.nonzero()))
             sim = ig.Graph(edges, edge_attrs={'weight': csr_full_graph.data}).similarity_jaccard(pairs=edges)
             ig_fullgraph = ig.Graph(edges, edge_attrs={'weight': sim}).simplify(combine_edges='sum')
 
@@ -3479,7 +3482,7 @@ class VIA:
                 vals_roc, predict_class_array, majority_truth_labels, numclusters_targetval = \
                     self.accuracy(onevsall=onevsall_val)
                 f1_current = vals_roc[1]
-                f1_accumulated = f1_accumulated + f1_current * (self.true_label.count(onevsall_val)) / N
+                f1_accumulated = f1_accumulated + f1_current * (list(self.true_label).count(onevsall_val)) / N
                 f1_acc_noweighting = f1_acc_noweighting + f1_current
 
                 list_roc.append([self.jac_std_global, self.dist_std_local, onevsall_val] +
@@ -3497,6 +3500,5 @@ class VIA:
             self.f1_mean = f1_mean
             self.stats_df = df_accuracy
             # self.majority_truth_labels = majority_truth_labels
-
 
 
