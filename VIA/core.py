@@ -151,10 +151,15 @@ def plot_sc_pb(ax, embedding, prob, ti, cmap_name='viridis'):
 
     # changing the alpha transparency parameter for plotting points
     c = cmap(norm(prob)).reshape(-1, 4)
+    loc_c = np.where(prob <= 0.3)[0]
+    c[loc_c, 3] = 0.2
+    loc_c = np.where((prob > 0.3) & (prob <= 0.5))[0]
+    c[loc_c, 3] = 0.5
+    loc_c = np.where((prob > 0.5) & (prob <= 0.7))[0]
+    c[loc_c, 3] = 0.8
+    loc_c = np.where((prob > 0.7))[0]
+    c[loc_c, 3] = 0.8
 
-    c[prob <= .3, 3] = .2
-    c[.3 < prob <= .5, 3] = .5
-    c[.5 < prob, 3] = .8
     size_point = 10 if embedding.shape[0] > 10000 else 30
     ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=size_point, cmap=cmap_name, edgecolors='none')
     ax.set_title('Target: ' + str(ti))
@@ -171,7 +176,6 @@ def get_loc_terminal_states(via0, X_input):
         loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
         temp = np.mean(X_input[loc_i], axis=0)
         labelsq, distances = via0.knn_struct.knn_query(temp, k=1)
-        # print(labelsq[0])
         tsi_list.append(labelsq[0][0])
     return tsi_list
 
@@ -307,9 +311,7 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
     root1_list = []
     p1_sc_bp = p1.single_cell_bp[idx, :]
     p1_labels = np.asarray(p1.labels)[idx]
-    p1_sc_pt_markov = list(np.asarray(p1.single_cell_pt_markov)[idx])
-    p1_cc = p1.connected_comp_labels
-    X_data = p1.data  # the input data (sometimes this is the PCA space) with all samples
+    X_data = p1.data
 
     X_ds = X_data[idx, :]
     p_ds = hnswlib.Index(space='l2', dim=X_ds.shape[1])
@@ -322,234 +324,17 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
         x = [embedding[xi, 0] for xi in loc_i]
         y = [embedding[yi, 1] for yi in loc_i]
 
-        labels_root, distances_root = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]),
-                                                         k=1)  # sc location in embedded space of root cell
+        labels_root, distances_root = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]), k=1)
         x_root.append(embedding[labels_root, 0][0])
         y_root.append(embedding[labels_root, 1][0])
 
-        labelsroot1, distances1 = p1.knn_struct.knn_query(X_ds[labels_root[0][0], :],
-                                                          k=1)  # index of sc-root-cell in the full-PCA space. Need for path
-
+        labelsroot1, distances1 = p1.knn_struct.knn_query(X_ds[labels_root[0][0], :], k=1)
         root1_list.append(labelsroot1[0][0])
 
     # single-cell branch probability evolution probability
     for i, ti in enumerate(p1.terminal_clusters):
         fig, ax = plt.subplots()
         plot_sc_pb(ax, embedding, p1_sc_bp[:, i], ti, cmap_name=cmap_name)
-        '''
-        loc_i = np.where(p1_labels == ti)[0]
-        val_pt = [p1_sc_pt_markov[i] for i in loc_i]
-        th_pt = np.percentile(val_pt, 50)  # 50
-        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-        x = [embedding[xi, 0] for xi in
-             loc_i]  # location of sc nearest to average location of terminal clus in the EMBEDDED space
-        y = [embedding[yi, 1] for yi in loc_i]
-        labels, distances = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]),
-                                               k=1)  # knn_hnsw is knn of embedded space
-        x_sc = embedding[labels[0], 0]  # terminal sc location in the embedded space
-        y_sc = embedding[labels[0], 1]
-        start_time = time.time()
-        labelsq1, distances1 = p1.knn_struct.knn_query(X_ds[labels[0][0], :],
-                                                       k=1)  # find the nearest neighbor in the PCA-space full graph
-
-        path = G.get_shortest_paths(root1_list[p1_cc[ti]], to=labelsq1[0][0])  # weights='weight')
-        # G is the knn of all sc points
-
-        path_idx = []  # find the single-cell which is nearest to the average-location of a terminal cluster
-        # get the nearest-neighbor in this downsampled PCA-space graph. These will make the new path-way points
-        path = path[0]
-
-        # clusters of path
-        cluster_path = []
-        for cell_ in path:
-            cluster_path.append(p1.labels[cell_])
-
-        # print(colored('cluster_path', 'green'), colored('terminal state: ', 'blue'), ti, cluster_path)
-        revised_cluster_path = []
-        revised_sc_path = []
-        for enum_i, clus in enumerate(cluster_path):
-            num_instances_clus = cluster_path.count(clus)
-            if (clus == cluster_path[0]) | (clus == cluster_path[-1]):
-                revised_cluster_path.append(clus)
-                revised_sc_path.append(path[enum_i])
-            else:
-                if num_instances_clus > 1:
-                    revised_cluster_path.append(clus)
-                    revised_sc_path.append(path[enum_i])
-        print(colored('Cluster-path', 'green'), colored('terminal state: ', 'blue'), ti, revised_cluster_path)
-        path = revised_sc_path  # (based on hi-dim PCA KNN)
-
-        # find the single-cells in the original high-dimensional path that correspond to the closest single-cells in the downsampled space
-        for pii in path:
-            labelsq, distances = p_ds.knn_query(X_data[pii, :], k=1)
-            path_idx.append(labelsq[0][0])
-        ## for the cells in the downsampled path, find the corresponding clusters
-        downsampled_cluster_idx = []
-        for clus_ in path_idx:
-            downsampled_cluster_idx.append(p1_labels[clus_])
-        print(colored('Cluster-path in downsampled embedded space (if visualization is performed on downsampled input)',
-                      'green'), colored('terminal state: ', 'blue'), ti, downsampled_cluster_idx)
-
-        path = path_idx
-        n_orange = len(path)
-        orange_m = np.zeros((n_orange, 3))
-        for enum_point, point in enumerate(path):
-            # ax.text(embedding[point, 0], embedding[point, 1], 'D ' + str(enum_point), color='blue', fontsize=8)
-            orange_m[enum_point, 0] = embedding[point, 0]
-            orange_m[enum_point, 1] = embedding[point, 1]
-            orange_m[enum_point, 2] = p1_sc_pt_markov[point]
-        from sklearn.neighbors import NearestNeighbors
-        k_orange = min(3, n_orange)  # increasing can smoothen in simple trajectories (Toy)
-        nbrs = NearestNeighbors(n_neighbors=k_orange, algorithm='ball_tree').fit(
-            orange_m[:, 0:])  # make a knn in low-dim space using points of path in embedded space
-        distances, indices = nbrs.kneighbors(orange_m[:, 0:])
-        row_list = []
-        col_list = []
-        dist_list = []
-
-        for i_or in range(n_orange):
-            for j_or in range(1, k_orange):
-                row_list.append(i_or)
-                col_list.append(indices[i_or, j_or])
-                dist_list.append(distances[i_or, j_or])
-        print('target number ' + str(ti))
-
-        orange_adjacency_knn = csr_matrix((np.array(dist_list), (np.array(row_list), np.array(col_list))),
-                                          shape=(n_orange, n_orange))
-
-        n_mst, comp_labels_mst = connected_components(csgraph=orange_adjacency_knn, directed=False, return_labels=True)
-
-        for enum_point, point in enumerate(path):  # [0]):
-            orange_m[enum_point, 2] = p1_sc_pt_markov[point] * p1_sc_pt_markov[
-                point] * 2
-
-        while n_mst > 1:
-            comp_root = comp_labels_mst[0]
-
-            min_ed = 9999999
-            loc_comp_i = np.where(comp_labels_mst == comp_root)[0]
-            loc_comp_noti = np.where(comp_labels_mst != comp_root)[0]
-
-            orange_pt_val = [orange_m[cc, 2] for cc in loc_comp_i]
-            loc_comp_i_revised = [loc_comp_i[cc] for cc in range(len(orange_pt_val)) if
-                                  orange_pt_val[cc] >= np.percentile(orange_pt_val, 70)]
-            if len(loc_comp_i_revised) < 3: loc_comp_i_revised = loc_comp_i
-            # print('len loc_compi and loc_notcompi',len(loc_comp_i_revised), len(loc_comp_noti))
-
-            for nn_i in loc_comp_i_revised:
-
-                ed = euclidean_distances(orange_m[nn_i, :].reshape(1, -1), orange_m[loc_comp_noti])
-
-                if np.min(ed) < min_ed:
-                    ed_where_min = np.where(ed[0] == np.min(ed))[0][0]
-
-                    min_ed = np.min(ed)
-                    ed_loc_end = loc_comp_noti[ed_where_min]
-                    ed_loc_start = nn_i
-            # print('Connecting components before sc-bp-GAM: the closest pair of points', ed_loc_start, ed_loc_end)
-            orange_adjacency_knn[ed_loc_start, ed_loc_end] = min_ed
-            n_mst, comp_labels_mst = connected_components(csgraph=orange_adjacency_knn, directed=False,
-                                                          return_labels=True)
-
-        if n_mst == 1:  # if no disconnected components in the graph #now draw the shortest path along the knn of embedding points along the path
-
-            (orange_sources, orange_targets) = orange_adjacency_knn.nonzero()
-
-            orange_edgelist = list(zip(orange_sources.tolist(), orange_targets.tolist()))
-
-            G_orange = ig.Graph(n=orange_adjacency_knn.shape[0], edges=orange_edgelist,
-                                edge_attrs={'weight': orange_adjacency_knn.data.tolist()}, )
-            path_orange = G_orange.get_shortest_paths(0, to=orange_adjacency_knn.shape[0] - 1, weights='weight')[0]
-            len_path_orange = len(path_orange)
-
-            for path_i in range(len_path_orange - 1):
-                path_x_start = orange_m[path_orange[path_i], 0]
-                path_x_end = orange_m[path_orange[path_i + 1], 0]
-                orange_x = [orange_m[path_orange[path_i], 0], orange_m[path_orange[path_i + 1], 0]]
-                orange_minx = min(orange_x)
-                orange_maxx = max(orange_x)
-
-                orange_y = [orange_m[path_orange[path_i], 1], orange_m[path_orange[path_i + 1], 1]]
-                orange_miny = min(orange_y)
-                orange_maxy = max(orange_y)
-                orange_embedding_sub = embedding[
-                    ((embedding[:, 0] <= orange_maxx) & (embedding[:, 0] >= orange_minx)) & (
-                            (embedding[:, 1] <= orange_maxy) & ((embedding[:, 1] >= orange_miny)))]
-
-                if (orange_maxy - orange_miny > 5) | (orange_maxx - orange_minx > 5):
-                    orange_n_reps = 150
-                else:
-                    orange_n_reps = 100
-                or_reps = np.repeat(np.array([[orange_x[0], orange_y[0]]]), orange_n_reps, axis=0)
-                orange_embedding_sub = np.concatenate((orange_embedding_sub, or_reps), axis=0)
-                or_reps = np.repeat(np.array([[orange_x[1], orange_y[1]]]), orange_n_reps, axis=0)
-                orange_embedding_sub = np.concatenate((orange_embedding_sub, or_reps), axis=0)
-
-                orangeGam = pg.LinearGAM(n_splines=8, spline_order=3, lam=10, verbose=False).fit(
-                    orange_embedding_sub[:, 0],
-                    orange_embedding_sub[:, 1])
-                nx_spacing = 100
-                orange_GAM_xval = np.linspace(orange_minx, orange_maxx, nx_spacing * 2)
-                yg_orange = orangeGam.predict(X=orange_GAM_xval)
-
-                ax.plot(orange_GAM_xval, yg_orange, color='dimgrey', linewidth=2, zorder=3, linestyle=(0, (5, 2, 1, 2)),
-                        dash_capstyle='round')
-
-                cur_x1 = orange_GAM_xval[-1]
-                cur_y1 = yg_orange[-1]
-                cur_x2 = orange_GAM_xval[0]
-                cur_y2 = yg_orange[0]
-                if path_i >= 1:
-                    for mmddi in range(2):
-                        xy11 = euclidean_distances(np.array([cur_x1, cur_y1]).reshape(1, -1),
-                                                   np.array([prev_x1, prev_y1]).reshape(1, -1))
-                        xy12 = euclidean_distances(np.array([cur_x1, cur_y1]).reshape(1, -1),
-                                                   np.array([prev_x2, prev_y2]).reshape(1, -1))
-                        xy21 = euclidean_distances(np.array([cur_x2, cur_y2]).reshape(1, -1),
-                                                   np.array([prev_x1, prev_y1]).reshape(1, -1))
-                        xy22 = euclidean_distances(np.array([cur_x2, cur_y2]).reshape(1, -1),
-                                                   np.array([prev_x2, prev_y2]).reshape(1, -1))
-                        mmdd_temp_array = np.asarray([xy11, xy12, xy21, xy22])
-                        mmdd_loc = np.where(mmdd_temp_array == np.min(mmdd_temp_array))[0][0]
-                        if mmdd_loc == 0:
-                            ax.plot([cur_x1, prev_x1], [cur_y1, prev_y1], color='black', linestyle=(0, (5, 2, 1, 2)),
-                                    dash_capstyle='round')
-                        if mmdd_loc == 1:
-                            ax.plot([cur_x1, prev_x2], [cur_y1, prev_y2], color='black', linestyle=(0, (5, 2, 1, 2)),
-                                    dash_capstyle='round')
-                        if mmdd_loc == 2:
-                            ax.plot([cur_x2, prev_x1], [cur_y2, prev_y1], color='black', linestyle=(0, (5, 2, 1, 2)),
-                                    dash_capstyle='round')
-                        if mmdd_loc == 3:
-                            ax.plot([cur_x2, prev_x2], [cur_y2, prev_y2], color='black', linestyle=(0, (5, 2, 1, 2)),
-                                    dash_capstyle='round')
-                    if (path_x_start > path_x_end): direction_arrow_orange = -1  # going LEFT
-                    if (path_x_start <= path_x_end): direction_arrow_orange = 1  # going RIGHT
-
-                    if (abs(
-                            path_x_start - path_x_end) > 2.5):  # |(abs(orange_m[path_i, 2] - orange_m[path_i + 1, 1]) > 1)):
-                        if (direction_arrow_orange == -1):  # & :
-                            ax.arrow(orange_GAM_xval[nx_spacing], yg_orange[nx_spacing],
-                                     orange_GAM_xval[nx_spacing - 1] - orange_GAM_xval[nx_spacing],
-                                     yg_orange[nx_spacing - 1] - yg_orange[nx_spacing], shape='full', lw=0,
-                                     length_includes_head=True,
-                                     head_width=0.5, color='dimgray', zorder=3)
-                        if (direction_arrow_orange == 1):  # &(abs(orange_m[path_i,0]-orange_m[path_i+1,0])>0.5):
-                            ax.arrow(orange_GAM_xval[nx_spacing], yg_orange[nx_spacing],
-                                     orange_GAM_xval[nx_spacing + 1] - orange_GAM_xval[nx_spacing],
-                                     yg_orange[nx_spacing + 1] - yg_orange[nx_spacing], shape='full', lw=0,
-                                     length_includes_head=True,
-                                     head_width=0.5,
-                                     color='dimgray', zorder=3)
-
-                prev_x1 = cur_x1
-                prev_y1 = cur_y1
-                prev_x2 = cur_x2
-                prev_y2 = cur_y2
-
-        ax.scatter(x_sc, y_sc, color='pink', zorder=3, label=str(ti), s=22)
-        '''
-    return
 
 
 def get_biased_weights(edges, weights, pt, round=1):
@@ -609,11 +394,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         int)
 
     df_super_mean = df.groupby('super_cluster', as_index=False).mean()
-
     pt = df_super_mean['projected_sc_pt'].values
-    pt_int = [int(i) for i in pt]
-    # pt_str = [str(i) for i in pt_int]
-    # pt_sub = [str(int(i)) for i in df_mean['projected_sc_pt'].values]
 
     f, (ax1, ax2) = plt.subplots(1, 2, sharey=True, figsize=[20, 10])
     num_true_group = len(set(true_label))
@@ -645,13 +426,13 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         y_i_start = df[df['super_cluster'] == start]['y'].values
         x_i_end = df[df['super_cluster'] == end]['x'].values
         y_i_end = df[df['super_cluster'] == end]['y'].values
-        direction_arrow = 1
+
 
         super_start_x = X_dimred[sc_supercluster_nn[start], 0]
         super_end_x = X_dimred[sc_supercluster_nn[end], 0]
         super_start_y = X_dimred[sc_supercluster_nn[start], 1]
         super_end_y = X_dimred[sc_supercluster_nn[end], 1]
-        if super_start_x > super_end_x: direction_arrow = -1
+        direction_arrow = -1 if super_start_x > super_end_x else 1
         ext_maxx = False
         minx = min(super_start_x, super_end_x)
         maxx = max(super_start_x, super_end_x)
@@ -736,11 +517,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         XX = gam50.generate_X_grid(term=0, n=500)
         preds = gam50.predict(XX)
 
-        if ext_maxx == False:
-            idx_keep = np.where((xp <= (maxx)) & (xp >= (minx)))[0]
-        else:
-            idx_keep = np.where((xp <= (maxx)) & (xp >= (minx)))[0]
-
+        idx_keep = np.where((xp <= (maxx)) & (xp >= (minx)))[0]
         ax2.plot(XX, preds, linewidth=linewidth, c='#323538')  # 3.5#1.5
 
         mean_temp = np.mean(xp[idx_keep])
@@ -748,7 +525,6 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         closest_loc = idx_keep[0]
 
         for i, xp_val in enumerate(xp[idx_keep]):
-
             if abs(xp_val - mean_temp) < abs(closest_val - mean_temp):
                 closest_val = xp_val
                 closest_loc = idx_keep[i]
@@ -758,12 +534,12 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         if direction_arrow == 1:
             ax2.arrow(xp[closest_loc], preds[closest_loc], xp[closest_loc + step] - xp[closest_loc],
                       preds[closest_loc + step] - preds[closest_loc], shape='full', lw=0, length_includes_head=False,
-                      head_width=head_width, color='#323538')  # , head_starts_at_zero = direction_arrow )
+                      head_width=head_width, color='#323538')
 
         else:
             ax2.arrow(xp[closest_loc], preds[closest_loc], xp[closest_loc - step] - xp[closest_loc],
                       preds[closest_loc - step] - preds[closest_loc], shape='full', lw=0, length_includes_head=False,
-                      head_width=head_width, color='#323538')  # dimgray head_width=head_width
+                      head_width=head_width, color='#323538')
 
     c_edge = []
     width_edge = []
@@ -1403,103 +1179,35 @@ class VIA:
         roundtrip_times = roundtrip_commute_matrix[root, :]
         return abs(final_hitting_times), roundtrip_times
 
-    def project_branch_probability_sc(self, brach_probabilities, pt):
+    def project_branch_probability_sc(self, bp_array_clus, pt):
+        n_clus = len(list(set(self.labels)))
+        n_cells = self.data.shape[0]
+
         knn_sc = 3 if self.data.shape[0] > 1000 else 10
         neighbors, _ = self.knn_struct.knn_query(self.data, k=knn_sc)
 
-        weights = csr_matrix(([0], ([0], [0])), shape=(self.data.shape[0], len(set(self.labels))))
-        for r, sn in enumerate(neighbors):
-            clusters = self.labels[sn]
-            for c in set(clusters):
-                weights[r, c] = np.sum(clusters == c) / knn_sc
-
-
-        row_list = []
-        col_list = []
-        weight_list = []
-        irow = 0
-        # print('filling in weight array', time.ctime())
-        for row in neighbors:
+        rows, cols, weights = [], [], []
+        for i, row in enumerate(neighbors):
             neighboring_clus = self.labels[row]
+            for c in set(list(neighboring_clus)):
+                rows.append(i)
+                cols.append(c)
+                weights.append(np.sum(neighboring_clus == c) / knn_sc)
 
-            for clus_i in set(list(neighboring_clus)):
-                num_clus_i = np.sum(neighboring_clus == clus_i)
-                wi = num_clus_i / knn_sc
-                weight_list.append(wi)
-                row_list.append(irow)
-                col_list.append(clus_i)
-                # weight_array[irow, clus_i] = wi
-            irow = irow + 1
-        # print('start dot product', time.ctime())
-        weight_array = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
-                                  shape=(self.data.shape[0], len(set(self.labels))))
-
-        bp = weights @ brach_probabilities
-        bp = bp * 1. / np.max(bp, axis=0)  # divide cell by max value in that column
+        weights = csr_matrix((weights, (rows, cols)), shape=(n_cells, n_clus))
+        bp_array_sc = weights.dot(bp_array_clus)
+        bp_array_sc /= np.max(bp_array_sc, axis=0)  # divide cell by max value in that column
 
         for i, label_ts in enumerate(list(self.terminal_clusters)):
-            loc = self.labels == label_ts
-            if np.max(bp[~loc, i]) > 0.8:
-                bp[loc, i] = 1.2
-
-        pt = weights @ pt
-        return bp, pt / np.amax(pt)
-
-    def project_branch_probability_sc2(self, bp_array_clus, pt):
-        print('start single cell projections of pseudotime and lineage likelihood')
-        n_clus = len(list(set(self.labels)))
-        labels = np.asarray(self.labels)
-        n_cells = self.data.shape[0]
-
-        if self.data.shape[0] > 1000:
-            knn_sc = 3
-        else:
-            knn_sc = 10
-
-        neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=knn_sc)
-        # print('shape of neighbor in project onto sc', neighbor_array.shape)
-        # print('start initalize coo', time.ctime())
-        # weight_array = coo_matrix((n_cells, n_clus)).tocsr()  # csr_matrix
-
-        row_list = []
-        col_list = []
-        weight_list = []
-        irow = 0
-        # print('filling in weight array', time.ctime())
-        for row in neighbor_array:
-            neighboring_clus = labels[row]
-
-            for clus_i in set(list(neighboring_clus)):
-                num_clus_i = np.sum(neighboring_clus == clus_i)
-                wi = num_clus_i / knn_sc
-                weight_list.append(wi)
-                row_list.append(irow)
-                col_list.append(clus_i)
-                # weight_array[irow, clus_i] = wi
-            irow = irow + 1
-        # print('start dot product', time.ctime())
-        weight_array = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
-                                  shape=(n_cells, n_clus))
-        bp_array_sc = weight_array.dot(bp_array_clus)
-        bp_array_sc = bp_array_sc * 1. / np.max(bp_array_sc, axis=0)  # divide cell by max value in that column
-        # print('column max:',np.max(bp_array_sc, axis=0))
-        # print('sc bp array max', np.max(bp_array_sc))
-        # bp_array_sc = bp_array_sc/np.max(bp_array_sc)
-        for i, label_ts in enumerate(list(self.terminal_clusters)):
-
-            loc_i = np.where(np.asarray(self.labels) == label_ts)[0]
-            loc_noti = np.where(np.asarray(self.labels) != label_ts)[0]
+            loc_i = np.where(self.labels == label_ts)[0]
+            loc_noti = np.where(self.labels != label_ts)[0]
             if np.max(bp_array_sc[loc_noti, i]) > 0.8: bp_array_sc[loc_i, i] = 1.2
         pt = np.asarray(pt)
         pt = np.reshape(pt, (n_clus, 1))
-        pt_sc = weight_array.dot(pt)
-        pt_sc = pt_sc / np.amax(pt_sc)
+        pt_sc = weights.dot(pt)
+        pt_sc /= np.amax(pt_sc)
 
-        self.single_cell_bp = bp_array_sc
-        self.single_cell_pt_markov = pt_sc.flatten()
-        df_via_pt = pd.DataFrame(self.single_cell_pt_markov)
-
-        return
+        return bp_array_sc, pt_sc.flatten()
 
     def construct_knn(self, data: np.ndarray, too_big: bool = False) -> hnswlib.Index:
         """
@@ -1928,47 +1636,30 @@ class VIA:
             root = cluster_i
         return graph_node_label, majority_truth_labels, deg_list, root
 
-    def full_graph_paths(self, X_data, n_components_original=1):
+    def full_graph_paths(self, data, n_components_original=1):
         # make igraph object of very low-K KNN using the knn_struct PCA-dimension space made in PARC.
         # This is later used by find_shortest_path for sc_bp visual
         # neighbor array is not listed in in any order of proximity
         print('number of components in the original full graph', n_components_original)
         print('for downstream visualization purposes we are also constructing a low knn-graph ')
-        neighbor_array, distance_array = self.knn_struct.knn_query(X_data, k=3)
-        csr_array = self.make_csrmatrix_noselfloop(neighbor_array, distance_array, auto_=False)
-        n_comp, comp_labels = connected_components(csr_array, return_labels=True)
-        k_0 = 2  # 3
-        if n_components_original == 1:
-            while (n_comp > 1):
-                k_0 = k_0 + 1
-                neighbor_array, distance_array = self.knn_struct.knn_query(X_data, k=k_0)
-                csr_array = self.make_csrmatrix_noselfloop(neighbor_array, distance_array,
-                                                           auto_=False)  # do not automatically use the local-pruning of Via
-                n_comp, comp_labels = connected_components(csr_array, return_labels=True)
-        if n_components_original > 1:
-            while (k_0 <= 5) & (n_comp > n_components_original):
-                k_0 = k_0 + 1
-                neighbor_array, distance_array = self.knn_struct.knn_query(X_data, k=k_0)
-                csr_array = self.make_csrmatrix_noselfloop(neighbor_array, distance_array,
-                                                           auto_=False)  # do not automatically use the local-pruning of Via)
-                n_comp, comp_labels = connected_components(csr_array, return_labels=True)
-        row_list = []
+        first, k0, n_comp = True, 3, 1.5
+        while (n_components_original == 1 and n_comp > 1) or \
+                (n_components_original > 1 and k0 <= 5 and n_comp > n_components_original):
+            neighbors, distances = self.knn_struct.knn_query(data, k=k0)
+            csr_array = self.make_csrmatrix_noselfloop(neighbors, distances, auto_=False)
+            n_comp, comp_labels = connected_components(csr_array, return_labels=True)
+            if first:
+                first = False
+            else:
+                k0 += 1
 
-        print('size neighbor array in low-KNN in pca-space for visualization', neighbor_array.shape)
-        n_neighbors = neighbor_array.shape[1]
-        n_cells = neighbor_array.shape[0]
+        print('size neighbor array in low-KNN in pca-space for visualization', neighbors.shape)
+        n_cells, n_neighbors = neighbors.shape
+        rows = np.transpose(np.ones((n_neighbors, n_cells)) * range(0, n_cells)).flatten()
+        cols = neighbors.flatten()
+        csr_full_graph = csr_matrix((distances.flatten(), (rows, cols)), shape=(n_cells, n_cells))
 
-        row_list.extend(list(np.transpose(np.ones((n_neighbors, n_cells)) * range(0, n_cells)).flatten()))
-        col_list = neighbor_array.flatten().tolist()
-        weight_list = (distance_array.flatten()).tolist()
-        csr_full_graph = csr_matrix((np.array(weight_list), (np.array(row_list), np.array(col_list))),
-                                    shape=(n_cells, n_cells))
-
-        sources, targets = csr_full_graph.nonzero()
-        edgelist = list(zip(sources.tolist(), targets.tolist()))
-        Gr = ig.Graph(edgelist)  # , edge_attrs={'weight': csr_full_graph.data.tolist()})
-        Gr.simplify(combine_edges='sum')
-        return Gr
+        return ig.Graph(list(zip(*csr_full_graph.nonzero()))).simplify(combine_edges='sum')
 
     def get_gene_expression(self, gene_exp, title_gene="", spline_order=4):
         df_gene = pd.DataFrame()
@@ -1983,10 +1674,7 @@ class VIA:
         for i in range(n_terminal_states):  # [0]:
 
             sc_bp = sc_bp_original.copy()
-            if len(np.where(sc_bp[:, i] > 0.8)[
-                       0]) > 0:  # check in case this terminal state i cannot be reached (sc_bp is all 0)
-
-                # loc_terminal_i = np.where(np.asarray(self.labels) == self.terminal_clusters[i])[0]
+            if len(np.where(sc_bp[:, i] > 0.8)[0]) > 0:  # check in case this terminal state i cannot be reached (sc_bp is all 0)
 
                 loc_i = np.where(sc_bp[:, i] > 0.95)[0]  # 0.8
                 val_pt = [sc_pt[pt_i] for pt_i in loc_i]  # TODO,  replace with array to speed up
@@ -2007,68 +1695,40 @@ class VIA:
                 weights = np.asarray(sc_bp[:, i])[loc_].reshape(-1, 1)
 
                 if len(loc_) > 1:
-                    # n_splines =10 default. FOR pancreatic you can lower to n_splines = 6( n_splines=6, spline_order=4, lam=10))
-                    # for Pancreatic the GAmmaGAM looks nicer as it prevents negative numbers, but the corr scores better for linearGAM
-                    geneGAM = pg.LinearGAM(n_splines=6, spline_order=4, lam=10).fit(x, y,
-                                                                                    weights=weights)  # spline_order=4
-                    # print('GAMMA,n_splines=6, spline_order=4, lam=10')
-                    # geneGAM = pg.GammaGAM(n_splines=6, spline_order=4, lam=10).fit(x, y, weights=weights)  # spline_order=4
-                    nx_spacing = 100
-                    # xval = np.linspace(min(sc_pt), max_val_pt, nx_spacing * 2)
-
-                    xval = np.linspace(min(sc_pt), 1, nx_spacing * 2)
+                    geneGAM = pg.LinearGAM(n_splines=6, spline_order=spline_order, lam=10).fit(x, y, weights=weights)
+                    xval = np.linspace(min(sc_pt), 1, 100 * 2)
                     yg = geneGAM.predict(X=xval)
-                    # yg_intervals = geneGAM.prediction_intervals(X=xval, width = .2)
-
-
                 else:
                     print('loc_ has length zero')
+
                 df_temp = pd.DataFrame()
                 df_temp['pt'] = xval
                 df_temp['gene'] = yg
                 corr = df_temp['pt'].corr(df_temp['gene'], method='pearson')
                 corr_kend = df_temp['pt'].corr(df_temp['gene'], method='kendall')
-                if title_gene == 'CD34':
-                    if corr < corr_max: corr_max = corr
-                else:
-                    if corr > corr_max: corr_max = corr
+                if corr < corr_max: corr_max = corr
+
                 col_title_gene = title_gene + '_' + str(i)
                 ts_ = self.terminal_clusters[i]
                 do_plot = True
-                # FOR HUMANCD34 VIA0
-                '''
-                if (ts_==16)&('DC' in  title_gene): do_plot = True
-                if (ts_ == 18) & ('DC' in title_gene): do_plot = True
-                if (ts_ == 12) & ('MPO' in title_gene): do_plot = True
-                if (ts_ == 2) & ('CD79' in title_gene): do_plot = True
-                if (ts_ == 9) & ('GATA' in title_gene): do_plot = True
-                if (ts_ == 6) & ('GATA' in title_gene): do_plot = True
-                if (ts_ == 15) & ('CD41' in title_gene): do_plot = True
-                '''
-                if do_plot == True:
-                    col_title_pt = 'pt_' + str(self.terminal_clusters[i]) + '_' + title_gene
-                    var1 = 'var1_' + str(self.terminal_clusters[i]) + '_' + title_gene
-                    var2 = 'var2_' + str(self.terminal_clusters[i]) + '_' + title_gene
+
+                if do_plot:
+                    col_title_pt = f"pt_{self.terminal_clusters[i]}_{title_gene}"
+
                     df_gene[col_title_pt] = xval
                     df_gene[col_title_gene] = yg
-                    # df_gene[var1] = yg_intervals[:,0]
-                    # df_gene[var2] = yg_intervals[:, 1]
+
                     label_str_pears = 'TS:' + str(self.terminal_clusters[i]) + ' ' + str(int(corr * 100)) + '%'
                     print('gene corr pear', title_gene, self.terminal_clusters[i], '%.0f' % (corr * 100) + '%')
                     print('gene corr kend', title_gene, self.terminal_clusters[i], '%.0f' % (corr_kend * 100) + '%')
-                    ax.plot(xval, yg, color=cmap_[i], linewidth=3.5, zorder=3,
-                            label=label_str_pears)  # linestyle=(0, (5, 2, 1, 2)),    dash_capstyle='round'
-                    # ax.fill_between(xval, yg_intervals[:,0],yg_intervals[:,1],color=cmap_[i],alpha=0.15)
+                    ax.plot(xval, yg, color=cmap_[i], linewidth=3.5, zorder=3, label=label_str_pears)
+
             plt.legend()
             str_title = 'Trend:' + title_gene + ' ' + '%.0f' % (corr_max * 100) + '%'
-            # df_gene.to_csv('/home/shobi/Trajectory/Datasets/HumanCD34/VIAGeneCorr/temp/'+title_gene+'.csv')
-            # df_gene.to_csv('/home/shobi/Trajectory/Datasets/Pancreas/ViaGeneCorr/HVG5000_pc20_knn30/temp/' + title_gene + '.csv')
-
             plt.title(str_title)
         return
 
     def get_gene_expression_multi(self, ax, gene_exp, title_gene=""):
-
         sc_pt = self.single_cell_pt_markov
         sc_bp_original = self.single_cell_bp
         n_terminal_states = sc_bp_original.shape[1]
@@ -2098,40 +1758,29 @@ class VIA:
                 weights = np.asarray(sc_bp[:, i])[loc_].reshape(-1, 1)
 
                 if len(loc_) > 1:
-                    # geneGAM = pg.LinearGAM(n_splines=20, spline_order=5, lam=10).fit(x, y, weights=weights)
-                    # geneGAM = pg.LinearGAM(n_splines=10, spline_order=4, lam=10).fit(x, y, weights=weights)
                     geneGAM = pg.LinearGAM(n_splines=10, spline_order=4, lam=10).fit(x, y, weights=weights)
-                    nx_spacing = 100
-                    xval = np.linspace(min(sc_pt), max_val_pt, nx_spacing * 2)
+                    xval = np.linspace(min(sc_pt), max_val_pt, 100 * 2)
                     yg = geneGAM.predict(X=xval)
                 else:
                     print('loc_ has length zero')
-                # cmap_[i]
-                ax.plot(xval, yg, color='navy', linewidth=3.5, zorder=3,
-                        label='TS:' + str(self.terminal_clusters[i]))
-            # plt.legend()
+
+                ax.plot(xval, yg, color='navy', linewidth=3.5, zorder=3, label=f"TS:{self.terminal_clusters[i]}")
+
             ax.set_title(title_gene)
-        return
 
     def do_impute(self, df_gene, magic_steps=3, gene_list=[]):
         # ad_gene is an ann data object from scanpy
-        if self.do_impute_bool == False:
+        if not self.do_impute_bool:
             print(colored('please re-run Via with do_impute set to True', 'red'))
             return
-        else:
-            from sklearn.preprocessing import normalize
-            transition_full_graph = normalize(self.csr_full_graph, norm='l1',
-                                              axis=1) ** magic_steps  # normalize across columns to get Transition matrix.
 
-            print('shape of transition matrix raised to power', magic_steps, transition_full_graph.shape)
-            subset = df_gene[gene_list].values
+        from sklearn.preprocessing import normalize
+        # normalize across columns to get Transition matrix.
+        transition_full_graph = normalize(self.csr_full_graph, norm='l1', axis=1) ** magic_steps
 
-            dot_ = transition_full_graph.dot(subset)
-
-            df_imputed_gene = pd.DataFrame(dot_, index=df_gene.index, columns=gene_list)
-            print('shape of imputed gene matrix', df_imputed_gene.shape)
-
-            return df_imputed_gene
+        print('shape of transition matrix raised to power', magic_steps, transition_full_graph.shape)
+        subset = df_gene[gene_list].values
+        return pd.DataFrame(transition_full_graph.dot(subset), index=df_gene.index, columns=gene_list)
 
     def run_subPARC(self):
         print(f"{datetime.now()}\tGlobal pruning of weighted knn graph")
@@ -2615,9 +2264,8 @@ class VIA:
         print('terminal clusters', terminal_clus)
         self.node_degree_list = node_deg_list
         print(colored(f"{datetime.now()}\tBegin projection of pseudotime and lineage likelihood", "red"))
-        a, b = self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
-        # self.single_cell_bp, self.single_cell_pt_markov
-        self.project_branch_probability_sc2(bp_array, df_graph['markov_pt'].values)
+        self.single_cell_bp, self.single_cell_pt_markov = self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
+
         self.dict_terminal_super_sub_pairs = dict_terminal_super_sub_pairs
         hitting_times = self.markov_hitting_times
 
@@ -2733,7 +2381,6 @@ class VIA:
         graph_node_label = self.graph_node_label
         if type_pt == 'pt':
             pt = self.scaled_hitting_times  # these are the final MCMC refined pt then slightly scaled
-
             title_ax1 = "pseudotime"
 
         if type_pt == 'gene':
@@ -2754,46 +2401,35 @@ class VIA:
             true_label_in_group_i = list(np.asarray(self.true_label)[loc_i])
             for ii in set(true_label_in_group_i):
                 group_frac[ii][group_i] = true_label_in_group_i.count(ii)
-        # group_frac = group_frac.div(group_frac.sum(axis=1), axis=0)
-        # print('group frac', group_frac)
 
         line_true = np.linspace(0, 1, n_truegroups)
         color_true_list = [plt.cm.jet(color) for color in line_true]
 
-        sct = ax.scatter(
-            node_pos[:, 0], node_pos[:, 1],
-            c='white', edgecolors='face', s=group_pop, cmap='jet')
-        # print('draw triangle edgelist', len(edgelist), edgelist)
+        sct = ax.scatter(node_pos[:, 0], node_pos[:, 1],
+                         c='white', edgecolors='face', s=group_pop, cmap='jet')
+
         bboxes = getbb(sct, ax)
         for e_i, (start, end) in enumerate(edgelist):
             if pt[start] > pt[end]:
-                temp = start
-                start = end
-                end = temp
+                start, end = end, start
 
             ax.add_line(lines.Line2D([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]],
                                      color='black', lw=edgeweight[e_i] * edgeweight_scale, alpha=0.6))
             z = np.polyfit([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]], 1)
             minx = np.min(np.array([node_pos[start, 0], node_pos[end, 0]]))
 
-            direction_arrow = 1 if node_pos[start, 0] < node_pos[end, 0] else -1
+            direction = 1 if node_pos[start, 0] < node_pos[end, 0] else -1
             maxx = np.max(np.array([node_pos[start, 0], node_pos[end, 0]]))
 
             xp = np.linspace(minx, maxx, 500)
             p = np.poly1d(z)
             smooth = p(xp)
             step = 1
-            if direction_arrow == 1:
 
-                ax.arrow(xp[250], smooth[250], xp[250 + step] - xp[250], smooth[250 + step] - smooth[250], shape='full',
-                         lw=0,
-                         length_includes_head=True, head_width=arrow_head_w,
-                         color='grey')
-                # ax.plot(xp, smooth, linewidth=edgeweight[e_i], c='pink')
-            else:
-                ax.arrow(xp[250], smooth[250], xp[250 - step] - xp[250],
-                         smooth[250 - step] - smooth[250], shape='full', lw=0,
-                         length_includes_head=True, head_width=arrow_head_w, color='grey')
+            ax.arrow(xp[250], smooth[250], xp[250 + direction * step] - xp[250],
+                     smooth[250 + direction * step] - smooth[250], shape='full',
+                     lw=0, length_includes_head=True, head_width=arrow_head_w,color='grey')
+
         trans = ax.transData.transform
         bbox = ax.get_position().get_points()
         ax_x_min = bbox[0, 0]
@@ -2897,18 +2533,13 @@ class VIA:
 
         fig, axs = plt.subplots(1, n)
         pt = self.markov_hitting_times
-        if type_val == 'gene':
-            cmap = 'coolwarm'
-        else:
-            cmap = 'viridis_r'
+        cmap = 'coolwarm' if type_val == 'gene' else 'viridis_r'
 
         node_pos = self.graph_node_pos
         edgelist = list(self.edgelist_maxout)
         edgeweight = self.edgeweights_maxout
 
         node_pos = np.asarray(node_pos)
-
-        graph_node_label = self.graph_node_label
 
         import matplotlib.lines as lines
         from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -2933,9 +2564,7 @@ class VIA:
             print('gene i', gene_i)
             for e_i, (start, end) in enumerate(edgelist):
                 if pt[start] > pt[end]:
-                    temp = start
-                    start = end
-                    end = temp
+                    start, end = end, start
 
                 ax_i.add_line(
                     lines.Line2D([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]],
@@ -2943,30 +2572,18 @@ class VIA:
                 z = np.polyfit([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]], 1)
                 minx = np.min(np.array([node_pos[start, 0], node_pos[end, 0]]))
 
-                if (node_pos[start, 0] < node_pos[end, 0]):
-                    direction_arrow = 1
-                else:
-                    direction_arrow = -1
-
-                maxx = np.max(np.array([node_pos[start, 0], node_pos[end, 0]]))
-
+                direction = 1 if node_pos[start, 0] < node_pos[end, 0] else -1
+                maxx = np.max([node_pos[start, 0], node_pos[end, 0]])
                 xp = np.linspace(minx, maxx, 500)
                 p = np.poly1d(z)
                 smooth = p(xp)
                 step = 1
-                if direction_arrow == 1:
 
-                    ax_i.arrow(xp[250], smooth[250], xp[250 + step] - xp[250], smooth[250 + step] - smooth[250],
-                               shape='full', lw=0,
-                               length_includes_head=True, head_width=arrow_head_w,
-                               color='grey')
+                ax_i.arrow(xp[250], smooth[250], xp[250 + direction * step] - xp[250],
+                           smooth[250 + direction * step] - smooth[250],
+                           shape='full', lw=0, length_includes_head=True, head_width=arrow_head_w, color='grey')
 
-                else:
-                    ax_i.arrow(xp[250], smooth[250], xp[250 - step] - xp[250],
-                               smooth[250 - step] - smooth[250], shape='full', lw=0,
-                               length_includes_head=True, head_width=arrow_head_w, color='grey')
-            c_edge = []
-            l_width = []
+            c_edge, l_width = [], []
             for ei, pti in enumerate(pt):
                 if ei in self.terminal_clusters:
                     c_edge.append('red')
@@ -2975,15 +2592,9 @@ class VIA:
                     c_edge.append('gray')
                     l_width.append(0.0)
 
-            gp_scaling = 1000 / max(group_pop)  # 500 / max(group_pop)
-            # print(gp_scaling, 'gp_scaling')
-            group_pop_scale = group_pop * gp_scaling * 0.5
-
+            group_pop_scale = .5 * group_pop * 1000 / max(group_pop)
             pos = ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=gene_exp[gene_i].values, cmap=cmap,
-                               edgecolors=c_edge,
-                               alpha=1, zorder=3, linewidth=l_width)
-            # for ii in range(node_pos.shape[0]):
-            # ax_i.text(node_pos[ii, 0] + 0.5, node_pos[ii, 1] + 0.5, 'c' + str(ii), color='black', zorder=4)
+                               edgecolors=c_edge, alpha=1, zorder=3, linewidth=l_width)
 
             divider = make_axes_locatable(ax_i)
             cax = divider.append_axes('right', size='10%', pad=0.05)
