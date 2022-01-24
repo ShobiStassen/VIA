@@ -141,36 +141,22 @@ def getbb(sc, ax):
             )
             # bboxes.append(result.inverse_transformed(ax.transData))
             bboxes.append(result.transformed(ax.transData.inverted()))
-
     return bboxes
 
 
 def plot_sc_pb(ax, embedding, prob, ti, cmap_name='viridis'):
-    # threshold = #np.percentile(prob, 95)#np.mean(prob) + 3 * np.std(prob)
-    # print('thresold', threshold, np.max(prob))
-    # prob = [x if x < threshold else threshold for x in prob]
     prob = np.sqrt(prob)  # scale values to improve visualization of colors
     cmap = matplotlib.cm.get_cmap('plasma')
     norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
-    prob = np.asarray(prob)
-    # print('prob plot stats (min, max, mean)', min(prob), max(prob), np.mean(prob))
-    # changing the alpha transapency parameter for plotting points
-    c = cmap(norm(prob))
-    c = c.reshape(-1, 4)
-    loc_c = np.where(prob <= 0.3)[0]
-    c[loc_c, 3] = 0.2
-    loc_c = np.where((prob > 0.3) & (prob <= 0.5))[0]
-    c[loc_c, 3] = 0.5
-    loc_c = np.where((prob > 0.5) & (prob <= 0.7))[0]
-    c[loc_c, 3] = 0.8
-    loc_c = np.where((prob > 0.7))[0]
-    c[loc_c, 3] = 0.8
-    if embedding.shape[0] > 10000:
-        size_point = 10
-    else:
-        size_point = 30
-    ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=size_point, cmap=cmap_name,
-               edgecolors='none')
+
+    # changing the alpha transparency parameter for plotting points
+    c = cmap(norm(prob)).reshape(-1, 4)
+
+    c[prob <= .3, 3] = .2
+    c[.3 < prob <= .5, 3] = .5
+    c[.5 < prob, 3] = .8
+    size_point = 10 if embedding.shape[0] > 10000 else 30
+    ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=size_point, cmap=cmap_name, edgecolors='none')
     ax.set_title('Target: ' + str(ti))
 
 
@@ -566,44 +552,27 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
     return
 
 
-def get_biased_weights(edgelist, weights, pt, round_no=1):
+def get_biased_weights(edges, weights, pt, round=1):
     # small nu means less biasing (0.5 is quite mild)
     # larger nu (in our case 1/nu) means more aggressive biasing https://en.wikipedia.org/wiki/Generalised_logistic_function
 
-    bias_weight = []
-    if round_no == 1:  # using the pseudotime calculated from lazy-jumping walk
-        b = 1
-    else:  # using the refined MCMC Psuedotimes before calculating lineage likelihood paths
-        b = 20
-    K = 1
-    c = 0
-    C = 1
-    nu = 1
-    high_weights_th = np.mean(weights)
-    high_pt_th = np.percentile(np.asarray(pt), 80)
-    loc_high_weights = np.where(weights > high_weights_th)[0]
-    loc_high_pt = np.where(np.asarray(pt) > high_pt_th)[0]
-    for i in loc_high_weights:
+    # using the pseudotime calculated from lazy-jumping walk. Otherwise using the refined MCMC Psuedotimes before
+    # calculating lineage likelihood paths
+    b = 1 if round == 1 else 20
 
-        start = edgelist[i][0]
-        end = edgelist[i][1]
-        if (start in loc_high_pt) | (end in loc_high_pt):
-            weights[i] = 0.5 * np.mean(weights)
+    weights_thr, pct_thr = weights.mean(), np.percentile(pt, 80)
+    loc_high_pt = set(np.where(pt > pct_thr)[0])
+    for i in np.where(weights > weights_thr)[0]:
+        start, end = edges[i]
+        if start in loc_high_pt or end in loc_high_pt:
+            weights[i] = 0.5 * weights.mean()
+    weights.clip(np.percentile(weights, 10), np.percentile(weights, 90))
 
-    upper_lim = np.percentile(weights, 90)  # 80
-    lower_lim = np.percentile(weights, 10)  # 20
-    weights = [i if i <= upper_lim else upper_lim for i in weights]
-    weights = [i if i >= lower_lim else lower_lim for i in weights]
-    for i, (start, end) in enumerate(edgelist):
-        Pt_a = pt[start]
-        Pt_b = pt[end]
-        P_ab = weights[i]
-        t_ab = Pt_a - Pt_b
-
-        Bias_ab = K / ((C + math.exp(b * (t_ab + c)))) ** nu
-        new_weight = (Bias_ab * P_ab)
-        bias_weight.append(new_weight)
-    return list(bias_weight)
+    bias_weight, K, c, C, nu = [], 1, 0, 1, 1
+    for (s, t), w in zip(edges, weights):
+        t_ab = pt[s] - pt[t]
+        bias_weight.append(w * K / (C + math.exp(b * (t_ab + c))) ** nu)
+    return bias_weight
 
 
 def expected_num_steps(start_i, N):
@@ -828,7 +797,6 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
     loci = [sc_supercluster_nn[key] for key in sc_supercluster_nn]
     for i, c, w, pc, dsz, lab in zip(loci, c_edge, width_edge, pen_color, dot_size,
                                      super_cluster_label):  # sc_supercluster_nn
-        print('lab', lab)
         ax2.scatter(X_dimred[i, 0], X_dimred[i, 1], c='black', s=dsz, edgecolors=c, linewidth=w)
         ax2.annotate(str(lab), xy=(X_dimred[i, 0], X_dimred[i, 1]))
         count_ = count_ + 1
@@ -837,13 +805,13 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
     plt.title(title_str)
 
 
-def csr_mst(adjacency_matrix):
+def csr_mst(adjacency):
     # return minimum spanning tree from adjacency matrix (csr)
-    Tcsr = adjacency_matrix.copy()
-    Tcsr.data = -1 * Tcsr.data
-    Tcsr.data = Tcsr.data - np.min(Tcsr.data) + 1
+    Tcsr = adjacency.copy()
+    Tcsr.data *= -1
+    Tcsr.data -= np.min(Tcsr.data) - 1
     Tcsr = minimum_spanning_tree(Tcsr)
-    return (Tcsr + Tcsr.T) * 0.5  # make symmetric
+    return (Tcsr + Tcsr.T) * .5
 
 
 def connect_all_components(MSTcsr, cluster_graph_csr, adjacency):
@@ -2458,7 +2426,6 @@ class VIA:
 
             print(f"{datetime.now()}\tComputing lazy-teleporting expected hitting times")
             hitting_times, roundtrip_times = self.compute_hitting_time(a_i, new_root_index, self.x_lazy, self.alpha_teleport)
-
             # rescale hitting times
             very_high = np.mean(hitting_times) + 1.5 * np.std(hitting_times)
             without_very_high_pt = [iii for iii in hitting_times if iii < very_high]
@@ -2471,28 +2438,42 @@ class VIA:
             s_ai, t_ai = a_i.nonzero()
             edgelist_ai = list(zip(s_ai, t_ai))
             edgeweights_ai = a_i.data
+            # print('edgelist ai', edgelist_ai)
+            # print('edgeweight ai', edgeweights_ai)
             biased_edgeweights_ai = get_biased_weights(edgelist_ai, edgeweights_ai, hitting_times)
+
+            # biased_sparse = csr_matrix((biased_edgeweights, (row, col)))
             adjacency_matrix_ai = np.zeros((a_i.shape[0], a_i.shape[0]))
+
             for i, (start, end) in enumerate(edgelist_ai):
                 adjacency_matrix_ai[start, end] = biased_edgeweights_ai[i]
 
-            markov_hitting_times_ai = self.simulate_markov(adjacency_matrix_ai, new_root_index)
+            markov_hitting_times_ai = self.simulate_markov(adjacency_matrix_ai,
+                                                           new_root_index)  # +adjacency_matrix.T))
 
-            very_high = np.mean(markov_hitting_times_ai) + 1.5 * np.std(markov_hitting_times_ai)
+            # for eee, ttt in enumerate(markov_hitting_times_ai):print('cluster ', eee, ' had markov time', ttt)
+
+            very_high = np.mean(markov_hitting_times_ai) + 1.5 * np.std(markov_hitting_times_ai)  # 1.5
             very_high = min(very_high, max(markov_hitting_times_ai))
             without_very_high_pt = [iii for iii in markov_hitting_times_ai if iii < very_high]
             new_very_high = min(np.mean(without_very_high_pt) + np.std(without_very_high_pt), very_high)
 
             new_markov_hitting_times_ai = [x if x < very_high else very_high for x in markov_hitting_times_ai]
+            # for eee, ttt in enumerate(new_markov_hitting_times_ai):      print('cluster ', eee, ' had markov time', ttt)
 
             markov_hitting_times_ai = np.asarray(new_markov_hitting_times_ai)
-            scaling_fac = 10. / max(markov_hitting_times_ai)
+            scaling_fac = 10 / max(markov_hitting_times_ai)
             markov_hitting_times_ai = markov_hitting_times_ai * scaling_fac
+            # for eee, ttt in enumerate(markov_hitting_times_ai):print('cluster ', eee, ' had markov time', ttt)
+
+            # print('markov hitting times', [(i, j) for i, j in enumerate(markov_hitting_times_ai)])
+            # print('hitting times', [(i, j) for i, j in enumerate(hitting_times)])
+            markov_hitting_times_ai = (markov_hitting_times_ai)  # + hitting_times)*.5 #consensus
             adjacency_matrix_csr_ai = sparse.csr_matrix(adjacency_matrix_ai)
             (sources, targets) = adjacency_matrix_csr_ai.nonzero()
             edgelist_ai = list(zip(sources, targets))
             weights_ai = adjacency_matrix_csr_ai.data
-            bias_weights_2_ai = get_biased_weights(edgelist_ai, weights_ai, markov_hitting_times_ai, round_no=2)
+            bias_weights_2_ai = get_biased_weights(edgelist_ai, weights_ai, markov_hitting_times_ai, round=2)
             adjacency_matrix2_ai = np.zeros((adjacency_matrix_ai.shape[0], adjacency_matrix_ai.shape[0]))
 
             for i, (start, end) in enumerate(edgelist_ai):
@@ -2500,13 +2481,11 @@ class VIA:
 
             if self.super_terminal_cells == False:
                 # print('new_root_index', new_root_index, ' before get terminal')
-                terminal_clus_ai = self.get_terminal_clusters(adjacency_matrix2_ai, markov_hitting_times_ai,
-                                                              new_root_index)
+                terminal_clus_ai = self.get_terminal_clusters(adjacency_matrix2_ai, markov_hitting_times_ai, new_root_index)
                 temp_terminal_clus_ai = []
                 for i in terminal_clus_ai:
                     if markov_hitting_times_ai[i] > np.percentile(np.asarray(markov_hitting_times_ai),
                                                                   self.pseudotime_threshold_TS):
-                        # print(i, markov_hitting_times_ai[i],np.percentile(np.asarray(markov_hitting_times_ai), self.pseudotime_threshold_TS))
                         terminal_clus.append(cluster_labels_subi[i])
                         temp_terminal_clus_ai.append(i)
                 terminal_clus_ai = temp_terminal_clus_ai
@@ -2601,7 +2580,6 @@ class VIA:
             print('terminal clus in this component', terminal_clus_ai)
             print('final terminal clus', terminal_clus)
             for target_terminal in terminal_clus_ai:
-
                 prob_ai = self.simulate_branch_probability(target_terminal, terminal_clus_ai,
                                                            adjacency_matrix2_ai,
                                                            new_root_index, pt=markov_hitting_times_ai,
@@ -2643,7 +2621,7 @@ class VIA:
         self.dict_terminal_super_sub_pairs = dict_terminal_super_sub_pairs
         hitting_times = self.markov_hitting_times
 
-        bias_weights_2_all = get_biased_weights(self.edgelist, edgeweights, self.markov_hitting_times, round_no=2)
+        bias_weights_2_all = get_biased_weights(self.edgelist, edgeweights, self.markov_hitting_times, round=2)
 
         n_clus = len(set(self.labels))
         temp_csr = csr_matrix((bias_weights_2_all, tuple(zip(*self.edgelist))), shape=(n_clus, n_clus))
