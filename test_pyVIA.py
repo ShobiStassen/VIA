@@ -7,26 +7,19 @@ import numpy as np
 import warnings
 
 
+def run_Toy_multi(foldername="Datasets/"):
+    via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername=foldername)
 
-# This is a test script for some of the examples shown on the github page and as Jupyter Notebooks (https://github.com/ShobiStassen/VIA)
-# change the foldername accordingly to the folder containing relevant data files
-# Please visit https://github.com/ShobiStassen/VIA for more detailed examples
 
-def run_Toy_multi(foldername = "/home/shobi/Trajectory/Datasets/Toy3/"):
-    #### Test Toy Multifurcation
-    via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername= foldername)
+def run_Toy_discon(foldername="Datasets/"):
+    via.main_Toy(ncomps=10, knn=30,dataset='Toy4', random_seed=2,foldername=foldername)
 
-def run_Toy_discon(foldername = "/home/shobi/Trajectory/Datasets/Toy4/"):
-    #### Test Toy Disconnected
-    via.main_Toy(ncomps=10, knn=30,dataset='Toy4', random_seed=2,foldername= foldername)
 
-def run_EB(foldername = '/home/shobi/Trajectory/Datasets/EB_Phate/'):
-    #### Test Embryoid Body
+def run_EB(foldername="Datasets/"):
     via.main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, foldername=foldername)
 
-def run_generic_wrapper(foldername = "/home/shobi/Trajectory/Datasets/Bcell/", knn=20, ncomps = 20):
-    #### Test pre-B cell differentiation using generic VIA wrapper
 
+def run_generic_wrapper(foldername = "Datasets/", knn=20, ncomps = 20):
     # Read the two files:
     # 1) the first file contains 200PCs of the Bcell filtered and normalized data for the first 5000 HVG.
     # 2)The second file contains raw count data for marker genes
@@ -99,6 +92,7 @@ def run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/'):
     random_seed = 1
     root_user = ['T1_M1']
     v0 = via.VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
+                 cluster_graph_pruning_std=1.,
                  too_big_factor=0.3, root_user=root_user, dataset='faced', random_seed=random_seed,
                  do_impute_bool=True, is_coarse=True, preserve_disconnected=True,
                  preserve_disconnected_after_pruning=True,
@@ -108,6 +102,7 @@ def run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/'):
     tsi_list = via.get_loc_terminal_states(v0, X_in)
 
     v1 = via.VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
+                 cluster_graph_pruning_std=1.,
                  too_big_factor=0.05, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
                  super_terminal_cells=tsi_list, root_user=root_user, is_coarse=False,
                  preserve_disconnected=True, dataset='faced',
@@ -208,6 +203,7 @@ def run_scATAC_Buenrostro_Hemato(foldername = '/home/shobi/Trajectory/Datasets/s
     root = [1200]  # HSC cell
 
     v0 = via.VIA(X_in, true_label, jac_std_global=0.5, dist_std_local=1, knn=knn,
+                 cluster_graph_pruning_std=.15,
                  too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
                  do_impute_bool=True, is_coarse=True, preserve_disconnected=False)
     v0.run_VIA()
@@ -215,6 +211,7 @@ def run_scATAC_Buenrostro_Hemato(foldername = '/home/shobi/Trajectory/Datasets/s
     tsi_list = via.get_loc_terminal_states(v0, X_in)
 
     v1 = via.VIA(X_in, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
+                 cluster_graph_pruning_std=.15,
                  too_big_factor=0.1, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
                  super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
                  preserve_disconnected=True, dataset='scATAC',
@@ -268,14 +265,8 @@ def run_generic_discon(foldername ="/home/shobi/Trajectory/Datasets/Toy4/"):
     via.via_wrapper_disconnected(adata_counts, true_label=None, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[23, 902],
                              preserve_disconnected=True, knn=10, ncomps=30, cluster_graph_pruning_std=1, random_seed=41)
 
+
 if __name__ == '__main__':
-
     warnings.filterwarnings('ignore')
+    run_Toy_multi()
 
-    #run_Toy_multi(foldername="/home/shobi/Trajectory/Datasets/Toy3/")
-    #run_Toy_discon()
-    #run_generic_discon()
-    #run_EB(foldername = "/home/shobi/Trajectory/Datasets/EB_Phate/") #folder containing relevant data files
-    #run_scATAC_Buenrostro_Hemato() #shows the main function calls within a typical VIA wrapper function
-    #run_generic_wrapper(foldername = "/home/shobi/Trajectory/Datasets/Bcell/", knn=20, ncomps = 20)
-    run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/')
