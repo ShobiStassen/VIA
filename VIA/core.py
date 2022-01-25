@@ -22,7 +22,7 @@ from termcolor import colored
 from collections import Counter
 
 
-def prob_reaching_terminal_state1(terminal_state, all_terminal_states, A, root, pt, n_simulations, q,
+def prob_reaching_terminal_state1(terminal_state,  A, root,  n_simulations, q,
                                   cumstateChangeHist, cumstateChangeHist_all, seed):
     # this function is defined outside the VIA class to enable smooth parallel processing in Windows
     np.random.seed(seed)
@@ -311,6 +311,8 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
     root1_list = []
     p1_sc_bp = p1.single_cell_bp[idx, :]
     p1_labels = np.asarray(p1.labels)[idx]
+    p1_cc = p1.connected_comp_labels
+    p1_sc_pt_markov = list(np.asarray(p1.single_cell_pt_markov)[idx])
     X_data = p1.data
 
     X_ds = X_data[idx, :]
@@ -318,7 +320,8 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
     p_ds.init_index(max_elements=X_ds.shape[0], ef_construction=200, M=16)
     p_ds.add_items(X_ds)
     p_ds.set_ef(50)
-
+    num_cluster = len(set(p1.labels))
+    G_orange = ig.Graph(n=num_cluster, edges=p1.edgelist_maxout, edge_attrs={'weight': p1.edgeweights_maxout})
     for ii, r_i in enumerate(p1.root):
         loc_i = np.where(p1_labels == p1.root[ii])[0]
         x = [embedding[xi, 0] for xi in loc_i]
@@ -330,11 +333,58 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
 
         labelsroot1, distances1 = p1.knn_struct.knn_query(X_ds[labels_root[0][0], :], k=1)
         root1_list.append(labelsroot1[0][0])
+        for fst_i in p1.terminal_clusters:
+            path_orange = G_orange.get_shortest_paths(p1.root[ii], to=fst_i)[0]
+            #if the roots is in the same component as the terminal cluster, then print the path to output
+            if len(path_orange)>0: print(colored('Cluster path on clustergraph starting from Root Cluster', 'blue'), p1.root[ii], colored('to Terminal Cluster','blue'), fst_i, colored(':','blue'), path_orange)
 
     # single-cell branch probability evolution probability
     for i, ti in enumerate(p1.terminal_clusters):
         fig, ax = plt.subplots()
         plot_sc_pb(ax, embedding, p1_sc_bp[:, i], ti, cmap_name=cmap_name)
+
+        loc_i = np.where(p1_labels == ti)[0]
+        val_pt = [p1_sc_pt_markov[i] for i in loc_i]
+        th_pt = np.percentile(val_pt, 50)  # 50
+        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
+        x = [embedding[xi, 0] for xi in
+             loc_i]  # location of sc nearest to average location of terminal clus in the EMBEDDED space
+        y = [embedding[yi, 1] for yi in loc_i]
+        labels, distances = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]),
+                                               k=1)  # knn_hnsw is knn of embedded space
+        x_sc = embedding[labels[0], 0]  # terminal sc location in the embedded space
+        y_sc = embedding[labels[0], 1]
+        start_time = time.time()
+
+        labelsq1, distances1 = p1.knn_struct.knn_query(X_ds[labels[0][0], :],
+                                                       k=1)  # find the nearest neighbor in the PCA-space full graph
+
+        path = G.get_shortest_paths(root1_list[p1_cc[ti]], to=labelsq1[0][0])  # weights='weight')
+        # G is the knn of all sc points
+
+        path_idx = []  # find the single-cell which is nearest to the average-location of a terminal cluster
+        # get the nearest-neighbor in this downsampled PCA-space graph. These will make the new path-way points
+        path = path[0]
+
+        # clusters of path
+        cluster_path = []
+        for cell_ in path:
+            cluster_path.append(p1.labels[cell_])
+
+        # print(colored('cluster_path', 'green'), colored('terminal state: ', 'blue'), ti, cluster_path)
+        revised_cluster_path = []
+        revised_sc_path = []
+        for enum_i, clus in enumerate(cluster_path):
+            num_instances_clus = cluster_path.count(clus)
+            if (clus == cluster_path[0]) | (clus == cluster_path[-1]):
+                revised_cluster_path.append(clus)
+                revised_sc_path.append(path[enum_i])
+            else:
+                if num_instances_clus > 1:  # typically intermediate stages spend a few transitions at the sc level within a cluster
+                    if clus not in revised_cluster_path: revised_cluster_path.append(clus)  # cluster
+                    revised_sc_path.append(path[enum_i])  # index of single cell
+        print(colored('Cluster level path on sc-knnGraph from Root Cluster', 'blue'), p1.root[p1_cc[ti]],
+              colored('to Terminal Cluster: ', 'blue'), ti, revised_cluster_path)
 
 
 def get_biased_weights(edges, weights, pt, round=1):
@@ -1015,7 +1065,7 @@ class VIA:
             cumstateChangeHist = np.zeros((1, n_states))
             cumstateChangeHist_all = np.zeros((1, n_states))
             process = multiprocessing.Process(target=prob_reaching_terminal_state1, args=(
-                terminal_state, all_terminal_states, A, root, pt, num_sim_pp, q, cumstateChangeHist,
+                terminal_state, A, root,  num_sim_pp, q, cumstateChangeHist,
                 cumstateChangeHist_all,
                 seed_list[i]))
             jobs.append(process)
@@ -1645,7 +1695,7 @@ class VIA:
         # neighbor array is not listed in in any order of proximity
         print('number of components in the original full graph', n_components_original)
         print('for downstream visualization purposes we are also constructing a low knn-graph ')
-        first, k0, n_comp = True, 3, 1.5
+        first, k0, n_comp = True, 3, n_components_original+1
         while (n_components_original == 1 and n_comp > 1) or \
                 (n_components_original > 1 and k0 <= 5 and n_comp > n_components_original):
             neighbors, distances = self.knn_struct.knn_query(data, k=k0)
@@ -1802,11 +1852,12 @@ class VIA:
 
         # Prune edges off graph
         threshold = np.median(sim) if self.jac_std_global == 'median' else sim.mean() - self.jac_std_global * sim.std()
-        strong_locs = np.where(sim > threshold)[0]
+        strong_locs = np.asarray(np.where(sim > threshold)[0])
+        #strong_locs = np.where(sim > threshold)[0]
+        pruned_similarities = ig.Graph(n=self.nsamples, edges=list(edges[strong_locs]),
+                                       edge_attrs={'weight': list(sim[strong_locs])}).simplify(combine_edges='sum')
         print('strong locs', strong_locs)
-        pruned_similarities = ig.Graph(n=self.nsamples, edges=edges[strong_locs],
-                                       edge_attrs={'weight': sim[strong_locs]})\
-            .simplify(combine_edges='sum')
+        #pruned_similarities = ig.Graph(n=self.nsamples, edges=edges[strong_locs],    edge_attrs={'weight': sim[strong_locs]})\    .simplify(combine_edges='sum')
         print(f"{datetime.now()}\tFinished global pruning. Kept {round(100 * len(strong_locs) / tot, 2)} of edges. ")
 
         if self.is_coarse:
@@ -1881,6 +1932,8 @@ class VIA:
 
         # Reset labels to begin from zero and with no missing numbers
         self.labels = labels = np.unique(labels, return_inverse=True)[1]
+
+
         print(f"{datetime.now()}\tFinished detecting communities")
 
         # end community detection
@@ -1961,7 +2014,7 @@ class VIA:
             # TODO - remove this code and dataset specific `find_root` methods to external file
             if ((self.dataset == 'toy') | (self.dataset == 'faced')):
 
-                if self.super_cluster_labels != False:
+                if self.super_cluster_labels:# != False:
                     # find which sub-cluster has the super-cluster root
 
                     if 'T1_M1' in sc_truelabels_subi:
@@ -2334,7 +2387,7 @@ class VIA:
         f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True, figsize=[8, 5])  # , dpi=300)
 
         self.draw_piechart_graph(ax, ax1)
-
+        self.labels = list(self.labels)
         plt.show()
         # plt.scatter(self.embedding[:, 0], self.embedding[:, 1], c=self.single_cell_pt_markov, cmap='viridis', s=4, alpha=0.5)
         # plt.scatter(self.embedding[root_user, 0], self.embedding[root_user, 1], c='orange', s=15)
@@ -2721,5 +2774,4 @@ class VIA:
             self.f1_mean = f1_mean
             self.stats_df = df_accuracy
             # self.majority_truth_labels = majority_truth_labels
-
 

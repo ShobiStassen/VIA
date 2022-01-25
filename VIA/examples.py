@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 import umap
 import phate
 import seaborn as sns
-from pyVIA.core import *
+from core import * #pyVIA.core import *
 
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
     import scvelo as scv
@@ -809,14 +809,14 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
 
     if dataset == "Toy3":
         df_counts = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000.csv", delimiter=",")
-        df_ids = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000_ids.csv", delimiter=",")
+        df_ids = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000_ids_with_truetime.csv", delimiter=",")
 
         root_user = ['M1']
         paga_root = "M1"
     if dataset == "Toy4":  # 2 disconnected components
         print('inside toy4')
         df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv", delimiter=",")
-        df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids.csv", delimiter=",")
+        df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids_with_truetime.csv", delimiter=",")
         root_user = ['T1_M1', 'T2_M1']  # 'T1_M1'
         paga_root = 'T1_M1'
 
@@ -856,6 +856,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
              piegraph_edgeweight_scalingfactor=1.0)  # *.4 root=2,
     v0.run_VIA()
     super_labels = v0.labels
+    print('super labels', type(super_labels))
     df_ids['pt'] = v0.single_cell_pt_markov
     correlation = df_ids['pt'].corr(df_ids['true_time'])
     print('corr via knn', knn, correlation)
