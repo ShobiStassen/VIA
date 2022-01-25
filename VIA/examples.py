@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 import umap
 import phate
 import seaborn as sns
-from core import * #pyVIA.core import *
+from pyVIA.core import *
 
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
     import scvelo as scv
