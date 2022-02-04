@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import scipy
 from scipy import sparse
-from scipy.sparse import csr_matrix, csgraph
+from scipy.sparse import csr_matrix, csgraph, find
 from scipy.sparse.csgraph import minimum_spanning_tree, connected_components
 import igraph
 import igraph as ig
@@ -20,7 +20,9 @@ import multiprocessing
 import pygam as pg
 from termcolor import colored
 from collections import Counter
-
+from velocity_utils import *
+from sklearn.preprocessing import normalize
+###work in progress core
 
 def prob_reaching_terminal_state1(terminal_state,  A, root,  n_simulations, q,
                                   cumstateChangeHist, cumstateChangeHist_all, seed):
@@ -407,6 +409,7 @@ def get_biased_weights(edges, weights, pt, round=1):
     for (s, t), w in zip(edges, weights):
         t_ab = pt[s] - pt[t]
         bias_weight.append(w * K / (C + math.exp(b * (t_ab + c))) ** nu)
+
     return bias_weight
 
 
@@ -424,7 +427,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
                          projected_sc_pt, true_label, knn, ncomp, final_super_terminal, sub_terminal_clusters,
                          title_str="hitting times", super_root=[0], draw_all_curves=True, arrow_width_scale_factor=15,
                          scatter_size=10, scatter_alpha=0.5,
-                         linewidth=1.5):
+                         linewidth=1.5, marker_edgewidth=1):
     # draw_all_curves. True draws all the curves in the piegraph, False simplifies the number of edges
     # arrow_width_scale_factor: size of the arrow head
     X_dimred = X_dimred * 1. / np.max(X_dimred, axis=0)
@@ -452,8 +455,8 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
     line = np.linspace(0, 1, num_true_group)
     for color, group in zip(line, sorted(set(true_label))):
         where = np.where(np.array(true_label) == group)[0]
-        ax1.scatter(X_dimred[where, 0], X_dimred[where, 1], label=group, c=np.asarray(plt.cm.jet(color)).reshape(-1, 4),
-                    alpha=scatter_alpha, s=scatter_size)  # 10 # 0.5 and 4
+        ax1.scatter(X_dimred[where, 0], X_dimred[where, 1], label=group, c=np.asarray(plt.cm.rainbow(color)).reshape(-1, 4),
+                    alpha=scatter_alpha, s=scatter_size, linewidths=marker_edgewidth*.1)  # 10 # 0.5 and 4
     ax1.legend(fontsize=6)
     ax1.set_title('true labels, ncomps:' + str(ncomp) + '. knn:' + str(knn))
 
@@ -618,7 +621,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
 
     ax2.set_title('lazy:' + str(x_lazy) + ' teleport' + str(alpha_teleport) + 'super_knn:' + str(knn))
     ax2.scatter(X_dimred[:, 0], X_dimred[:, 1], c=projected_sc_pt, cmap='viridis_r', alpha=scatter_alpha,
-                s=scatter_size)  # alpha=0.6, s=10,50
+                s=scatter_size, linewidths=marker_edgewidth*.1)  # alpha=0.6, s=10,50
     count_ = 0
     loci = [sc_supercluster_nn[key] for key in sc_supercluster_nn]
     for i, c, w, pc, dsz, lab in zip(loci, c_edge, width_edge, pen_color, dot_size,
@@ -1262,6 +1265,137 @@ class VIA:
 
         return bp_array_sc, pt_sc.flatten()
 
+    def sc_transition_matrix(self,smooth_transition,perc = 10):
+        #n_clus = len(list(set(self.labels)))
+        #n_cells = self.data.shape[0]
+
+        #global pruning of the locally pruned sc knn graph
+
+        T = self.csr_array_locally_pruned.copy()
+        '''
+        thr_global = np.mean(T.data) - 3*np.std(T.data)
+        T.data[T.data < thr_global] = 0
+        T.eliminate_zeros()
+        '''
+        size_T = T.size
+        T.data = T.data.clip(np.percentile(T.data, 10), np.percentile(T.data, 80))
+        find_T = find(T)
+        bias_weight, K, c, C, nu, b = [], 1, 0, 1, 1, 1
+        print('transition before biasing')
+        print(T)
+        for i in range(size_T):
+
+            #start = find_T[0][i]
+            #end = find_T[1][i]
+            weight = find_T[2][i]
+            t_dif = self.single_cell_pt_markov[find_T[0][i]] - self.single_cell_pt_markov[find_T[1][i]]
+
+            bias_weight.append(weight * K / ((C + math.exp(b * (t_dif + c))) ** nu))
+        T = csr_matrix((bias_weight/np.mean(np.array(bias_weight)), (np.array(find_T[0]), np.array(find_T[1]))), shape=T.shape)
+        #T = T.multiply(csr_matrix(1.0 / np.abs(T).sum(1)))
+        print('transition before expm1 ')
+        print(T)
+        T.setdiag(0)
+        T.eliminate_zeros()
+        T = np.expm1(T)
+
+        #thr_perc = np.percentile(T.data, 10)
+        #T.data[T.data < thr_perc] = 0
+        #T.eliminate_zeros()
+        #print('T rows')
+        #print(find(T)[0].shape)
+        #print(np.unique(find(T)[0]).size)
+        T = normalize(T, norm='l1', axis=1) **smooth_transition
+
+        T = T.multiply(csr_matrix(1.0 / np.abs(T).sum(1)))  # rows sum to one
+        print('transition ')
+        print(T)
+        return T
+
+    def velocity_embedding(self, X_emb, smooth_transition):
+        #T transition matrix at single cell level
+        n_obs = X_emb.shape[0]
+        V_emb = np.zeros(X_emb.shape)
+        T = self.sc_transition_matrix(smooth_transition)
+
+        for i in range(n_obs):
+            indices = T[i].indices
+            dX = X_emb[indices] - X_emb[i, None]  # shape (n_neighbors, 2)
+            dX /= l2_norm(dX)[:, None]
+            #dX /= np.sqrt(dX.multiply(dX).sum(axis=1).A1)[:, None]
+            dX[np.isnan(dX)] = 0  # zero diff in a steady-state
+            probs =  T[i].data
+            if probs.size ==0: print(probs, i)
+            V_emb[i] = probs.dot(dX) - probs.mean() * dX.sum(0)
+
+        print('before quiver Vemb')
+        print(V_emb)
+
+        V_emb /= 3 * quiver_autoscale(X_emb, V_emb)
+
+
+        print('after quiver Vemb')
+        print(V_emb)
+        return X_emb, V_emb
+
+    def via_streamplot(self, X_emb, density_grid=0.5, arrow_size=.7, arrow_color = 'k',
+    arrow_style="-|>",  max_length=4, linewidth=1,min_mass = 1, cutoff_perc = None,scatter_size=500, scatter_alpha=0.5,marker_edgewidth=0.1, density_stream = 2, smooth_transition=1, smooth_grid=0.5, color_scheme = 'annotations'):
+        import matplotlib.patheffects as PathEffects
+
+
+        X_emb, V_emb = self.velocity_embedding(X_emb, smooth_transition)
+        print('X_emb', X_emb.shape)
+        V_emb *=20
+
+        print('V_emb')
+        print(V_emb)
+        X_grid, V_grid = compute_velocity_on_grid(
+            X_emb=X_emb,
+            V_emb=V_emb,
+            density=density_grid,
+            smooth=smooth_grid,
+            min_mass=min_mass,
+            autoscale=False,
+            adjust_for_stream=True,
+            cutoff_perc=cutoff_perc )
+
+        print('V-grid',V_grid)
+        lengths = np.sqrt((V_grid ** 2).sum(0))
+        print('lengths1', lengths)
+        linewidth = 1 if linewidth is None else linewidth
+        #linewidth *= 2 * lengths / np.percentile(lengths[~np.isnan(lengths)],90)
+        linewidth *= 2 * lengths / lengths[~np.isnan(lengths)].max()
+        print('linewidths', linewidth)
+        #linewidth=0.5
+        fig, ax = plt.subplots(dpi=300)
+        ax.grid(False)
+        ax.streamplot(X_grid[0], X_grid[1], V_grid[0], V_grid[1], color=arrow_color, arrowsize=arrow_size, arrowstyle=arrow_style, zorder = 3, linewidth=linewidth, density = density_stream, maxlength=max_length)
+
+        #num_cluster = len(set(super_cluster_labels))
+        line = np.linspace(0, 1, len(set(self.true_label)))
+        if color_scheme == 'time':
+            ax.scatter(X_emb[:,0],X_emb[:,1], c=self.single_cell_pt_markov,alpha=scatter_alpha,  zorder = 0, s=scatter_size, linewidths=marker_edgewidth, cmap = 'viridis_r')
+        if color_scheme == 'annotations':
+            for color, group in zip(line, sorted(set(self.true_label))):
+                where = np.where(np.array(self.true_label) == group)[0]
+                ax.scatter(X_emb[where, 0], X_emb[where, 1], label=group,
+                            c=np.asarray(plt.cm.rainbow(color)).reshape(-1, 4),
+                            alpha=scatter_alpha,  zorder = 0, s=scatter_size, linewidths=marker_edgewidth)
+                x_mean = X_emb[where, 0].mean()
+                y_mean = X_emb[where, 1].mean()
+                ax.text(x_mean, y_mean, str(group), fontsize=5, zorder=4, path_effects = [PathEffects.withStroke(linewidth=1, foreground='w')], weight = 'bold')
+        if color_scheme == 'cluster':
+            for color, group in zip(line, sorted(set(self.labels))):
+                where = np.where(np.array(self.labels) == group)[0]
+                ax.scatter(X_emb[where, 0], X_emb[where, 1], label=group,
+                            c=np.asarray(plt.cm.rainbow(color)).reshape(-1, 4),
+                            alpha=scatter_alpha,  zorder = 0, s=scatter_size, linewidths=marker_edgewidth)
+                x_mean = X_emb[where, 0].mean()
+                y_mean = X_emb[where, 1].mean()
+                ax.text(x_mean, y_mean, str(group), fontsize=5, zorder=4, path_effects = [PathEffects.withStroke(linewidth=1, foreground='w')], weight = 'bold')
+
+        fig.patch.set_visible(False)
+        ax.axis('off')
     def construct_knn(self, data: np.ndarray, too_big: bool = False) -> hnswlib.Index:
         """
         Construct K-NN graph for given data
@@ -1333,7 +1467,8 @@ class VIA:
         # Inverting the distances outputs values in range [0-1]. This also causes many ``good'' neighbors ending up
         # having a weight near zero (misleading as non-neighbors have a weight of zero). Therefore we scale by the
         # mean distance.
-        weights = (np.mean(distances[msk]) ** 2) / (distances[msk] + distance_factor)
+        weights = (np.mean(distances[msk]) ** 2) / (distances[msk] + distance_factor) #larger weight is a stronger edge
+        #weights = 1 / (distances[msk] + distance_factor)
         rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
         cols = neighbors[msk]
         return csr_matrix((weights, (rows, cols)), shape=(len(neighbors), len(neighbors)), dtype=np.float64)
@@ -1489,7 +1624,7 @@ class VIA:
                     PARC_labels_leiden[single_cell] = best_group
 
         do_while_time = time.time()
-        while (small_pop_exist == True) & (time.time() - do_while_time < 5):
+        while (small_pop_exist == True) & (time.time() - do_while_time < 15):
             small_pop_list = []
             small_pop_exist = False
             for cluster in set(list(PARC_labels_leiden.flatten())):
@@ -1777,7 +1912,7 @@ class VIA:
                     ax.plot(xval, yg, color=cmap_[i], linewidth=3.5, zorder=3, label=label_str_pears)
 
             plt.legend()
-            str_title = 'Trend:' + title_gene + ' ' + '%.0f' % (corr_max * 100) + '%'
+            str_title = 'Trend:' + title_gene# + ' ' + '%.0f' % (corr_max * 100) + '%'
             plt.title(str_title)
         return
 
@@ -1827,7 +1962,7 @@ class VIA:
             print(colored('please re-run Via with do_impute set to True', 'red'))
             return
 
-        from sklearn.preprocessing import normalize
+
         # normalize across columns to get Transition matrix.
         transition_full_graph = normalize(self.csr_full_graph, norm='l1', axis=1) ** magic_steps
 
@@ -1840,7 +1975,7 @@ class VIA:
         # Construct graph or obtain from previous run
         if self.is_coarse:
             neighbors, distances = self.knn_struct.knn_query(self.data, k=self.knn)
-            adjacency = self.make_csrmatrix_noselfloop(neighbors, distances)
+            adjacency = self.make_csrmatrix_noselfloop(neighbors, distances) #this function has local pruning
         else:
             neighbors, distances = self.full_neighbor_array, self.full_distance_array
             adjacency = self.csr_array_locally_pruned
@@ -1850,26 +1985,25 @@ class VIA:
                        .similarity_jaccard(pairs=edges))
         tot = len(sim)
 
-        # Prune edges off graph
+        # Prune edges off graph on global level
         threshold = np.median(sim) if self.jac_std_global == 'median' else sim.mean() - self.jac_std_global * sim.std()
         strong_locs = np.asarray(np.where(sim > threshold)[0])
         #strong_locs = np.where(sim > threshold)[0]
         pruned_similarities = ig.Graph(n=self.nsamples, edges=list(edges[strong_locs]),
-                                       edge_attrs={'weight': list(sim[strong_locs])}).simplify(combine_edges='sum')
-        print('strong locs', strong_locs)
+                                       edge_attrs={'weight': list(sim[strong_locs])}).simplify(combine_edges='sum') #used for clustering
         #pruned_similarities = ig.Graph(n=self.nsamples, edges=edges[strong_locs],    edge_attrs={'weight': sim[strong_locs]})\    .simplify(combine_edges='sum')
         print(f"{datetime.now()}\tFinished global pruning. Kept {round(100 * len(strong_locs) / tot, 2)} of edges. ")
 
         if self.is_coarse:
             # Construct full graph with no pruning - used for cluster graph edges, not listed in any order of proximity
-            csr_full_graph = self.make_csrmatrix_noselfloop(neighbors, distances, auto_=False, distance_factor=0.05)
+            csr_full_graph = self.make_csrmatrix_noselfloop(neighbors, distances, auto_=False, distance_factor=0.05) #no local pruning: auto_ set to false
             n_original_comp, n_original_comp_labels = connected_components(csr_full_graph, directed=False)
 
             edges = list(zip(*adjacency.nonzero()))
             sim = ig.Graph(edges, edge_attrs={'weight': csr_full_graph.data}).similarity_jaccard(pairs=edges)
             ig_fullgraph = ig.Graph(edges, edge_attrs={'weight': sim}).simplify(combine_edges='sum')
 
-            self.csr_array_locally_pruned = adjacency
+            self.csr_array_locally_pruned = adjacency #used for clustering
             self.ig_full_graph = ig_fullgraph  # for VIA we prune the vertex cluster graph *after* making the clustergraph
             self.csr_full_graph = csr_full_graph
             self.full_neighbor_array = neighbors
@@ -1896,9 +2030,11 @@ class VIA:
             print(colored(f"{datetime.now()}\tFound {len(too_big_clusters)} clusters that are too big", "blue"))
         else:
             print(colored(f"{datetime.now()}\tNo cluster is too big", "blue"))
-
+        time0_big = time.time()
+        count_big_pop = len(too_big_clusters)
+        num_times_expanded = 0
         # TODO - add max running time condition
-        while len(too_big_clusters):
+        while len(too_big_clusters)& (not ((time.time() - time0_big > 200) & (num_times_expanded >= count_big_pop))):
             cluster = too_big_clusters.pop(0)
             idx = labels == cluster
             print(f"{datetime.now()}\tCluster {cluster} contains "
@@ -1906,6 +2042,7 @@ class VIA:
 
             data = self.data[idx]
             membership = max(labels) + 1 + np.array(self.run_toobig_subPARC(data))
+            num_times_expanded +=1
 
             if len(set(membership)) > 1:
                 labels[idx] = membership
@@ -1914,25 +2051,38 @@ class VIA:
             else:
                 print(f"{datetime.now()}\t\tCould not expand cluster {cluster}")
 
-        # Search for clusters that are too small and merge them to non-small clusters based on neighbors' majority vote
+        # Search for clusters that are too small (like singletons) and merge them to non-small clusters based on neighbors' majority vote
+        #first we make a quick pass through all clusters to remove very small outliers by merging with a larger cluster
         print(f"{datetime.now()}\tMerging too small clusters (<{self.small_pop})")
+        too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop/2}
+        idx = np.where(np.isin(labels, list(too_small_clusters)))[0]
+        neighbours_labels = labels[neighbors[idx]]
+        for i, nl in zip(*[idx, neighbours_labels]):
+            # Retrieve the first non small cluster, with highest number of neighbours
+            label = next((label for label, n in Counter(nl).most_common() if label not in too_small_clusters), None)
+            # label = next((label for label, n in Counter(nl).most_common()), None)
+            if label is not None:  # recall 0 is a valid label value
+                labels[i] = label
+
+
+            #too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
         too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
-        while len(too_small_clusters):
+        #in this pass we allow clusters to be merged even if they are not a Large Cluster.. as multiple smaller ones might come together to form an acceptably large cluster
+        do_while_time = time.time()
+        while len(too_small_clusters) & (time.time() - do_while_time < 15):
             # membership of neighbours of samples in small clusters
             idx = np.where(np.isin(labels, list(too_small_clusters)))[0]
             neighbours_labels = labels[neighbors[idx]]
             for i, nl in zip(*[idx, neighbours_labels]):
                 # Retrieve the first non small cluster, with highest number of neighbours
-                label = next((label for label, n in Counter(nl).most_common() if label not in too_small_clusters), None)
+                # label = next((label for label, n in Counter(nl).most_common() if label not in too_small_clusters), None)
+                label = next((label for label, n in Counter(nl).most_common()), None)
                 if label is not None:  # recall 0 is a valid label value
                     labels[i] = label
-
             # Update set of too small clusters, stopping if converged
             too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
-
         # Reset labels to begin from zero and with no missing numbers
         self.labels = labels = np.unique(labels, return_inverse=True)[1]
-
 
         print(f"{datetime.now()}\tFinished detecting communities")
 
@@ -2322,6 +2472,8 @@ class VIA:
         self.node_degree_list = node_deg_list
         print(colored(f"{datetime.now()}\tBegin projection of pseudotime and lineage likelihood", "red"))
         self.single_cell_bp, self.single_cell_pt_markov = self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
+        #print('testing sc_transition')
+        #self.sc_transition_matrix()
 
         self.dict_terminal_super_sub_pairs = dict_terminal_super_sub_pairs
         hitting_times = self.markov_hitting_times
@@ -2460,7 +2612,7 @@ class VIA:
                 group_frac[ii][group_i] = true_label_in_group_i.count(ii)
 
         line_true = np.linspace(0, 1, n_truegroups)
-        color_true_list = [plt.cm.jet(color) for color in line_true]
+        color_true_list = [plt.cm.rainbow(color) for color in line_true]
 
         sct = ax.scatter(node_pos[:, 0], node_pos[:, 1],
                          c='white', edgecolors='face', s=group_pop, cmap='jet')
@@ -2573,7 +2725,7 @@ class VIA:
             ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap=cmap, edgecolors=c_edge,
                          alpha=1, zorder=3, linewidth=l_width)
             for ii in range(node_pos.shape[0]):
-                ax_i.text(node_pos[ii, 0] + 0.5, node_pos[ii, 1] + 0.5, 'c' + str(ii) + 'pop' + str(group_pop[ii][0]),
+                ax_i.text(node_pos[ii, 0] + 0.5, node_pos[ii, 1] + 0.5, 'c' + str(ii) + 'pop' + str(int(group_pop[ii][0])),
                           color='black', zorder=4)
 
             title_pt = title_list[i]
@@ -2652,7 +2804,9 @@ class VIA:
             group_pop_scale = .5 * group_pop * 1000 / max(group_pop)
             pos = ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=gene_exp[gene_i].values, cmap=cmap,
                                edgecolors=c_edge, alpha=1, zorder=3, linewidth=l_width)
-
+            for ii in range(node_pos.shape[0]):
+                ax_i.text(node_pos[ii, 0] + 0.5, node_pos[ii, 1] + 0.5, str(round(gene_exp[gene_i].values[ii], 1)),
+                          color='black', zorder=4, fontsize= 4)
             divider = make_axes_locatable(ax_i)
             cax = divider.append_axes('right', size='10%', pad=0.05)
             fig.colorbar(pos, cax=cax, orientation='vertical')
