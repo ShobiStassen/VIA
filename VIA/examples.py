@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 import umap
 import phate
 import seaborn as sns
-from pyVIA.core import *
+from core_working import * #pyVIA.core import *
 
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
     import scvelo as scv
@@ -731,7 +731,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
     # v1.run_VIA()
     # labels = v1.labels
     print('start tsne')
-    n_downsample = 500
+    n_downsample = 10000
     if len(labels) > n_downsample:
         # idx = np.random.randint(len(labels), size=900)
         np.random.seed(2357)
@@ -746,13 +746,19 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
         embedding = adata_counts.obsm['X_pca'][idx,
                     0:2]  # umap.UMAP().fit_transform(adata_counts.obsm['X_pca'][idx, 0:5])
         # embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'][idx, :])
+
+
         print('tsne downsampled size', embedding.shape)
     else:
         embedding = umap.UMAP().fit_transform(Xin)  # (adata_counts.obsm['X_pca'])
         print('tsne input size', adata_counts.obsm['X_pca'].shape)
         # embedding = umap.UMAP().fit_transform(adata_counts.obsm['X_pca'])
-        idx = np.random.randint(len(labels), size=len(labels))
-    print('end tsne')
+        idx = np.arange(len(labels))#randint(len(labels), size=len(labels))
+
+
+    v0.via_streamplot(X_emb=embedding[:, 0:2], scatter_size=400, scatter_alpha=0.2, marker_edgewidth=0.01,
+                      density_stream=2, density_grid=0.5, smooth_transition=1, smooth_grid=0.3)
+    plt.show()
 
     super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, idx)
     print('super terminal and sub terminal', v0.super_terminal_cells, v1.terminal_clusters)
@@ -2460,6 +2466,13 @@ def via_wrapper(adata, true_label=None, embedding=None, knn=20, jac_std_global=0
     if true_label is None:
         true_label = v0.true_label
     # plot coarse cluster heatmap
+
+
+    v0.via_streamplot(X_emb=embedding[:, 0:2], scatter_size=400, scatter_alpha=0.2, marker_edgewidth=0.01,
+                      density_stream=2, density_grid=0.5, smooth_transition=1, smooth_grid=0.3)
+    plt.show()
+
+
     if len(marker_genes) > 0:
         adata.obs['via0'] = [str(i) for i in v0.labels]
         sc.pl.matrixplot(adata, marker_genes, groupby='via0', dendrogram=True)
@@ -2495,7 +2508,7 @@ def via_wrapper(adata, true_label=None, embedding=None, knn=20, jac_std_global=0
                          final_super_terminal=v1.revised_super_terminal_clusters,
                          sub_terminal_clusters=v1.terminal_clusters,
                          title_str='Pseudotime', ncomp=ncomps, draw_all_curves=draw_all_curves, scatter_alpha=0.5,
-                         scatter_size=50, arrow_width_scale_factor=15, linewidth=5)
+                         scatter_size=100, arrow_width_scale_factor=5, linewidth=5)
 
     # draw trajectory and evolution probability for each lineage
     draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath,
@@ -3136,7 +3149,7 @@ def main1():
 
 
 def main():
-    dataset = 'wrapper'  #
+    dataset = 'Toy'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
         main_Human(ncomps=120, knn=10, v0_random_seed=3,
