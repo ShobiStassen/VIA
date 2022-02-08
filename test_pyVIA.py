@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-import examples as via #pyVIA.examples as via#examples as via #Viav031 as via
+import pyVIA.examples as via #pyVIA.examples as via#examples as via #Viav031 as via
 import pandas as pd
 import umap
 import scanpy as sc
