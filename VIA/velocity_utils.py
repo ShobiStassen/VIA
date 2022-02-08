@@ -27,6 +27,16 @@ def quiver_autoscale(X_emb, V_emb):
     pl.close(fig)
     return Q.scale / scale_factor
 
+def velocity_transition(A,G):
+    #A, Adjacency of clustergraph
+    #G, gene matrix, cluster average
+    #V, velocity matrix, cluster average
+
+    print('')
+    #global pruning of the locally pruned sc knn graph
+
+    #T = self.csr_array_locally_pruned.copy()
+
 def compute_velocity_on_grid(
     X_emb,
     V_emb,
@@ -74,13 +84,13 @@ def compute_velocity_on_grid(
 
     scale = np.mean([(g[1] - g[0]) for g in grs]) * smooth
     weight = normal.pdf(x=dists, scale=scale)
-    print('weight', weight)
+    #print('weight', weight)
     p_mass = weight.sum(1)
-    print('p_mass', p_mass)
+    #print('p_mass', p_mass)
     V_grid = (V_emb[neighs] * weight[:, :, None]).sum(1)
-    print('V_grid intermediate 1', V_grid)
+    #print('V_grid intermediate 1', V_grid)
     V_grid /= np.maximum(1, p_mass)[:, None]
-    print('V_grid /= p_mass', V_grid)
+    #print('V_grid /= p_mass', V_grid)
     if min_mass is None:
         min_mass = 1
 
