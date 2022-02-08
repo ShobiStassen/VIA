@@ -47,7 +47,7 @@ Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Data
 </p> 
 
 <p align="center">
-     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/streamplots.tif" alt="Trulli" width="100%" >
+     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/streamplots.tif?raw=true" alt="Trulli" width="100%" >
 </p> 
 
 ### To run on Linux:
