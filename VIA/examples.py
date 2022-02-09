@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 import umap
 import phate
 import seaborn as sns
-from core import * #pyVIA.core import * #pyVIA.core import *
+from core import * #pyVIA.core import *
 
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
     import scvelo as scv
@@ -947,11 +947,9 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     df_subset = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
     for gene_i in ['Gene0', 'Gene1', 'Gene2']:  # , 'Gene3', 'Gene4']:
         subset_ = df_subset[gene_i].values
-        v1.get_gene_expression(subset_, title_gene=gene_i)
+        v1.get_gene_expression(subset_, title_gene=gene_i, verbose=False)
 
-    knn_hnsw = make_knn_embeddedspace(embedding)
-
-    draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath, idx)
+    draw_sc_evolution_trajectory_dijkstra(v1, embedding, make_knn_embeddedspace(embedding), v0.full_graph_shortpath, idx)
 
     plt.show()
 
@@ -3168,8 +3166,8 @@ def main():
         # main_scATAC_zscores(knn=30, ncomps =10) #knn=20, ncomps = 30)
     elif dataset == 'Toy':
         #main_Toy_comparisons(ncomps=10, knn=30, random_seed=2, dataset='Toy3',  foldername="/home/shobi/Trajectory/Datasets/Toy3/")
-        #main_Toy(ncomps=10, knn=30, random_seed=2, dataset='Toy4',foldername="/home/shobi/Trajectory/Datasets/Toy4/")  # pc10/knn30 for Toy4
-         main_Toy(ncomps=20, knn=30, random_seed=2, dataset='Toy3',     foldername="/home/shobi/Trajectory/Datasets/Toy3/")  # pc10/knn30/rs2 for Toy4
+        main_Toy(ncomps=10, knn=30, random_seed=2, dataset='Toy4',foldername="/home/shobi/Trajectory/Datasets/Toy4/")  # pc10/knn30/rs2 for Toy4
+        #main_Toy(ncomps=20, knn=30, random_seed=2, dataset='Toy3',     foldername="/home/shobi/Trajectory/Datasets/Toy3/")
         # main_Toy_comparisons(ncomps=10, knn=10, random_seed=2, dataset='ToyMultiM11',              foldername="/home/shobi/Trajectory/Datasets/ToyMultifurcating_M11/")
         # main_Toy_comparisons(ncomps=10, knn=20, random_seed=2, dataset='Toy3',                             foldername="/home/shobi/Trajectory/Datasets/Toy3/")
     elif dataset == 'wrapper':

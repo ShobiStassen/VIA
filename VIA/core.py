@@ -1866,7 +1866,7 @@ class VIA:
 
         return ig.Graph(list(zip(*csr_full_graph.nonzero()))).simplify(combine_edges='sum')
 
-    def get_gene_expression(self, gene_exp, title_gene="", spline_order=4, cmap='jet'):
+    def get_gene_expression(self, gene_exp, title_gene="", spline_order=4, cmap='jet', verbose=False):
         df_gene = pd.DataFrame()
         fig_0, ax = plt.subplots(dpi=300)
         sc_pt = self.single_cell_pt_markov
@@ -1923,12 +1923,13 @@ class VIA:
                     df_gene[col_title_pt] = xval
                     df_gene[col_title_gene] = yg
 
-                    label_str_pears = 'TS:' + str(self.terminal_clusters[i]) + ' ' + str(int(corr * 100)) + '%'
-                    print('gene corr pear', title_gene, 'of lineage',  self.terminal_clusters[i], '%.0f' % (corr * 100) + '%')
-                    print('gene corr kend', title_gene, 'of lineage',self.terminal_clusters[i], '%.0f' % (corr_kend * 100) + '%')
+                    label_str_pears = 'Lineage:' + str(self.terminal_clusters[i]) + ' ' + str(int(corr * 100)) + '%'
+                    if verbose==True:
+                        print('gene corr pear', title_gene, 'of lineage',  self.terminal_clusters[i], '%.0f' % (corr * 100) + '%')
+                        print('gene corr kend', title_gene, 'of lineage',self.terminal_clusters[i], '%.0f' % (corr_kend * 100) + '%')
                     ax.plot(xval, yg, color=cmap_[i], linewidth=3.5, zorder=3, label=label_str_pears)
 
-            plt.legend()
+            plt.legend(fontsize=6)
             str_title = 'Trend:' + title_gene# + ' ' + '%.0f' % (corr_max * 100) + '%'
             plt.title(str_title)
         return
@@ -2061,7 +2062,6 @@ class VIA:
             num_times_expanded +=1
 
             if len(set(membership)) > 1:
-                print('broken into', len(set(membership)))
                 labels[idx] = membership
                 too_big_clusters.extend(
                     [k for k, v in Counter(membership).items() if v > self.too_big_factor * self.nsamples])
@@ -2188,11 +2188,13 @@ class VIA:
                                   (PARC_labels_leiden[i] in cluster_labels_subi)]
 
             # TODO - remove this code and dataset specific `find_root` methods to external file
-            if ((self.dataset == 'toy') | (self.dataset == 'faced')):
+            if self.dataset in ['toy','faced','mESC','iPSC','group']:#((self.dataset == 'toy') | (self.dataset == 'faced')):
 
+                for ri in root_user:
+                    if ri in sc_truelabels_subi: root_user_ = ri
                 if self.super_cluster_labels:# != False:
                     # find which sub-cluster has the super-cluster root
-
+                    '''
                     if 'T1_M1' in sc_truelabels_subi:
                         root_user_ = 'T1_M1'
                     elif 'T2_M1' in sc_truelabels_subi:
@@ -2200,6 +2202,7 @@ class VIA:
                     else:
                         for ri in root_user:
                             if ri in sc_truelabels_subi: root_user_ = ri
+                    '''
 
                     super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if
                                          (PARC_labels_leiden[i] in cluster_labels_subi)]
@@ -2211,6 +2214,7 @@ class VIA:
                                                                                                             super_labels_subi,
                                                                                                             self.super_node_degree_list)
                 else:
+                    '''
                     if 'T1_M1' in sc_truelabels_subi:
                         root_user_ = 'T1_M1'
                     elif 'T2_M1' in sc_truelabels_subi:
@@ -2220,7 +2224,7 @@ class VIA:
                     else:
                         for ri in root_user:
                             if ri in sc_truelabels_subi: root_user_ = ri
-
+                    '''
                     # print('component', comp_i, 'has root', root_user[comp_i])
                     graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_group(a_i,
                                                                                                             sc_labels_subi,
@@ -2228,7 +2232,7 @@ class VIA:
                                                                                                             sc_truelabels_subi,
                                                                                                             [], [])
 
-            elif (self.dataset == 'humanCD34'):  # | (self.dataset == '2M'):
+            elif self.dataset in ['humanCD34' 'bcell','EB']:#(self.dataset == 'humanCD34'):  # | (self.dataset == '2M'):
                 for ri in root_user:
                     if PARC_labels_leiden[ri] in cluster_labels_subi: root_user_ = ri
                 graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root(a_i,
@@ -2244,37 +2248,6 @@ class VIA:
                                                                                                           root_user_,
                                                                                                           sc_truelabels_subi)
 
-            elif (self.dataset == 'bcell') | (self.dataset == 'EB'):
-                for ri in root_user:
-                    if PARC_labels_leiden[ri] in cluster_labels_subi: root_user_ = ri
-                graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root(a_i,
-                                                                                                        sc_labels_subi,
-                                                                                                        root_user_,
-                                                                                                        sc_truelabels_subi)
-            elif ((self.dataset == 'iPSC') | (self.dataset == 'mESC')):
-                for ri in root_user:
-                    print('root user ri', ri)
-                    print('sc_truelabels_subi', sc_truelabels_subi)
-                    if ri in sc_truelabels_subi: root_user_ = ri
-
-                if self.super_cluster_labels != False:
-                    super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if
-                                         (PARC_labels_leiden[i] in cluster_labels_subi)]
-                    # print('super node degree', self.super_node_degree_list)
-
-                    graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_group(a_i,
-                                                                                                            sc_labels_subi,
-                                                                                                            root_user_,
-                                                                                                            sc_truelabels_subi,
-                                                                                                            super_labels_subi,
-                                                                                                            self.super_node_degree_list)
-                else:
-                    graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root_group(a_i,
-                                                                                                            sc_labels_subi,
-                                                                                                            root_user_,
-                                                                                                            sc_truelabels_subi,
-                                                                                                            [],
-                                                                                                            [])
             else:
                 if comp_i > len(root_user) - 1:
                     root_generic = 0
@@ -2364,7 +2337,7 @@ class VIA:
             for i, (start, end) in enumerate(edgelist_ai):
                 adjacency_matrix2_ai[start, end] = bias_weights_2_ai[i]
 
-            if self.super_terminal_cells == False:
+            if self.super_terminal_cells == False: # when is_coarse = True, there is no list of terminal clusters/cells that are passed into VIA based on a previous iteration.
                 # print('new_root_index', new_root_index, ' before get terminal')
                 terminal_clus_ai = self.get_terminal_clusters(adjacency_matrix2_ai, markov_hitting_times_ai, new_root_index)
                 temp_terminal_clus_ai = []
@@ -2375,7 +2348,7 @@ class VIA:
                         temp_terminal_clus_ai.append(i)
                 terminal_clus_ai = temp_terminal_clus_ai
 
-            elif len(self.super_terminal_clusters) > 0:  # round2 of PARC
+            elif len(self.super_terminal_clusters) > 0:  # in the case where is_coarse = False, VIA is instantiated with a list of super_terminal_cells which belong to super_terminal clusters. We need to use these to select which of the clusters in the fine-grained graph capture the original set of super-clusters
                 print('super_terminal_clusters', self.super_terminal_clusters)
                 sub_terminal_clus_temp_ = []
                 # print('cluster_labels_subi', cluster_labels_subi)
@@ -2451,7 +2424,7 @@ class VIA:
                             print('the sub terminal cluster that best captures the super terminal', i, 'is',
                                   most_likely_sub_terminal, 'but the pseudotime is too low')
 
-            else:
+            else: #this would only happen in a second iteration of VIA. if super-terminal cells was provided but no super_terminal_clusters where provided, then we use these to identify the terminal clusters in the current fine-grained VIA iteration
                 print('super terminal cells', self.super_terminal_cells)
 
                 temp = [self.labels[ti] for ti in self.super_terminal_cells if
@@ -2750,7 +2723,6 @@ class VIA:
             # print(gp_scaling, 'gp_scaling')
             group_pop_scale = group_pop * gp_scaling * 0.5
 
-            print('cmap', cmap)
             ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap=cmap, edgecolors=c_edge,
                          alpha=1, zorder=3, linewidth=l_width)
             if ax_text:
