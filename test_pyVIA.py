@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-import pyVIA.examples as via #pyVIA.examples as via#examples as via #Viav031 as via
+import examples as via #pyVIA.examples as via#examples as via #Viav031 as via
 import pandas as pd
 import umap
 import scanpy as sc
@@ -100,30 +100,19 @@ def run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/'):
     random_seed = 1
     root_user = ['T1_M1']
     v0 = via.VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
-                 too_big_factor=0.3, root_user=root_user, dataset='faced', random_seed=random_seed,
-                 do_impute_bool=True, is_coarse=True, preserve_disconnected=True,
+                 too_big_factor=0.3, root_user=root_user, dataset='faced', random_seed=random_seed, is_coarse=True, preserve_disconnected=True,
                  preserve_disconnected_after_pruning=True,
                  pseudotime_threshold_TS=40)
     v0.run_VIA()
 
-    tsi_list = via.get_loc_terminal_states(v0, X_in)
-
     v1 = via.VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
-                 too_big_factor=0.05, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
-                 super_terminal_cells=tsi_list, root_user=root_user, is_coarse=False,
-                 preserve_disconnected=True, dataset='faced',
-                 super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed,
-                 full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
-                 ig_full_graph=v0.ig_full_graph,
-                 csr_array_locally_pruned=v0.csr_array_locally_pruned, pseudotime_threshold_TS=40)
+                 too_big_factor=0.05,  root_user=root_user, is_coarse=False,
+                 preserve_disconnected=True, dataset='faced',  random_seed=random_seed,
+                  pseudotime_threshold_TS=40, via_coarse=v0)
     v1.run_VIA()
 
-    super_clus_ds_PCA_loc = via.sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v0.labels)))
-    via.draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
-                             v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, true_label, knn=v0.knn,
-                             final_super_terminal=v1.revised_super_terminal_clusters,
-                             sub_terminal_clusters=v1.terminal_clusters,
-                             title_str='Hitting times: Markov Simulation on biased edges', ncomp=38)
+
+    via.draw_trajectory_gams(via_coarse=v0, via_fine=v1, embedding=embedding)
     plt.show()
 
     all_cols = ['Area', 'Volume', 'Dry Mass', 'Circularity', 'Orientation', 'Phase Entropy Skewness',
@@ -209,20 +198,15 @@ def run_scATAC_Buenrostro_Hemato(foldername = '/home/shobi/Trajectory/Datasets/s
     root = [1200]  # HSC cell
 
     v0 = via.VIA(X_in, true_label, jac_std_global=0.5, dist_std_local=1, knn=knn,
-                 too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
-                 do_impute_bool=True, is_coarse=True, preserve_disconnected=False)
+                 too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed, is_coarse=True, preserve_disconnected=False)
     v0.run_VIA()
-
-    tsi_list = via.get_loc_terminal_states(v0, X_in)
+    v0.via_streamplot(embedding)
+    plt.show()
 
     v1 = via.VIA(X_in, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
-                 too_big_factor=0.1, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
-                 super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
+                 too_big_factor=0.1, super_cluster_labels=v0.labels, root_user=root, is_coarse=False,
                  preserve_disconnected=True, dataset='scATAC',
-                 super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed,
-                 full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
-                 ig_full_graph=v0.ig_full_graph,
-                 csr_array_locally_pruned=v0.csr_array_locally_pruned)
+                 random_seed=random_seed, via_coarse=v0)
     v1.run_VIA()
 
     df['via1'] = v1.labels
@@ -230,22 +214,15 @@ def run_scATAC_Buenrostro_Hemato(foldername = '/home/shobi/Trajectory/Datasets/s
     gene_dict = {'ENSG00000092067_LINE336_CEBPE_D_N1': 'CEBPE Eosophil (GMP/Mono)',
                  'ENSG00000102145_LINE2081_GATA1_D_N7': 'GATA1 (MEP)'}
     for key in gene_dict:
-        f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True, figsize=[10, 5])
-        v1.draw_piechart_graph(ax, ax1, type_pt='gene', gene_exp=df_mean[key].values, title=gene_dict[key])
+        v1.draw_piechart_graph(type_pt='gene', gene_exp=df_mean[key].values, title=gene_dict[key])
         plt.show()
     # get knn-graph and locations of terminal states in the embedded space
-    knn_hnsw = via.make_knn_embeddedspace(embedding)
-    super_clus_ds_PCA_loc = via.sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v0.labels)))
-    # draw overall pseudotime and main trajectories
-    via.draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
-                             v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, true_label, knn=v0.knn,
-                             final_super_terminal=v1.revised_super_terminal_clusters,
-                             sub_terminal_clusters=v1.terminal_clusters,
-                             title_str='Pseudotime', ncomp=5 )
+        # draw overall pseudotime and main trajectories
+
+    via.draw_trajectory_gams(v0, v1, embedding)
     plt.show()
     # draw trajectory and evolution probability for each lineage
-    via.draw_sc_evolution_trajectory_dijkstra(v1, embedding, knn_hnsw, v0.full_graph_shortpath,
-                                              np.arange(0, len(true_label)), X_in)
+    via.draw_sc_evolution_trajectory_dijkstra(v0, v1, embedding)
     plt.show()
 
 def run_generic_discon(foldername ="/home/shobi/Trajectory/Datasets/Toy4/"):
@@ -277,8 +254,8 @@ if __name__ == '__main__':
 
     #run_Toy_multi(foldername="/home/shobi/Trajectory/Datasets/Toy3/")
     #run_Toy_discon()
-    run_generic_discon()
-    #run_EB(foldername = "/home/shobi/Trajectory/Datasets/EB_Phate/") #folder containing relevant data files
+    #run_generic_discon()
+    run_EB(foldername = "/home/shobi/Trajectory/Datasets/EB_Phate/") #folder containing relevant data files
     #run_scATAC_Buenrostro_Hemato() #shows the main function calls within a typical VIA wrapper function
     #run_generic_wrapper(foldername = "/home/shobi/Trajectory/Datasets/Bcell/", knn=15, ncomps = 20)
     #run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/')
