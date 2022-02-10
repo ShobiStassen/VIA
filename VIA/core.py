@@ -146,25 +146,34 @@ def getbb(sc, ax):
     return bboxes
 
 
-def plot_sc_pb(ax, embedding, prob, ti, cmap_name='viridis'):
+def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name='plasma'):
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
     prob = np.sqrt(prob)  # scale values to improve visualization of colors
-    cmap = matplotlib.cm.get_cmap('plasma')
+    cmap = matplotlib.cm.get_cmap(cmap_name)
     norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
-
+    size_point = 10 if embedding.shape[0] > 10000 else 30
     # changing the alpha transparency parameter for plotting points
+    im =ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=0.01, cmap=cmap_name,    edgecolors = 'none')
+    ax.set_title('Target: ' + str(ti))
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
+
     c = cmap(norm(prob)).reshape(-1, 4)
     loc_c = np.where(prob <= 0.3)[0]
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none',alpha=0.2, cmap=cmap_name)
     c[loc_c, 3] = 0.2
     loc_c = np.where((prob > 0.3) & (prob <= 0.5))[0]
     c[loc_c, 3] = 0.5
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.5, cmap=cmap_name)
     loc_c = np.where((prob > 0.5) & (prob <= 0.7))[0]
     c[loc_c, 3] = 0.8
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name)
     loc_c = np.where((prob > 0.7))[0]
     c[loc_c, 3] = 0.8
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name)
 
-    size_point = 10 if embedding.shape[0] > 10000 else 30
-    ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=size_point, cmap=cmap_name, edgecolors='none')
-    ax.set_title('Target: ' + str(ti))
+
 
 
 def get_loc_terminal_states(via0, X_input):
@@ -302,30 +311,34 @@ def make_knn_embeddedspace(embedding):
     return knn
 
 
-def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_name='plasma'):
+def draw_sc_evolution_trajectory_dijkstra(via_coarse, via_fine, embedding, idx=None, cmap_name='plasma'):
+    # embedding is the full or downsampled 2D representation of the full dataset.
+    # idx is the list of indices of the full dataset for which the embedding is available. if the dataset is very large the the user only has the visual embedding for a subsample of the data, then these idx can be carried forward
+    # idx is the selected indices of the downsampled samples used in the visualization
     # G is the igraph knn (low K) used for shortest path in high dim space. no idx needed as it's made on full sample
     # knn_hnsw is the knn made in the embedded space used for query to find the nearest point in the downsampled embedding
     #   that corresponds to the single cells in the full graph
-    # embedding is the full or downsampled 2D representation of the full dataset. idx is the list of indices of the full dataset for which the embedding is available
-    # idx is the selected indices of the downsampled samples used in the visualization
+    if idx is None: idx = np.arange(0, via_coarse.nsamples)
+    G = via_coarse.full_graph_shortpath
+    knn_hnsw = make_knn_embeddedspace(embedding)
     y_root = []
     x_root = []
     root1_list = []
-    p1_sc_bp = p1.single_cell_bp[idx, :]
-    p1_labels = np.asarray(p1.labels)[idx]
-    p1_cc = p1.connected_comp_labels
-    p1_sc_pt_markov = list(np.asarray(p1.single_cell_pt_markov)[idx])
-    X_data = p1.data
+    p1_sc_bp = via_fine.single_cell_bp[idx, :]
+    p1_labels = np.asarray(via_fine.labels)[idx]
+    p1_cc = via_fine.connected_comp_labels
+    p1_sc_pt_markov = list(np.asarray(via_fine.single_cell_pt_markov)[idx])
+    X_data = via_fine.data
 
     X_ds = X_data[idx, :]
     p_ds = hnswlib.Index(space='l2', dim=X_ds.shape[1])
     p_ds.init_index(max_elements=X_ds.shape[0], ef_construction=200, M=16)
     p_ds.add_items(X_ds)
     p_ds.set_ef(50)
-    num_cluster = len(set(p1.labels))
-    G_orange = ig.Graph(n=num_cluster, edges=p1.edgelist_maxout, edge_attrs={'weight': p1.edgeweights_maxout})
-    for ii, r_i in enumerate(p1.root):
-        loc_i = np.where(p1_labels == p1.root[ii])[0]
+    num_cluster = len(set(via_fine.labels))
+    G_orange = ig.Graph(n=num_cluster, edges=via_fine.edgelist_maxout, edge_attrs={'weight':via_fine.edgeweights_maxout})
+    for ii, r_i in enumerate(via_fine.root):
+        loc_i = np.where(p1_labels == via_fine.root[ii])[0]
         x = [embedding[xi, 0] for xi in loc_i]
         y = [embedding[yi, 1] for yi in loc_i]
 
@@ -333,17 +346,17 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
         x_root.append(embedding[labels_root, 0][0])
         y_root.append(embedding[labels_root, 1][0])
 
-        labelsroot1, distances1 = p1.knn_struct.knn_query(X_ds[labels_root[0][0], :], k=1)
+        labelsroot1, distances1 = via_fine.knn_struct.knn_query(X_ds[labels_root[0][0], :], k=1)
         root1_list.append(labelsroot1[0][0])
-        for fst_i in p1.terminal_clusters:
-            path_orange = G_orange.get_shortest_paths(p1.root[ii], to=fst_i)[0]
+        for fst_i in via_fine.terminal_clusters:
+            path_orange = G_orange.get_shortest_paths(via_fine.root[ii], to=fst_i)[0]
             #if the roots is in the same component as the terminal cluster, then print the path to output
-            if len(path_orange)>0: print(colored('Cluster path on clustergraph starting from Root Cluster', 'blue'), p1.root[ii], colored('to Terminal Cluster','blue'), fst_i, colored(':','blue'), path_orange)
+            if len(path_orange)>0: print(colored('Cluster path on clustergraph starting from Root Cluster', 'blue'), via_fine.root[ii], colored('to Terminal Cluster','blue'), fst_i, colored(':','blue'), path_orange)
 
     # single-cell branch probability evolution probability
-    for i, ti in enumerate(p1.terminal_clusters):
+    for i, ti in enumerate(via_fine.terminal_clusters):
         fig, ax = plt.subplots()
-        plot_sc_pb(ax, embedding, p1_sc_bp[:, i], ti, cmap_name=cmap_name)
+        plot_sc_pb(ax, fig, embedding, p1_sc_bp[:, i], ti, cmap_name=cmap_name)
 
         loc_i = np.where(p1_labels == ti)[0]
         val_pt = [p1_sc_pt_markov[i] for i in loc_i]
@@ -358,7 +371,7 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
         y_sc = embedding[labels[0], 1]
         start_time = time.time()
 
-        labelsq1, distances1 = p1.knn_struct.knn_query(X_ds[labels[0][0], :],
+        labelsq1, distances1 =via_fine.knn_struct.knn_query(X_ds[labels[0][0], :],
                                                        k=1)  # find the nearest neighbor in the PCA-space full graph
 
         path = G.get_shortest_paths(root1_list[p1_cc[ti]], to=labelsq1[0][0])  # weights='weight')
@@ -371,7 +384,7 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
         # clusters of path
         cluster_path = []
         for cell_ in path:
-            cluster_path.append(p1.labels[cell_])
+            cluster_path.append(via_fine.labels[cell_])
 
         # print(colored('cluster_path', 'green'), colored('terminal state: ', 'blue'), ti, cluster_path)
         revised_cluster_path = []
@@ -385,8 +398,11 @@ def draw_sc_evolution_trajectory_dijkstra(p1, embedding, knn_hnsw, G, idx, cmap_
                 if num_instances_clus > 1:  # typically intermediate stages spend a few transitions at the sc level within a cluster
                     if clus not in revised_cluster_path: revised_cluster_path.append(clus)  # cluster
                     revised_sc_path.append(path[enum_i])  # index of single cell
-        print(colored('Cluster level path on sc-knnGraph from Root Cluster', 'blue'), p1.root[p1_cc[ti]],
+        print(colored('Cluster level path on sc-knnGraph from Root Cluster', 'blue'), via_fine.root[p1_cc[ti]],
               colored('to Terminal Cluster: ', 'blue'), ti, revised_cluster_path)
+        fig.patch.set_visible(False)
+        ax.axis('off')
+
 
 
 def get_biased_weights(edges, weights, pt, round=1):
@@ -422,22 +438,42 @@ def absorption_probability(N, R, absorption_state_j):
     return M, M[:, absorption_state_j]
 
 
-def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_cluster_labels, super_edgelist, x_lazy,
-                         alpha_teleport,
-                         projected_sc_pt, true_label, knn, ncomp, final_super_terminal, sub_terminal_clusters,
-                         title_str="hitting times", super_root=[0], draw_all_curves=True, arrow_width_scale_factor=15,
-                         scatter_size=10, scatter_alpha=0.5,
-                         linewidth=1.5, marker_edgewidth=1):
+def draw_trajectory_gams(via_coarse,via_fine, embedding, idx=None,
+                         title_str="Pseudotime", draw_all_curves=True, arrow_width_scale_factor=15,
+                         scatter_size=50, scatter_alpha=0.5,
+                         linewidth=1.5, marker_edgewidth=1, cmap_pseudotime = 'viridis_r',dpi=150):
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    if idx is None: idx = np.arange(0, via_coarse.nsamples)
+    cluster_labels = list(np.asarray(via_fine.labels)[idx])
+    super_cluster_labels = list(np.asarray(via_coarse.labels)[idx])
+    super_edgelist = via_coarse.edgelist
+    true_label = list(np.asarray(via_fine.true_label)[idx])
+    knn = via_fine.knn
+    ncomp = via_fine.ncomp
+    if len(via_fine.revised_super_terminal_clusters)>0:
+        final_super_terminal = via_fine.revised_super_terminal_clusters
+    else: final_super_terminal = via_fine.terminal_clusters
+
+    sub_terminal_clusters = via_fine.terminal_clusters
+
+
+    sc_pt_markov = list(np.asarray(via_fine.single_cell_pt_markov[idx]))
+    super_root = via_coarse.root[0]
+
+
+
+    sc_supercluster_nn = sc_loc_ofsuperCluster_PCAspace(via_coarse, via_fine, np.arange(0, len(cluster_labels)))
     # draw_all_curves. True draws all the curves in the piegraph, False simplifies the number of edges
     # arrow_width_scale_factor: size of the arrow head
-    X_dimred = X_dimred * 1. / np.max(X_dimred, axis=0)
+    X_dimred = embedding * 1. / np.max(embedding, axis=0)
     x = X_dimred[:, 0]
     y = X_dimred[:, 1]
     max_x = np.percentile(x, 90)
     noise0 = max_x / 1000
 
     df = pd.DataFrame({'x': x, 'y': y, 'cluster': cluster_labels, 'super_cluster': super_cluster_labels,
-                       'projected_sc_pt': projected_sc_pt},
+                       'projected_sc_pt': sc_pt_markov},
                       columns=['x', 'y', 'cluster', 'super_cluster', 'projected_sc_pt'])
     df_mean = df.groupby('cluster', as_index=False).mean()
     sub_cluster_isin_supercluster = df_mean[['cluster', 'super_cluster']]
@@ -449,7 +485,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
     df_super_mean = df.groupby('super_cluster', as_index=False).mean()
     pt = df_super_mean['projected_sc_pt'].values
 
-    f, (ax1, ax2) = plt.subplots(1, 2, sharey=True, figsize=[20, 10])
+    f, (ax1, ax2) = plt.subplots(1, 2, sharey=True, figsize=[20, 10],dpi=dpi)
     num_true_group = len(set(true_label))
     num_cluster = len(set(super_cluster_labels))
     line = np.linspace(0, 1, num_true_group)
@@ -457,14 +493,15 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         where = np.where(np.array(true_label) == group)[0]
         ax1.scatter(X_dimred[where, 0], X_dimred[where, 1], label=group, c=np.asarray(plt.cm.rainbow(color)).reshape(-1, 4),
                     alpha=scatter_alpha, s=scatter_size, linewidths=marker_edgewidth*.1)  # 10 # 0.5 and 4
-    ax1.legend(fontsize=6)
-    ax1.set_title('true labels, ncomps:' + str(ncomp) + '. knn:' + str(knn))
+    ax1.legend(fontsize=6, frameon = False)
+    ax1.set_title('True Labels: ncomps:' + str(ncomp) + '. knn:' + str(knn))
 
     G_orange = ig.Graph(n=num_cluster, edges=super_edgelist)
     ll_ = []  # this can be activated if you intend to simplify the curves
     for fst_i in final_super_terminal:
-        # print('draw traj gams:', G_orange.get_shortest_paths(super_root[0], to=fst_i))
-        path_orange = G_orange.get_shortest_paths(super_root[0], to=fst_i)[0]
+        #print('draw traj gams:', G_orange.get_shortest_paths(super_root, to=fst_i))
+
+        path_orange = G_orange.get_shortest_paths(super_root, to=fst_i)[0]
         len_path_orange = len(path_orange)
         for enum_edge, edge_fst in enumerate(path_orange):
             if enum_edge < (len_path_orange - 1):
@@ -573,6 +610,7 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         idx_keep = np.where((xp <= (maxx)) & (xp >= (minx)))[0]
         ax2.plot(XX, preds, linewidth=linewidth, c='#323538')  # 3.5#1.5
 
+
         mean_temp = np.mean(xp[idx_keep])
         closest_val = xp[idx_keep][0]
         closest_loc = idx_keep[0]
@@ -619,9 +657,14 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
             super_cluster_label.append(str(' '))  # i or ' '
             dot_size.append(00)  # 20
 
-    ax2.set_title('lazy:' + str(x_lazy) + ' teleport' + str(alpha_teleport) + 'super_knn:' + str(knn))
-    ax2.scatter(X_dimred[:, 0], X_dimred[:, 1], c=projected_sc_pt, cmap='viridis_r', alpha=scatter_alpha,
-                s=scatter_size, linewidths=marker_edgewidth*.1)  # alpha=0.6, s=10,50
+    ax2.set_title(title_str)
+
+    im2 =ax2.scatter(X_dimred[:, 0], X_dimred[:, 1], c=sc_pt_markov, cmap=cmap_pseudotime,  s=0.01)
+    divider = make_axes_locatable(ax2)
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    f.colorbar(im2, cax=cax, orientation='vertical', label='pseudotime') #to avoid lines drawn on the colorbar we need an image instance without alpha variable
+    ax2.scatter(X_dimred[:, 0], X_dimred[:, 1], c=sc_pt_markov, cmap=cmap_pseudotime, alpha=scatter_alpha,
+                s=scatter_size, linewidths=marker_edgewidth*.1)
     count_ = 0
     loci = [sc_supercluster_nn[key] for key in sc_supercluster_nn]
     for i, c, w, pc, dsz, lab in zip(loci, c_edge, width_edge, pen_color, dot_size,
@@ -629,9 +672,12 @@ def draw_trajectory_gams(X_dimred, sc_supercluster_nn, cluster_labels, super_clu
         ax2.scatter(X_dimred[i, 0], X_dimred[i, 1], c='black', s=dsz, edgecolors=c, linewidth=w)
         ax2.annotate(str(lab), xy=(X_dimred[i, 0], X_dimred[i, 1]))
         count_ = count_ + 1
+
     ax1.grid(False)
     ax2.grid(False)
-    plt.title(title_str)
+    f.patch.set_visible(False)
+    ax1.axis('off')
+    ax2.axis('off')
 
 
 def csr_mst(adjacency):
@@ -796,11 +842,10 @@ class VIA:
                  secondary_annotations=None, pseudotime_threshold_TS=30, cluster_graph_pruning_std=0.15,
                  visual_cluster_graph_pruning=0.15, neighboring_terminal_states_threshold=3, num_mcmc_simulations=1300,
                  piegraph_arrow_head_width=0.1,
-                 piegraph_edgeweight_scalingfactor=1.5, max_visual_outgoing_edges=2):
+                 piegraph_edgeweight_scalingfactor=1.5, max_visual_outgoing_edges=2, via_coarse=None):
 
         self.data = data
         self.nsamples, self.ncomp = data.shape
-        print('true labels')
         if true_label is not None:
             self.true_label = true_label
         else: self.true_label = [1] * self.nsamples
@@ -835,21 +880,41 @@ class VIA:
         self.num_threads = num_threads  # number of threads used in KNN search/construction
         self.distance = distance  # Euclidean distance 'l2' by default; other options 'ip' and 'cosine'
         self.time_smallpop = time_smallpop
-        self.super_cluster_labels = super_cluster_labels
-        self.super_node_degree_list = super_node_degree_list
-        self.super_terminal_cells = super_terminal_cells
+        if via_coarse is None:
+            self.super_cluster_labels = super_cluster_labels
+            self.super_node_degree_list = super_node_degree_list
+            self.super_terminal_clusters =super_terminal_clusters
+            self.full_neighbor_array = full_neighbor_array
+            self.full_distance_array = full_distance_array
+            self.ig_full_graph = ig_full_graph
+            self.csr_array_locally_pruned = csr_array_locally_pruned
+            self.csr_full_graph = csr_full_graph
+            self.super_terminal_cells = super_terminal_cells
+        else:
+            self.super_cluster_labels=via_coarse.labels
+            self.super_node_degree_list = via_coarse.node_degree_list
+            self.super_terminal_clusters = via_coarse.terminal_clusters
+            self.full_neighbor_array = via_coarse.full_neighbor_array
+            self.full_distance_array = via_coarse.full_distance_array
+            self.ig_full_graph = via_coarse.ig_full_graph
+            self.csr_array_locally_pruned = via_coarse.csr_array_locally_pruned
+            self.csr_full_graph = via_coarse.csr_full_graph
+            self.super_terminal_cells = get_loc_terminal_states(via0=via_coarse, X_input=data)
+
+        #self.super_node_degree_list = super_node_degree_list
+        #self.super_terminal_cells = super_terminal_cells
         self.x_lazy = x_lazy  # 1-x = probability of staying in same node
         self.alpha_teleport = alpha_teleport  # 1-alpha is probability of jumping
         self.root_user = root_user
         self.preserve_disconnected = preserve_disconnected
         self.dataset = dataset
-        self.super_terminal_clusters = super_terminal_clusters
+        #self.super_terminal_clusters = super_terminal_clusters
         self.is_coarse = is_coarse #set to True for first round of VIA. if one chooses to run a second iteration of VIA that uses the terminal states from the first round, then set this to False for second iteration
-        self.csr_full_graph = csr_full_graph #used for gene imputation
-        self.ig_full_graph = ig_full_graph #single cell graph in igraph format. edges are weighted by jaccard similarity. used for making clustergraph and mcmcs and pseudotime
-        self.csr_array_locally_pruned = csr_array_locally_pruned
-        self.full_neighbor_array = full_neighbor_array
-        self.full_distance_array = full_distance_array
+        #self.csr_full_graph = csr_full_graph #used for gene imputation
+        #self.ig_full_graph = ig_full_graph #single cell graph in igraph format. edges are weighted by jaccard similarity. used for making clustergraph and mcmcs and pseudotime
+        #self.csr_array_locally_pruned = csr_array_locally_pruned
+        #self.full_neighbor_array = full_neighbor_array
+        #self.full_distance_array = full_distance_array
         self.embedding = embedding
         self.df_annot = df_annot
         self.preserve_disconnected_after_pruning = preserve_disconnected_after_pruning
@@ -1334,7 +1399,7 @@ class VIA:
         return X_emb, V_emb
 
     def via_streamplot(self, X_emb, density_grid=0.5, arrow_size=.7, arrow_color = 'k',
-    arrow_style="-|>",  max_length=4, linewidth=1,min_mass = 1, cutoff_perc = None,scatter_size=500, scatter_alpha=0.5,marker_edgewidth=0.1, density_stream = 2, smooth_transition=1, smooth_grid=0.5, color_scheme = 'annotation', add_outline_clusters=False, cluster_outline_edgewidth = 0.001,gp_color = 'white', bg_color='black'  ):
+    arrow_style="-|>",  max_length=4, linewidth=1,min_mass = 1, cutoff_perc = None,scatter_size=500, scatter_alpha=0.5,marker_edgewidth=0.1, density_stream = 2, smooth_transition=1, smooth_grid=0.5, color_scheme = 'annotation', add_outline_clusters=False, cluster_outline_edgewidth = 0.001,gp_color = 'white', bg_color='black' , dpi=300 , title='Streamplot'):
 
         """
        Construct vector streamplot on the embedding to show a fine-grained view of inferred directions in the trajectory
@@ -1381,7 +1446,7 @@ class VIA:
         linewidth *= 2 * lengths / lengths[~np.isnan(lengths)].max()
 
         #linewidth=0.5
-        fig, ax = plt.subplots(dpi=300)
+        fig, ax = plt.subplots(dpi=dpi)
         ax.grid(False)
         ax.streamplot(X_grid[0], X_grid[1], V_grid[0], V_grid[1], color=arrow_color, arrowsize=arrow_size, arrowstyle=arrow_style, zorder = 3, linewidth=linewidth, density = density_stream, maxlength=max_length)
 
@@ -1422,6 +1487,7 @@ class VIA:
 
         fig.patch.set_visible(False)
         ax.axis('off')
+        ax.set_title(title)
     def construct_knn(self, data: np.ndarray, too_big: bool = False) -> hnswlib.Index:
         """
         Construct K-NN graph for given data
@@ -1928,8 +1994,9 @@ class VIA:
                         print('gene corr pear', title_gene, 'of lineage',  self.terminal_clusters[i], '%.0f' % (corr * 100) + '%')
                         print('gene corr kend', title_gene, 'of lineage',self.terminal_clusters[i], '%.0f' % (corr_kend * 100) + '%')
                     ax.plot(xval, yg, color=cmap_[i], linewidth=3.5, zorder=3, label=label_str_pears)
-
-            plt.legend(fontsize=6)
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            plt.legend(fontsize=6,frameon=False)
             str_title = 'Trend:' + title_gene# + ' ' + '%.0f' % (corr_max * 100) + '%'
             plt.title(str_title)
         return
@@ -2419,7 +2486,7 @@ class VIA:
                             terminal_clus_ai.append(
                                 np.where(np.asarray(cluster_labels_subi) == most_likely_sub_terminal)[0][0])  # =i
 
-                            # print('the sub terminal cluster that best captures the super terminal', i, 'is', most_likely_sub_terminal)
+                            print('the sub terminal cluster that best captures the super terminal', i, 'is', most_likely_sub_terminal)
                         else:
                             print('the sub terminal cluster that best captures the super terminal', i, 'is',
                                   most_likely_sub_terminal, 'but the pseudotime is too low')
@@ -2540,11 +2607,11 @@ class VIA:
         # print('self edge weight', len(self.edgeweight), self.edgeweight)
         # print('self edge list', len(self.edgelist_unique), self.edgelist_unique)
         self.graph_node_pos = layout.coords
-        f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True, figsize=[8, 5])  # , dpi=300)
+        #f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True, figsize=[8, 5])  # , dpi=300)
 
-        self.draw_piechart_graph(ax, ax1)
+        self.draw_piechart_graph()
         self.labels = list(self.labels)
-        plt.show()
+
         # plt.scatter(self.embedding[:, 0], self.embedding[:, 1], c=self.single_cell_pt_markov, cmap='viridis', s=4, alpha=0.5)
         # plt.scatter(self.embedding[root_user, 0], self.embedding[root_user, 1], c='orange', s=15)
         # plt.title('root cell' + str(root_user))
@@ -2578,10 +2645,12 @@ class VIA:
             plt.show()
         return
 
-    def draw_piechart_graph(self, ax, ax1, type_pt='pt', gene_exp='', title='', cmap=None, ax_text=True):
+    def draw_piechart_graph(self, type_pt='pt', gene_exp='', title='', cmap=None, ax_text=True,dpi=150):
         # type_pt can be 'pt' pseudotime or 'gene' for gene expression
         # ax1 is the pseudotime graph
         import matplotlib.lines as lines
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True, dpi=dpi)#, figsize=[8, 5])  # , dpi=300)
         arrow_head_w = self.piegraph_arrow_head_width  # 0.4
         edgeweight_scale = self.piegraph_edgeweight_scalingfactor  # 1.5
 
@@ -2594,7 +2663,7 @@ class VIA:
         graph_node_label = self.graph_node_label
         if type_pt == 'pt':
             pt = self.scaled_hitting_times  # these are the final MCMC refined pt then slightly scaled
-            title_ax1 = "pseudotime"
+            title_ax1 = "Pseudotime"
 
         if type_pt == 'gene':
             pt = gene_exp
@@ -2678,10 +2747,10 @@ class VIA:
 
         patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
         labels = list(set(self.true_label))
-        plt.legend(patches, labels, loc=(-5, -5), fontsize=6)
+        plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon = False)
 
         is_sub = ' super clusters' if self.is_coarse else ' sub clusters' # self.too_big_factor >= 0.1:
-        ti = 'Annotations. K=' + str(self.knn) + '. ncomp = ' + str(self.ncomp)  # "+ is_sub
+        ti = 'Cluster Composition. K=' + str(self.knn) + '. ncomp = ' + str(self.ncomp)  # "+ is_sub
         ax.set_title(ti)
         ax.grid(False)
         ax.set_xticks([])
@@ -2723,7 +2792,7 @@ class VIA:
             # print(gp_scaling, 'gp_scaling')
             group_pop_scale = group_pop * gp_scaling * 0.5
 
-            ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap=cmap, edgecolors=c_edge,
+            im1=ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap=cmap, edgecolors=c_edge,
                          alpha=1, zorder=3, linewidth=l_width)
             if ax_text:
                 x_max_range = np.amax(node_pos[:, 0])/100
@@ -2739,9 +2808,20 @@ class VIA:
             ax_i.set_xticks([])
             ax_i.set_yticks([])
 
+        divider = make_axes_locatable(ax1)
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        f.colorbar(im1, cax=cax, orientation='vertical', label = 'pseudotime')
+        f.patch.set_visible(False)
+        print("setting axis off")
+        ax1.axis('off')
+        ax.axis('off')
+        plt.show()
     def draw_clustergraph(self, type_val='gene', gene_exp='', gene_list='', arrow_head_w=0.4, edgeweight_scale=1.5, cmap=None):
+        '''
+        #draws the clustergraph for cluster level gene or pseudotime values
         # type_pt can be 'pt' pseudotime or 'gene' for gene expression
         # ax1 is the pseudotime graph
+        '''
         n = len(gene_list)
         print('length gene list', n)
 
@@ -2819,6 +2899,9 @@ class VIA:
             ax_i.grid(False)
             ax_i.set_xticks([])
             ax_i.set_yticks([])
+            ax_i.axis('off')
+        fig.patch.set_visible(False)
+
 
     def accuracy(self, onevsall=1):
 

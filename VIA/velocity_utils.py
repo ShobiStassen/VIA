@@ -48,16 +48,16 @@ def compute_velocity_on_grid(
     adjust_for_stream=False,
     cutoff_perc=None,
 ):
-    print('shape before removing invalid cells')
-    print(X_emb.shape, V_emb.shape)
+
+    #print(X_emb.shape, V_emb.shape)
 
     # remove invalid cells
     idx_valid = np.isfinite(X_emb.sum(1) + V_emb.sum(1))
     X_emb = X_emb[idx_valid]
     V_emb = V_emb[idx_valid]
 
-    print('shape after removing invalid cells')
-    print(X_emb.shape, V_emb.shape)
+    #print('shape after removing invalid cells')
+    #print(X_emb.shape, V_emb.shape)
 
     # prepare grid
     n_obs, n_dim = X_emb.shape
