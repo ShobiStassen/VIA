@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-import examples as via #pyVIA.examples as via#examples as via #Viav031 as via
+import pyVIA.examples as via #pyVIA.examples as via #pyVIA.examples as via#examples as via #Viav031 as via
 import pandas as pd
 import umap
 import scanpy as sc
@@ -254,8 +254,8 @@ if __name__ == '__main__':
 
     #run_Toy_multi(foldername="/home/shobi/Trajectory/Datasets/Toy3/")
     #run_Toy_discon()
-    #run_generic_discon()
-    run_EB(foldername = "/home/shobi/Trajectory/Datasets/EB_Phate/") #folder containing relevant data files
+    run_generic_discon()
+    #run_EB(foldername = "/home/shobi/Trajectory/Datasets/EB_Phate/") #folder containing relevant data files
     #run_scATAC_Buenrostro_Hemato() #shows the main function calls within a typical VIA wrapper function
     #run_generic_wrapper(foldername = "/home/shobi/Trajectory/Datasets/Bcell/", knn=15, ncomps = 20)
     #run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/')
