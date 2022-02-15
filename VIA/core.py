@@ -146,12 +146,14 @@ def getbb(sc, ax):
     return bboxes
 
 
-def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name='plasma'):
+def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name='plasma', scatter_size=None):
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     prob = np.sqrt(prob)  # scale values to improve visualization of colors
     cmap = matplotlib.cm.get_cmap(cmap_name)
     norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
-    size_point = 10 if embedding.shape[0] > 10000 else 30
+    if scatter_size is None:
+        size_point = 10 if embedding.shape[0] > 10000 else 30
+    else: size_point = scatter_size
     # changing the alpha transparency parameter for plotting points
     im =ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=0.01, cmap=cmap_name,    edgecolors = 'none')
     ax.set_title('Lineage: ' + str(ti))
@@ -424,7 +426,102 @@ arrow_style="-|>",  max_length=4, linewidth=1,min_mass = 1, cutoff_perc = None,s
     fig.patch.set_visible(False)
     ax.axis('off')
     ax.set_title(title)
-def draw_sc_evolution_trajectory_dijkstra(via_coarse, via_fine, embedding, idx=None, cmap_name='plasma', dpi=150):
+def draw_sc_lineage_probability_solo(via_coarse, via_fine, embedding, idx=None, cmap_name='plasma', dpi=150):
+    # embedding is the full or downsampled 2D representation of the full dataset.
+    # idx is the list of indices of the full dataset for which the embedding is available. if the dataset is very large the the user only has the visual embedding for a subsample of the data, then these idx can be carried forward
+    # idx is the selected indices of the downsampled samples used in the visualization
+    # G is the igraph knn (low K) used for shortest path in high dim space. no idx needed as it's made on full sample
+    # knn_hnsw is the knn made in the embedded space used for query to find the nearest point in the downsampled embedding
+    #   that corresponds to the single cells in the full graph
+    if idx is None: idx = np.arange(0, via_coarse.nsamples)
+    G = via_coarse.full_graph_shortpath
+    knn_hnsw = make_knn_embeddedspace(embedding)
+    y_root = []
+    x_root = []
+    root1_list = []
+    p1_sc_bp = via_fine.single_cell_bp[idx, :]
+    p1_labels = np.asarray(via_fine.labels)[idx]
+    p1_cc = via_fine.connected_comp_labels
+    p1_sc_pt_markov = list(np.asarray(via_fine.single_cell_pt_markov)[idx])
+    X_data = via_fine.data
+
+    X_ds = X_data[idx, :]
+    p_ds = hnswlib.Index(space='l2', dim=X_ds.shape[1])
+    p_ds.init_index(max_elements=X_ds.shape[0], ef_construction=200, M=16)
+    p_ds.add_items(X_ds)
+    p_ds.set_ef(50)
+    num_cluster = len(set(via_fine.labels))
+    G_orange = ig.Graph(n=num_cluster, edges=via_fine.edgelist_maxout, edge_attrs={'weight':via_fine.edgeweights_maxout})
+    for ii, r_i in enumerate(via_fine.root):
+        loc_i = np.where(p1_labels == via_fine.root[ii])[0]
+        x = [embedding[xi, 0] for xi in loc_i]
+        y = [embedding[yi, 1] for yi in loc_i]
+
+        labels_root, distances_root = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]), k=1)
+        x_root.append(embedding[labels_root, 0][0])
+        y_root.append(embedding[labels_root, 1][0])
+
+        labelsroot1, distances1 = via_fine.knn_struct.knn_query(X_ds[labels_root[0][0], :], k=1)
+        root1_list.append(labelsroot1[0][0])
+        for fst_i in via_fine.terminal_clusters:
+            path_orange = G_orange.get_shortest_paths(via_fine.root[ii], to=fst_i)[0]
+            #if the roots is in the same component as the terminal cluster, then print the path to output
+            if len(path_orange)>0:
+                print(colored( f"{datetime.now()}\tCluster path on clustergraph starting from Root Cluster {via_fine.root[ii]} to Terminal Cluster {fst_i} : follows {path_orange} ", "blue"))
+
+
+    # single-cell branch probability evolution probability
+    for i, ti in enumerate(via_fine.terminal_clusters):
+        fig, ax = plt.subplots(dpi=dpi)
+        plot_sc_pb(ax, fig, embedding, p1_sc_bp[:, i], ti=ti, cmap_name=cmap_name)
+
+        loc_i = np.where(p1_labels == ti)[0]
+        val_pt = [p1_sc_pt_markov[i] for i in loc_i]
+        th_pt = np.percentile(val_pt, 50)  # 50
+        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
+        x = [embedding[xi, 0] for xi in
+             loc_i]  # location of sc nearest to average location of terminal clus in the EMBEDDED space
+        y = [embedding[yi, 1] for yi in loc_i]
+        labels, distances = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]),
+                                               k=1)  # knn_hnsw is knn of embedded space
+        x_sc = embedding[labels[0], 0]  # terminal sc location in the embedded space
+        y_sc = embedding[labels[0], 1]
+        start_time = time.time()
+
+        labelsq1, distances1 =via_fine.knn_struct.knn_query(X_ds[labels[0][0], :],
+                                                       k=1)  # find the nearest neighbor in the PCA-space full graph
+
+        path = G.get_shortest_paths(root1_list[p1_cc[ti]], to=labelsq1[0][0])  # weights='weight')
+        # G is the knn of all sc points
+
+        path_idx = []  # find the single-cell which is nearest to the average-location of a terminal cluster
+        # get the nearest-neighbor in this downsampled PCA-space graph. These will make the new path-way points
+        path = path[0]
+
+        # clusters of path
+        cluster_path = []
+        for cell_ in path:
+            cluster_path.append(via_fine.labels[cell_])
+
+        # print(colored('cluster_path', 'green'), colored('terminal state: ', 'blue'), ti, cluster_path)
+        revised_cluster_path = []
+        revised_sc_path = []
+        for enum_i, clus in enumerate(cluster_path):
+            num_instances_clus = cluster_path.count(clus)
+            if (clus == cluster_path[0]) | (clus == cluster_path[-1]):
+                revised_cluster_path.append(clus)
+                revised_sc_path.append(path[enum_i])
+            else:
+                if num_instances_clus > 1:  # typically intermediate stages spend a few transitions at the sc level within a cluster
+                    if clus not in revised_cluster_path: revised_cluster_path.append(clus)  # cluster
+                    revised_sc_path.append(path[enum_i])  # index of single cell
+        print(f"{datetime.now()}\tCluster level path on sc-knnGraph from Root Cluster {via_fine.root[p1_cc[ti]]} to Terminal Cluster {ti} along path: {revised_cluster_path}")
+
+        fig.patch.set_visible(False)
+        ax.axis('off')
+
+def draw_sc_lineage_probability(via_coarse, via_fine, embedding, idx=None, cmap_name='plasma', dpi=150, scatter_size =None):
+
     # embedding is the full or downsampled 2D representation of the full dataset.
     # idx is the list of indices of the full dataset for which the embedding is available. if the dataset is very large the the user only has the visual embedding for a subsample of the data, then these idx can be carried forward
     # idx is the selected indices of the downsampled samples used in the visualization
@@ -467,56 +564,62 @@ def draw_sc_evolution_trajectory_dijkstra(via_coarse, via_fine, embedding, idx=N
             if len(path_orange)>0: print(colored('Cluster path on clustergraph starting from Root Cluster', 'blue'), via_fine.root[ii], colored('to Terminal Cluster','blue'), fst_i, colored(':','blue'), path_orange)
 
     # single-cell branch probability evolution probability
-    for i, ti in enumerate(via_fine.terminal_clusters):
-        fig, ax = plt.subplots(dpi=dpi)
-        plot_sc_pb(ax, fig, embedding, p1_sc_bp[:, i], ti, cmap_name=cmap_name)
+    n_terminal_clusters = len(via_fine.terminal_clusters)
+    fig_nrows, mod = divmod(n_terminal_clusters, 4)
+    if mod ==0: fig_nrows=fig_nrows
+    if mod != 0: fig_nrows+=1
+    fig_ncols = 4
+    fig, axs = plt.subplots(fig_nrows,fig_ncols,dpi=dpi)
+    ti = 0 # counter for terminal cluster
+    #for i, ti in enumerate(via_fine.terminal clusters):
+    print()
+    for r in range(fig_nrows):
+        for c in range(fig_ncols):
+            if ti < n_terminal_clusters:
 
-        loc_i = np.where(p1_labels == ti)[0]
-        val_pt = [p1_sc_pt_markov[i] for i in loc_i]
-        th_pt = np.percentile(val_pt, 50)  # 50
-        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-        x = [embedding[xi, 0] for xi in
-             loc_i]  # location of sc nearest to average location of terminal clus in the EMBEDDED space
-        y = [embedding[yi, 1] for yi in loc_i]
-        labels, distances = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]),
-                                               k=1)  # knn_hnsw is knn of embedded space
-        x_sc = embedding[labels[0], 0]  # terminal sc location in the embedded space
-        y_sc = embedding[labels[0], 1]
-        start_time = time.time()
+                plot_sc_pb(axs[r,c], fig, embedding, p1_sc_bp[:, ti], ti= via_fine.terminal_clusters[ti], cmap_name=cmap_name, scatter_size=scatter_size)
+                ti+=1
+                loc_i = np.where(p1_labels == ti)[0]
+                val_pt = [p1_sc_pt_markov[i] for i in loc_i]
+                th_pt = np.percentile(val_pt, 50)  # 50
+                loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
+                x = [embedding[xi, 0] for xi in
+                     loc_i]  # location of sc nearest to average location of terminal clus in the EMBEDDED space
+                y = [embedding[yi, 1] for yi in loc_i]
+                labels, distances = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]),
+                                                       k=1)  # knn_hnsw is knn of embedded space
+                x_sc = embedding[labels[0], 0]  # terminal sc location in the embedded space
+                y_sc = embedding[labels[0], 1]
 
-        labelsq1, distances1 =via_fine.knn_struct.knn_query(X_ds[labels[0][0], :],
-                                                       k=1)  # find the nearest neighbor in the PCA-space full graph
+                labelsq1, distances1 =via_fine.knn_struct.knn_query(X_ds[labels[0][0], :],
+                                                               k=1)  # find the nearest neighbor in the PCA-space full graph
 
-        path = G.get_shortest_paths(root1_list[p1_cc[ti]], to=labelsq1[0][0])  # weights='weight')
-        # G is the knn of all sc points
+                path = G.get_shortest_paths(root1_list[p1_cc[ti]], to=labelsq1[0][0])  # weights='weight')
+                # G is the knn of all sc points
 
-        path_idx = []  # find the single-cell which is nearest to the average-location of a terminal cluster
-        # get the nearest-neighbor in this downsampled PCA-space graph. These will make the new path-way points
-        path = path[0]
+                path_idx = []  # find the single-cell which is nearest to the average-location of a terminal cluster
+                # get the nearest-neighbor in this downsampled PCA-space graph. These will make the new path-way points
+                path = path[0]
 
-        # clusters of path
-        cluster_path = []
-        for cell_ in path:
-            cluster_path.append(via_fine.labels[cell_])
+                # clusters of path
+                cluster_path = []
+                for cell_ in path:
+                    cluster_path.append(via_fine.labels[cell_])
 
-        # print(colored('cluster_path', 'green'), colored('terminal state: ', 'blue'), ti, cluster_path)
-        revised_cluster_path = []
-        revised_sc_path = []
-        for enum_i, clus in enumerate(cluster_path):
-            num_instances_clus = cluster_path.count(clus)
-            if (clus == cluster_path[0]) | (clus == cluster_path[-1]):
-                revised_cluster_path.append(clus)
-                revised_sc_path.append(path[enum_i])
-            else:
-                if num_instances_clus > 1:  # typically intermediate stages spend a few transitions at the sc level within a cluster
-                    if clus not in revised_cluster_path: revised_cluster_path.append(clus)  # cluster
-                    revised_sc_path.append(path[enum_i])  # index of single cell
-        print(colored('Cluster level path on sc-knnGraph from Root Cluster', 'blue'), via_fine.root[p1_cc[ti]],
-              colored('to Terminal Cluster: ', 'blue'), ti, revised_cluster_path)
-        fig.patch.set_visible(False)
-        ax.axis('off')
-
-
+                revised_cluster_path = []
+                revised_sc_path = []
+                for enum_i, clus in enumerate(cluster_path):
+                    num_instances_clus = cluster_path.count(clus)
+                    if (clus == cluster_path[0]) | (clus == cluster_path[-1]):
+                        revised_cluster_path.append(clus)
+                        revised_sc_path.append(path[enum_i])
+                    else:
+                        if num_instances_clus > 1:  # typically intermediate stages spend a few transitions at the sc level within a cluster
+                            if clus not in revised_cluster_path: revised_cluster_path.append(clus)  # cluster
+                            revised_sc_path.append(path[enum_i])  # index of single cell
+                print(f"{datetime.now()}\tCluster level path on sc-knnGraph from Root Cluster {via_fine.root[p1_cc[ti]]} to Terminal Cluster {ti} along path: {revised_cluster_path}")
+            fig.patch.set_visible(False)
+            axs[r,c].axis('off')
 
 def get_biased_weights(edges, weights, pt, round=1):
     # small nu means less biasing (0.5 is quite mild)
@@ -2349,7 +2452,7 @@ class VIA:
 
                     temp_set = set(list(np.asarray(self.labels)[
                                             sub_terminal_clus_temp_loc]))  # the clusters in second iteration that make up the super clusters in first iteration
-                    print('temp_set', temp_set)
+
 
                     temp_set = [t_s for t_s in temp_set if t_s in cluster_labels_subi]
 
@@ -2358,22 +2461,21 @@ class VIA:
                     count_frequency_super_in_sub = 0
                     # If you have disconnected components and corresponding labels to identify which cell belongs to which components, then use the Toy 'T1_M1' format
                     CHECK_BOOL = False
-                    print('CHECK_Bool', CHECK_BOOL)
+
                     #if (self.dataset == 'toy'): if (root_user_[0:2] in true_majority_i[0]) | (root_user_[0:1] == 'M'): CHECK_BOOL = True
                     if self.dataset =='group':
                         if root_user_ in true_majority_i:
                             CHECK_BOOL = True
-                            print('CHECK_Bool in true_majority i.e. T1 is in T1', CHECK_BOOL)
+
                     if root_i in cluster_labels_subi:
                         CHECK_BOOL= True
-                        print('root i and cluster labels subi', root_i, cluster_labels_subi)
-                    print('CHECK_Bool', CHECK_BOOL)
+
                     # Find the sub-terminal cluster in second iteration of VIA that best corresponds to the super-terminal cluster  (i)from iteration 1
-                    if CHECK_BOOL==True & len(temp_set)>0:# | (                            self.dataset != 'toy'):  # 0:1 for single connected structure #when using Toy as true label has T1 or T2
-                        print('inside true CHECK_Bool', CHECK_BOOL, temp_set)
+                    if (CHECK_BOOL==True) & (len(temp_set)>0):# | (                            self.dataset != 'toy'):  # 0:1 for single connected structure #when using Toy as true label has T1 or T2
+
                         for j in temp_set:
                             loc_j_in_sub_ai = np.where(loc_compi == j)[0]
-                            print('loc_j_in_sub_ai', loc_j_in_sub_ai)
+
 
                             super_cluster_composition_loc = np.where(np.asarray(self.labels) == j)[0]
                             super_cluster_composition = self.func_mode(
