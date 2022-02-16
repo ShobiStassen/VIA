@@ -22,9 +22,9 @@ notebook       | details         | dataset  | reference
 [*scRNA-seq Hematopoiesis*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_scRNA_Hematopoiesis.ipynb) | Human hematopoiesis (5780 cells) | [CD34 scRNA-seq](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | Setty et al. (2019)
 ## Examples 
 
-The examples below show how to run VIA on generic connected and disconnected data. They also highlight a few difference in calling VIA when using Windows versus Linux. The data for the Jupyter Notebooks and Examples are available in the [Datasets folder](https://github.com/ShobiStassen/VIA/tree/master/Datasets) (smaller files) with larger datasets [here](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing).  
+The examples below show how to run VIA on generic connected and disconnected data using wrapper functions and serve as a check for your installation. For more detailed guidelines on running VIA and plotting the results, please use the Notebooks. We also highlight a few difference in calling VIA when using Windows versus Linux. The data for the Jupyter Notebooks and Examples are available in the [Datasets folder](https://github.com/ShobiStassen/VIA/tree/master/Datasets) (smaller files) with larger datasets [here](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing).  
 
-We also provide a [test script](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) for some of the examples, please change the foldername accordingly to the folder containing relevant data files
+A [test script](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) is available for some of the different datasets, please change the foldername accordingly to the folder containing relevant data files
 
 * 1.a Toy Data (multifurcation) [Multifurcation Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb)
 * 1.b Toy Data (disconnected) [Disconnected Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb)
@@ -35,7 +35,7 @@ We also provide a [test script](https://github.com/ShobiStassen/VIA/blob/master/
        
 ------------------------------------------------------
 ### 1.a/b Toy data (Multifurcation and Disconnected)
-Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets)  with annotations are generated using DynToy are provided. 
+Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets)  with annotations generated using DynToy are provided. For the step-by-step code within these wrappers, please see the corresponding Jupyter NBs. 
 ### Multifurcating toy dataset with [*interactive graph*](https://shobistassen.github.io/bifurc.html)
 <p align="center">
      <a href="https://shobistassen.github.io/bifurc.html"><img width="100%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_MainFig.png?raw=true"></a>
@@ -59,7 +59,7 @@ import pyVIA.core as via
 #the root is automatically set to  root_user = 'M1'
 via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername = ".../Trajectory/Datasets/") #multifurcation
 #disconnected trajectory
-#the root is automatically set as a list root_user = ['T1_M1', 'T2_M1'] # e.g. T2_M3 is a cell belonging to the 3rd Milestone (M3) of the second Trajectory (T2)
+# The root is automatically set as a list root_user = ['T1_M1', 'T2_M1'] # e.g. T2_M3 is a cell belonging to the 3rd Milestone (M3) of the second Trajectory (T2)
 via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Trajectory/Datasets/") #2 disconnected trajectories
 ```
 
@@ -104,8 +104,8 @@ Datasets and labels used in this example are provided in [Datasets](https://gith
 
 ```
 # Read the two files:
-# 1) the first file contains 200PCs of the Bcell filtered and normalized data for the first 5000 HVG.
-# 2)The second file contains raw count data for marker genes
+# 1) The first file contains 200PCs of the Bcell filtered and normalized data for the first 5000 HVG.
+# 2) The second file contains raw count data for marker genes
 
 data = pd.read_csv('./Bcell_200PCs.csv')
 data_genes = pd.read_csv('./Bcell_markergenes.csv')
@@ -144,6 +144,7 @@ adata_counts = sc.AnnData(df_counts, obs=df_ids)
 sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=10)
 
 #Since there are 2 disconnected trajectories, we provide 2 arbitrary roots (start cells).If there are more disconnected paths, then VIA arbitrarily selects roots. #The root can also just be arbitrarily set as [1] and VIA can detect how many additional roots it must add
+# The root can also be provided as a cell type level label corresponding to the groups present in "true_label", in this case the dataset must be set to 'group'
 via.via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[1,1], preserve_disconnected=True, knn=30, ncomps=10,cluster_graph_pruning_std = 1)
 
 #in the case of connected data (i.e. only 1 graph component. e.g. Toy Data Multifurcating) then the wrapper function from example 3.a can be used:
