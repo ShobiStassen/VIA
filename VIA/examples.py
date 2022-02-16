@@ -176,7 +176,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     # sc.pp.filter_genes(ad, min_cells=10)
     # print('after extra filtering', ad.shape)
     adata_counts = sc.AnnData(ad.X)
-    print(ad.raw.X.shape)
+
     # df_X = pd.DataFrame(ad.raw.X.todense(), columns = ad.var_names)
 
     # df_X.columns = [i for i in ad.var_names]
@@ -187,8 +187,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     adata_counts.obs_names = ad.obs_names
     adata_counts.var_names = ad.var_names
 
-    adata_counts_raw = sc.AnnData(ad.raw.X)
-    adata_counts_raw.var_names = [i for i in ad.var_names]
+
     # adata_counts_raw = adata_preprocess(adata_counts_raw, n_top_genes=500, log=True) # when using HVG and no PCA
     # sc.tl.pca(adata_counts_raw,svd_solver='arpack', n_comps=ncomps)
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
@@ -225,11 +224,19 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     genes_save = ['ITGAX', 'GATA1', 'GATA2', 'ITGA2B', 'CSF1R', 'MPO', 'CD79B', 'SPI1', 'IRF8', 'CD34', 'IL3RA',
                   'ITGAX', 'IGHD',
                   'CD27', 'CD14', 'CD22', 'ITGAM', 'CLC', 'MS4A3', 'FCGR3A', 'CSF1R']
-    df_selected_genes = pd.DataFrame(adata_counts.X, columns=[cc for cc in adata_counts.var_names])
-    df_selected_genes = df_selected_genes[genes_save]
+    #df_selected_genes = pd.DataFrame(adata_counts.X, columns=[cc for cc in adata_counts.var_names])
+    #df_selected_genes = df_selected_genes[genes_save]
     # df_selected_genes.to_csv("/home/shobi/Trajectory/Datasets/HumanCD34/selected_genes.csv")
-    df_ = pd.DataFrame(ad.X)
-    df_.columns = [i for i in ad.var_names]
+    #df_ = pd.DataFrame(ad.X)
+    #df_.columns = [i for i in ad.var_names]
+    adata_counts_raw = sc.AnnData(ad.raw.X) #raw counts
+    adata_counts_raw.var_names = [i for i in ad.var_names]
+
+    df_ = pd.DataFrame(adata_counts_raw.X.todense())
+    print('shape adata raw df', df_.shape)
+    df_.columns = [i for i in adata_counts_raw.var_names]
+
+
     print('start magic')
     gene_list_magic = ['IL3RA', 'IRF8', 'GATA1', 'GATA2', 'ITGA2B', 'MPO', 'CD79B', 'SPI1', 'CD34', 'CSF1R', 'ITGAX']
     df_magic = v0.do_impute(df_, magic_steps=3, gene_list=gene_list_magic)
@@ -238,6 +245,15 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     df_magic_cluster = df_magic_cluster.groupby('parc', as_index=True).mean()
     print('end magic', df_magic.shape)
 
+    marker_genes = ['ITGA2B', 'IL3RA', 'IRF8', 'MPO', 'CSF1R', 'GATA2', 'CD79B', 'CD34', 'GATA1']
+    # DC markers https://www.cell.com/pb-assets/products/nucleus/nucleus-phagocytes/rnd-systems-dendritic-cells-br.pdf
+    gene_name_dict = {'GATA1': 'GATA1', 'GATA2': 'GATA2', 'ITGA2B': 'CD41 (Mega)', 'MPO': 'MPO (Mono)',
+                      'CD79B': 'CD79B (B)', 'IRF8': 'IRF8 (DC)', 'SPI1': 'PU.1', 'CD34': 'CD34',
+                      'CSF1R': 'CSF1R (cDC Up. Up then Down in pDC)', 'IL3RA': 'CD123 (pDC)', 'IRF4': 'IRF4 (pDC)',
+                      'ITGAX': 'ITGAX (cDCs)', 'CSF2RA': 'CSF2RA (cDC)'}
+
+    v0.get_gene_expression(gene_exp=df_magic, cmap='rainbow', marker_genes=marker_genes)
+    plt.show()
     v0.draw_piechart_graph(type_data='gene', gene_exp=df_magic_cluster['GATA1'].values, title='GATA1', cmap='coolwarm')
     plt.show()
 
@@ -256,11 +272,11 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     magic_ad.obs_names = ad.obs_names
     magic_ad.var_names = ad.var_names
     magic_ad.obs['via0_label'] = [str(i) for i in super_labels]
-    marker_genes = {"ERY": ['GATA1', 'GATA2', 'ITGA2B'], "BCell": ['IGHD', 'CD22'],
+    marker_genes_matrix_plot = {"ERY": ['GATA1', 'GATA2', 'ITGA2B'], "BCell": ['IGHD', 'CD22'],
                     "DC": ['IRF8', 'IL3RA', 'IRF4', 'CSF2RA', 'ITGAX'],
                     "MONO": ['CD14', 'SPI1', 'MPO', 'IL12RB1', 'IL13RA1', 'C3AR1', 'FCGR3A'], 'HSC': ['CD34']}
 
-    sc.pl.matrixplot(magic_ad, marker_genes, groupby='via0_label', dendrogram=True)
+    sc.pl.matrixplot(magic_ad, marker_genes_matrix_plot, groupby='via0_label', dendrogram=True)
     '''
 
     sc.tl.rank_genes_groups(ad, groupby='via0_label', use_raw=True,
@@ -279,109 +295,27 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
 
     draw_trajectory_gams(v0,v1,embedding= tsnem)
     plt.show()
-    # DRAW EVOLUTION PATHS
-
+    # DRAW Lineage pathways
     draw_sc_lineage_probability(v0, v1, embedding=tsnem)
     plt.show()
 
-    loaded_magic_df = pd.read_csv('/home/shobi/Trajectory/Datasets/HumanCD34/MAGIC_palantir_knn30ncomp100_subset.csv')
-    # loaded_magic_df.head()
-
-    for gene_name in ['ITGA2B', 'IL3RA',
-                      'IRF8',
-                      'MPO', 'CSF1R', 'GATA2', 'CD79B',
-                      'CD34', 'GATA1', 'IL3RA']:  # ,'SPI1', 'CD34','CSF1R','IL3RA','IRF4', 'CSF2RA','ITGAX']:
-        # DC markers https://www.cell.com/pb-assets/products/nucleus/nucleus-phagocytes/rnd-systems-dendritic-cells-br.pdf
-        gene_name_dict = {'GATA1': 'GATA1', 'GATA2': 'GATA2', 'ITGA2B': 'CD41 (Mega)', 'MPO': 'MPO (Mono)',
-                          'CD79B': 'CD79B (B)', 'IRF8': 'IRF8 (DC)', 'SPI1': 'PU.1', 'CD34': 'CD34',
-                          'CSF1R': 'CSF1R (cDC Up. Up then Down in pDC)', 'IL3RA': 'CD123 (pDC)', 'IRF4': 'IRF4 (pDC)',
-                          'ITGAX': 'ITGAX (cDCs)', 'CSF2RA': 'CSF2RA (cDC)'}
-
-        loc_gata = np.where(np.asarray(ad.var_names) == gene_name)[0][0]
-        magic_ad = ad.obsm['MAGIC_imputed_data'][:, loc_gata]
-        magic_ad = loaded_magic_df[gene_name]
-        # subset_ = magic_ad
-        subset_ = df_magic[gene_name].values
-        print(subset_.shape)
-        # print('shapes of magic_ad 1 and 2', magic_ad.shape,subset_.shape)
-        # v1.get_gene_expression(magic_ad,title_gene = gene_name_dict[gene_name])
-        v0.get_gene_expression(subset_, title_gene=gene_name_dict[gene_name], cmap='rainbow')
+    v1.get_gene_expression(df_magic, marker_genes=marker_genes)
     plt.show()
 
-    labels = v1.labels
     #JSON interactive graphs
     #v1.make_JSON(filename='scRNA_Hema_via1_temp.js')
     df_magic_cluster = df_magic.copy()
     df_magic_cluster['via1'] = v1.labels
     df_magic_cluster = df_magic_cluster.groupby('via1', as_index=True).mean()
 
-    '''
-    #Get the clustsergraph gene expression on topology
-    for gene_i in gene_list_magic:
-        f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True)
-        v1.draw_piechart_graph(ax,ax1,type_pt='gene', gene_exp = df_magic_cluster[gene_i].values, title = gene_i)
-        plt.show()
-    '''
-    ad.obs['parc1_label'] = [str(i) for i in labels]
-    '''
-    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster
-    for tsi in v1.revised_super_terminal_clusters:
-        loc_i = np.where(super_labels == tsi)[0]
-        temp = np.mean(adata_counts.obsm['X_pca'][:, 0:ncomps][loc_i], axis=0)
-        labelsq, distances = v0.knn_struct.knn_query(temp, k=1)
-        tsi_list.append(labelsq[0][0])
 
+    ad.obs['parc1_label'] = [str(i) for i in v1.labels]
 
     sc.tl.rank_genes_groups(ad, groupby='parc1_label', use_raw=True,
                             method='wilcoxon', n_genes=10)  # compute differential expression
 
-    sc.pl.matrixplot(ad, marker_genes, groupby='parc1_label', use_raw=False)
+    sc.pl.matrixplot(ad, marker_genes_matrix_plot, groupby='parc1_label', use_raw=False)
     sc.pl.rank_genes_groups_heatmap(ad, n_genes=3, groupby="parc1_label", show_gene_labels=True, use_raw=False)
-    '''
-    label_df = pd.DataFrame(labels, columns=['parc'])
-    # label_df.to_csv('/home/shobi/Trajectory/Datasets/HumanCD34/parclabels.csv', index=False)
-    gene_ids = adata_counts.var_names
-
-    obs = ad.raw.X.toarray()
-    print('shape obs', obs.shape)
-    obs = pd.DataFrame(obs, columns=gene_ids)
-    #    obs['parc']=v1.labels
-    obs['louvain'] = revised_clus
-
-    # obs_average = obs.groupby('parc', as_index=True).mean()
-    obs_average = obs.groupby('louvain', as_index=True).mean()
-
-    ad_obs = sc.AnnData(obs_average)
-    ad_obs.var_names = gene_ids
-    ad_obs.obs['parc'] = [i for i in range(len(set(revised_clus)))]  # v1.labels instaed of revised_clus
-
-    loaded_magic_df = pd.read_csv('/home/shobi/Trajectory/Datasets/HumanCD34/MAGIC_palantir_knn30ncomp100_subset.csv')
-    # loaded_magic_df.head()
-
-    for gene_name in ['ITGA2B', 'IL3RA',
-                      'IRF8',
-                      'MPO', 'CSF1R', 'GATA2', 'CD79B',
-                      'CD34']:  # ['GATA1', 'GATA2', 'ITGA2B', 'MPO', 'CD79B','IRF8','SPI1', 'CD34','CSF1R','IL3RA','IRF4', 'CSF2RA','ITGAX']:
-        print('gene name', gene_name)
-        # DC markers https://www.cell.com/pb-assets/products/nucleus/nucleus-phagocytes/rnd-systems-dendritic-cells-br.pdf
-        gene_name_dict = {'GATA1': 'GATA1', 'GATA2': 'GATA2', 'ITGA2B': 'CD41 (Mega)', 'MPO': 'MPO (Mono)',
-                          'CD79B': 'CD79B (B)', 'IRF8': 'IRF8 (DC)', 'SPI1': 'PU.1', 'CD34': 'CD34',
-                          'CSF1R': 'CSF1R (cDC Up. Up then Down in pDC)', 'IL3RA': 'CD123 (pDC)', 'IRF4': 'IRF4 (pDC)',
-                          'ITGAX': 'ITGAX (cDCs)', 'CSF2RA': 'CSF2RA (cDC)'}
-
-        loc_gata = np.where(np.asarray(ad.var_names) == gene_name)[0][0]
-        magic_ad = ad.obsm['MAGIC_imputed_data'][:, loc_gata]
-        magic_ad = loaded_magic_df[gene_name]
-        # subset_ = magic_ad
-        subset_ = df_magic[gene_name].values
-        print(subset_.shape)
-        # print('shapes of magic_ad 1 and 2', magic_ad.shape,subset_.shape)
-        # v1.get_gene_expression(magic_ad,title_gene = gene_name_dict[gene_name])
-        v1.get_gene_expression(subset_, title_gene=gene_name_dict[gene_name])
-        # v0.get_gene_expression(subset_, title_gene=gene_name_dict[gene_name] + 'VIA MAGIC')
-
-
-
 
 
 def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root_user='M1',
@@ -589,7 +523,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
              knn=knn, cluster_graph_pruning_std=1,
              too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset='toy',
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
-             random_seed=random_seed, visual_global_pruning_std = 1)  # *.4 root=2,
+             random_seed=random_seed)  # *.4 root=2,
     v0.run_VIA()
     super_labels = v0.labels
     df_ids['pt'] = v0.single_cell_pt_markov
@@ -603,7 +537,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
              knn=knn,     too_big_factor=0.1, root_user=root_user, is_coarse=False,
              x_lazy=0.95, alpha_teleport=0.99, preserve_disconnected=True, dataset='toy',
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2, cluster_graph_pruning_std=1,
-             random_seed=random_seed, visual_global_pruning_std = 1, via_coarse=v0)
+             random_seed=random_seed, via_coarse=v0)
 
     v1.run_VIA()
     df_ids['pt1'] = v1.single_cell_pt_markov
@@ -611,45 +545,10 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
     print('corr via1 knn', knn, correlation)
     labels = v1.labels
 
-    # v1 = PARC(adata_counts.obsm['X_pca'], true_label, jac_std_global=1, knn=5, too_big_factor=0.05, anndata= adata_counts, small_pop=2)
-    # v1.run_VIA()
-    # labels = v1.labels
-    print('start tsne')
-    n_downsample = 10000
-    if len(labels) > n_downsample:
-        # idx = np.random.randint(len(labels), size=900)
-        np.random.seed(2357)
-        idx = np.random.choice(a=np.arange(0, len(labels)), size=len(labels), replace=False, p=None)
-        print('len idx', len(idx))
-        super_labels = np.asarray(super_labels)[idx]
-        labels = list(np.asarray(labels)[idx])
-        true_label = list(np.asarray(true_label)[idx])
-        sc_pt_markov = list(np.asarray(v1.single_cell_pt_markov[idx]))
 
-        # embedding = v0.run_umap_hnsw(adata_counts.obsm['X_pca'][idx, :], graph)
-        embedding = adata_counts.obsm['X_pca'][idx,
-                    0:2]  # umap.UMAP().fit_transform(adata_counts.obsm['X_pca'][idx, 0:5])
-        # embedding = TSNE().fit_transform(adata_counts.obsm['X_pca'][idx, :])
+    embedding = adata_counts.obsm['X_pca'][:,  0:2]  # umap.UMAP().fit_transform(adata_counts.obsm['X_pca'][idx, 0:5])
 
 
-        print('tsne downsampled size', embedding.shape)
-    else:
-        embedding = umap.UMAP().fit_transform(Xin)  # (adata_counts.obsm['X_pca'])
-        print('tsne input size', adata_counts.obsm['X_pca'].shape)
-        # embedding = umap.UMAP().fit_transform(adata_counts.obsm['X_pca'])
-        idx = np.arange(len(labels))#randint(len(labels), size=len(labels))
-        super_labels = np.asarray(super_labels)[idx]
-        labels = list(np.asarray(labels)[idx])
-        true_label = list(np.asarray(true_label)[idx])
-        sc_pt_markov = list(np.asarray(v1.single_cell_pt_markov[idx]))
-
-
-    #via_streamplot(v1, embedding=embedding[:, 0:2], scatter_size=400, scatter_alpha=0.3, marker_edgewidth=0.01,                      density_stream=2, density_grid=0.5, smooth_transition=1, smooth_grid=0.3, add_outline_clusters=False)
-    #plt.show()
-
-    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, idx)
-    print('super terminal and sub terminal', v0.super_terminal_cells, v1.terminal_clusters)
-    #knn_hnsw, ci_list = sc_loc_ofsuperCluster_embeddedspace(embedding, v0, v1, idx)
     draw_trajectory_gams(via_coarse=v0, via_fine=v1, embedding=embedding)
     plt.show()
 
@@ -667,17 +566,11 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
     ax1.set_title('true labels')
 
     ax3.set_title("Pseudotime using ncomps:" + str(Xin.shape[1]) + '. knn:' + str(knn))
-    ax3.scatter(embedding[:, 0], embedding[:, 1], c=sc_pt_markov, cmap='viridis_r')
+    ax3.scatter(embedding[:, 0], embedding[:, 1], c=v1.single_cell_pt_markov, cmap='viridis_r')
     plt.show()
-    df_subset = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
-    for gene_i in ['Gene0', 'Gene1', 'Gene2']:  # , 'Gene3', 'Gene4']:
-        subset_ = df_subset[gene_i].values
-        print(subset_.shape)
-        # print('shapes of magic_ad 1 and 2', magic_ad.shape,subset_.shape)
-        # v1.get_gene_expression(magic_ad,title_gene = gene_name_dict[gene_name])
-        v1.get_gene_expression(subset_, title_gene=gene_i)
+    df_genes = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4']) #dummy gene values for illustration
+    v1.get_gene_expression(gene_exp=df_genes, marker_genes=['Gene0', 'Gene1', 'Gene2'])
 
-    # knn_hnsw = make_knn_embeddedspace(embedding)
 
     draw_sc_lineage_probability(via_coarse=v0, via_fine=v1, embedding=embedding, idx=idx)
 
@@ -700,11 +593,11 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
         df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv", delimiter=",")
         df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids_with_truetime.csv", delimiter=",")
         root_user, dataset =  [136,4], ''
-        #root_user, dataset = ['T1_M1', 'T2_M1'],'toy'
+        #root_user, dataset = ['T1_M1', 'T2_M1'],'toy' #alternative root setting
         paga_root = 'T1_M1'
 
     df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
-    # print("shape", df_counts.shape, df_ids.shape)
+
     df_counts = df_counts.drop('Unnamed: 0', 1)
     df_ids = df_ids.sort_values(by=['cell_id_num'])
     df_ids = df_ids.reset_index(drop=True)
@@ -714,10 +607,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
     # true_label =['a' for i in true_label] #testing dummy true_label
     adata_counts.uns['iroot'] = np.flatnonzero(adata_counts.obs['group_id'] == paga_root)[0]  # 'T1_M1'#'M1'
-    # via_wrapper(adata_counts, true_label, embedding=  adata_counts.obsm['X_pca'][:,0:2], root=[1], knn=30, ncomps=10,cluster_graph_pruning_std = 1)
-    # print('starting via wrapper disconn')
-    # via_wrapper_disconnected(adata_counts, true_label, embedding=adata_counts.obsm['X_pca'][:, 0:2], root=[23,902], preserve_disconnected=True, knn=10, ncomps=10, cluster_graph_pruning_std=1 ,random_seed=41)
-    # print('end via wrapper disconn')
+
     if dataset == 'Toy4':
         jac_std_global = 0.15  # 1
     else:
@@ -738,17 +628,14 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
              random_seed=random_seed, piegraph_arrow_head_width=0.2,
              piegraph_edgeweight_scalingfactor=1.0)  # *.4 root=2,
     v0.run_VIA()
-    #via_streamplot(v0, embedding)
-    #plt.show()
-    #f, ((ax0, ax1)) = plt.subplots(1, 2, sharey=True, figsize=[15, 10])
-    #v0.draw_piechart_graph()
-    #plt.show()#
+    via_streamplot(v0, embedding)
+    plt.show()
     super_labels = v0.labels
     print('super labels', type(super_labels))
     df_ids['pt'] = v0.single_cell_pt_markov
     correlation = df_ids['pt'].corr(df_ids['true_time'])
     print('corr via knn', knn, correlation)
-    super_edges = v0.edgelist
+
     # v0.make_JSON(filename = 'Toy3_ViaOut_temp.js')
     #draw_sc_lineage_probability(via_coarse=v0, via_fine=v0, embedding=embedding)
 
@@ -768,13 +655,10 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
 
     draw_trajectory_gams(v0,v1, embedding)
 
-    df_subset = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
-    for gene_i in ['Gene0', 'Gene1', 'Gene2']:  # , 'Gene3', 'Gene4']:
-        subset_ = df_subset[gene_i].values
-        v1.get_gene_expression(subset_, title_gene=gene_i, verbose=False)
-
+    df_genes = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
+    v1.get_gene_expression(gene_exp=df_genes, marker_genes=['Gene0','Gene1','Gene2'])
+    plt.show()
     draw_sc_lineage_probability(via_coarse = v0, via_fine=v1, embedding=embedding)
-
     plt.show()
 
 
@@ -1029,8 +913,7 @@ def main_Bcell(ncomps=50, knn=20, random_seed=0, cluster_graph_pruning_std=.15,p
              super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed)
 
     v1.run_VIA()
-    labels = v1.labels
-    super_edges = v0.edgelist
+
 
     # plot gene expression vs. pseudotime
     Bcell_marker_gene_list = ['Igll1', 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4', 'Sp7', 'Zfp629']  # irf4 down-up
@@ -1039,22 +922,10 @@ def main_Bcell(ncomps=50, knn=20, random_seed=0, cluster_graph_pruning_std=.15,p
     df_Bcell_marker = df_[Bcell_marker_gene_list]
     print(df_Bcell_marker.shape, 'df_Bcell_marker.shape')
     df_Bcell_marker.to_csv('/home/shobi/Trajectory/Datasets/Bcell/Bcell_markergenes.csv')
-    # v0 is run with "do_impute" = true, hence it stores the full graph (in subsequent iterations we dont recompute and store the full unpruned knn graph)
+
     df_magic = v0.do_impute(df_, magic_steps=3, gene_list=Bcell_marker_gene_list)
-    for gene_name in Bcell_marker_gene_list:
-        # loc_gata = np.where(np.asarray(adata_counts_unfiltered.var_names) == gene_name)[0][0]
-        subset_ = df_magic[gene_name].values
-
-        v1.get_gene_expression(subset_, title_gene=gene_name)
-
-        # magic_ad = adata_counts_unfiltered.X[:, loc_gata]
-        # v1.get_gene_expression(magic_ad, gene_name)
-
-
-
-
-    # embedding = umap.UMAP(random_state=42, n_neighbors=15, init=umap_init).fit_transform(  adata_counts.obsm['X_pca'][:, 0:5])
-
+    v1.get_gene_expression(df_magic)
+    plt.show()
     draw_trajectory_gams(via_coarse = v0, via_fine = v1, embedding =embedding)
     plt.show()
 
@@ -1544,8 +1415,8 @@ def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palan
     adata.obs['day'] = ['0' + str(i) if i < 10 else str(i) for i in true_label_int]
     true_label_str = [str(i) for i in
                       true_label_int]  # the way find_root works is to match any part of root-user to majority truth
-    print('true_label_str','0.0' in true_label_str)
-    print(adata.obs['day'])
+
+
     if normalize == True:
         sc.pp.scale(adata, max_value=5)
         print(colored('normalized', 'blue'))
@@ -1669,16 +1540,18 @@ def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palan
     # df_ = pd.DataFrame(adata.X)
     # df_.columns = [i for i in adata.var_names]
     # df_.to_csv('/home/shobi/Trajectory/Datasets/mESC/transformed_normalized_input.csv')
-    df_ = pd.DataFrame(true_label_int, columns=['days'])
+    #df_ = pd.DataFrame(true_label_int, columns=['days'])
     #    df_.to_csv('/home/shobi/Trajectory/Datasets/mESC/annots_days.csv')
-    print('finished saving for monocle3')
+
+
+
     print('check root is in annots', root[0] in true_label_str)
     v0 = VIA(adata.X, true_label_str, jac_std_global=0.3, dist_std_local=1, knn=knn,
              cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=v0_too_big, resolution_parameter=2,
              root_user=root, dataset='mESC', random_seed=v0_random_seed,
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=3,is_coarse=True, preserve_disconnected=False, pseudotime_threshold_TS=40, x_lazy=0.99,
-             alpha_teleport=0.99, visual_global_pruning_std = 1)  # *.4 root=1,
+             alpha_teleport=0.99)  # *.4 root=1,
     v0.run_VIA()
     df_pt = v0.single_cell_pt_markov
     f, (ax1, ax2,) = plt.subplots(1, 2, sharey=True)
@@ -1689,7 +1562,6 @@ def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palan
     ax1.scatter(U[:, 0], U[:, 1], c=true_label_int, cmap='jet', s=4, alpha=0.7)
     ax2.scatter(U[:, 0], U[:, 1], c=df_pt, cmap='jet', s=4, alpha=0.7)
 
-    print('SAVED TRUE')
     df_pt = pd.DataFrame()
     df_pt['via_knn'] = v0.single_cell_pt_markov
     df_pt['days'] = true_label_int
@@ -1697,8 +1569,10 @@ def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palan
     adata.obs['via0'] = [str(i) for i in v0.labels]
     # show geneplot
     # sc.pl.matrixplot(adata, marker_genes, groupby='via0', dendrogram=True)
-
-    draw_trajectory_gams(via_coarse=v0, via_fine = v0, embedding = U)
+    marker_genes = ['CD44', 'GATA4', 'PDGFRa', 'EpCAM']
+    df_genes = pd.DataFrame(adata[:, marker_genes].X)
+    df_genes.columns = marker_genes
+    v0.get_gene_expression(gene_exp=df_genes)
     plt.show()
     '''
     #show geneplot
@@ -1709,25 +1583,21 @@ def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palan
         v0.get_gene_expression(subset, gene_i)
     plt.show()
     '''
-
+    draw_trajectory_gams(via_coarse=v0, via_fine=v0, embedding=U)
+    plt.show()
     v1 = VIA(adata.X, true_label_str, jac_std_global=0.15, dist_std_local=1, knn=knn,
-             cluster_graph_pruning_std=cluster_graph_pruning_std, visual_global_pruning_std = 1,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=p1_too_big, root_user=root, is_coarse=False,
              x_lazy=0.99, alpha_teleport=0.99, preserve_disconnected=True, dataset='mESC',
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=3,
-             random_seed=v0_random_seed,    pseudotime_threshold_TS=40)
+             random_seed=v0_random_seed,    pseudotime_threshold_TS=40, via_coarse=v0)
     v1.run_VIA()
     df_pt['via_v1'] = v1.single_cell_pt_markov
     #df_pt.to_csv('/home/shobi/Trajectory/Datasets/mESC/noMCMC_nolazynotele_via_pt_knn_Feb2021' + str(        knn) + 'resolution2jacp15.csv')
     adata.obs['parc1'] = [str(i) for i in v1.labels]
     sc.pl.matrixplot(adata, marker_genes, groupby='parc1', dendrogram=True)
-    labels = v1.labels
 
-    for gene_i in ['CD44', 'GATA4', 'PDGFRa', 'EpCAM']:
-        # subset = data[[gene_i]].values
-        subset = adata[:, gene_i].X.flatten()
-        print('gene expression for', gene_i)
-        v1.get_gene_expression(subset, gene_i)
+    v1.get_gene_expression(gene_exp=df_genes)
     # X = adata.obsm['X_pca'][:,0:2]
     # print(X.shape)
 
@@ -1945,26 +1815,26 @@ def main_scATAC_zscores(knn=20, ncomps=30, cluster_graph_pruning_std=.15):
         plt.show()
     '''
     # get knn-graph and locations of terminal states in the embedded space
-    knn_hnsw = make_knn_embeddedspace(embedding)
-    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v0.labels)))
-    # draw overall pseudotime and main trajectories
-    draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
-                         v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, true_label, knn=v0.knn,
-                         final_super_terminal=v1.revised_super_terminal_clusters,
-                         sub_terminal_clusters=v1.terminal_clusters,
-                         title_str='Pseudotime', ncomp=(ncomps - start_ncomp))
+    draw_trajectory_gams(v0,v1,embedding)
     plt.show()
-    df_genes = []
+    marker_genes =[key for key in gene_dict]
+    df_genes = df_Buen[marker_genes]
+    df_genes.columns = [gene_dict[key] for key in gene_dict]
+    for col in df_genes.columns:
+        df_genes[col] = (df_genes[col] - df_genes[col].mean()) / df_genes[col].std()
+    v1.get_gene_expression(gene_exp=df_genes)
+    '''
     for key in gene_dict:
         subset_ = df_Buen[key].values
         subset_ = (subset_ - subset_.mean()) / subset_.std()
         # print('subset shape', subset_.shape)
         df[key] = subset_
         v0.get_gene_expression(subset_, title_gene=gene_dict[key])
+    '''
+
     plt.show()
     # draw trajectory and evolution probability for each lineage
-    draw_sc_lineage_probability(v1, embedding, knn_hnsw, v0.full_graph_shortpath,
-                                          np.arange(0, len(true_label)), X_in)
+    draw_sc_lineage_probability(via_coarse=v0, via_fine=v1, embedding=embedding)
     plt.show()
 
 '''
@@ -2109,11 +1979,12 @@ def main_scATAC_Hemato(knn=20):
              too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
              visual_cluster_graph_pruning=.15, max_visual_outgoing_edges=2,is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
     v0.run_VIA()
-    v0.make_JSON(filename='scATAC_BuenrostroPC_temp.js')
+    #Make JSON FILES for interactive graph
+    #v0.make_JSON(filename='scATAC_BuenrostroPC_temp.js')
     df['via0'] = v0.labels
     df_mean = df.groupby('via0', as_index=False).mean()
 
-    gene_dict = {'ENSG00000092067_LINE336_CEBPE_D_N1': 'CEBPE Eosophil (GMP/Mono)',
+    gene_dict_long = {'ENSG00000092067_LINE336_CEBPE_D_N1': 'CEBPE Eosophil (GMP/Mono)',
                  'ENSG00000102145_LINE2081_GATA1_D_N7': 'GATA1 (MEP)', 'ENSG00000105610_LINE802_KLF1_D': 'KLF1 (MkP)',
                  'ENSG00000119919_LINE2287_NKX23_I': "NKX32", 'ENSG00000164330_LINE251_EBF1_D_N2': 'EBF1 (Bcell)',
                  'ENSG00000157554_LINE1903_ERG_D_N3': 'ERG', 'ENSG00000185022_LINE531_MAFF_D_N1': 'MAFF',
@@ -2122,31 +1993,25 @@ def main_scATAC_Hemato(knn=20):
                  'ENSG00000078399_LINE2186_HOXA9_D_N1': 'HOXA9', 'ENSG00000172216_LINE498_CEBPB_D_N8': 'CEBPB',
                  'ENSG00000123685_LINE392_BATF3_D': 'BATF3', 'ENSG00000140968_LINE2752_IRF8_D_N2': "IRF8",
                  "ENSG00000140968_LINE2754_IRF8_D_N1": "IRF8"}
-
-    for key in gene_dict:
-        subset_ = df[key].values
-        subset_ = (subset_ - subset_.mean()) / subset_.std()
-        # print('subset shape', subset_.shape)
-        v0.get_gene_expression(subset_, title_gene=gene_dict[key])
+    gene_dict = {'ENSG00000164330_LINE251_EBF1_D_N2': 'EBF1 (Bcell)',
+                 'ENSG00000123685_LINE392_BATF3_D': 'BATF3', 'ENSG00000102145_LINE2081_GATA1_D_N7': 'GATA1',
+                 'ENSG00000140968_LINE2752_IRF8_D_N2': "IRF8_N2", "ENSG00000140968_LINE2754_IRF8_D_N1": "IRF8_N1"}
+    marker_genes = [key for key in gene_dict]
+    df_genes = df[marker_genes]
+    df_genes.columns = [gene_dict[key] for key in gene_dict]
+    #for col in df_genes.columns:
+        #df_genes[col] = (df_genes[col] - df_genes[col].mean()) / df_genes[col].std()
+    v0.get_gene_expression(gene_exp=df_genes)
+    plt.show(    )
+    draw_trajectory_gams(v0, v0, embedding)
     plt.show()
-    '''
-
-    for key in gene_dict:
-        f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True)
-        v0.draw_piechart_graph(ax, ax1, type_pt='gene', gene_exp=df_mean[key].values, title=gene_dict[key])
-        plt.show()
-    '''
-    tsi_list = get_loc_terminal_states(v0, X_in)
+    gene_interest = 'ENSG00000123685_LINE392_BATF3_D'
+    v0.draw_piechart_graph(data_type='gene', gene_exp=df_mean[gene_interest], title=gene_dict[gene_interest])
+    plt.show()
 
     v1 = VIA(X_in, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
-             too_big_factor=0.1, super_cluster_labels=v0.labels, super_node_degree_list=v0.node_degree_list,
-             super_terminal_cells=tsi_list, root_user=root, is_coarse=False,
-             preserve_disconnected=True, dataset='scATAC',
-             visual_cluster_graph_pruning=.15, max_visual_outgoing_edges=2,
-             super_terminal_clusters=v0.terminal_clusters, random_seed=random_seed,
-             full_neighbor_array=v0.full_neighbor_array, full_distance_array=v0.full_distance_array,
-             ig_full_graph=v0.ig_full_graph,
-             csr_array_locally_pruned=v0.csr_array_locally_pruned)
+             too_big_factor=0.1,root_user=root, is_coarse=False,
+             preserve_disconnected=True, dataset='',  visual_cluster_graph_pruning=.15, max_visual_outgoing_edges=2,random_seed=random_seed, via_coarse=v0  )
     v1.run_VIA()
     df['via1'] = v1.labels
     df_mean = df.groupby('via1', as_index=False).mean()
@@ -2155,18 +2020,10 @@ def main_scATAC_Hemato(knn=20):
         v1.draw_piechart_graph(type_pt='gene', gene_exp=df_mean[key].values, title=gene_dict[key])
         plt.show()
 
-    # get knn-graph and locations of terminal states in the embedded space
-    knn_hnsw = make_knn_embeddedspace(embedding)
-    super_clus_ds_PCA_loc = sc_loc_ofsuperCluster_PCAspace(v0, v1, np.arange(0, len(v0.labels)))
     # draw overall pseudotime and main trajectories
-    draw_trajectory_gams(embedding, super_clus_ds_PCA_loc, v1.labels, v0.labels, v0.edgelist_maxout,
-                         v1.x_lazy, v1.alpha_teleport, v1.single_cell_pt_markov, true_label, knn=v0.knn,
-                         final_super_terminal=v1.revised_super_terminal_clusters,
-                         sub_terminal_clusters=v1.terminal_clusters,
-                         title_str='Pseudotime', ncomp=5)
+    draw_trajectory_gams(v0,v1,embedding)
     # draw trajectory and evolution probability for each lineage
-    draw_sc_lineage_probability(v1, embedding, knn_hnsw, v0.full_graph_shortpath,
-                                          np.arange(0, len(true_label)), X_in)
+    draw_sc_lineage_probability(v0,v1,embedding)
     plt.show()
     return
 
@@ -2184,7 +2041,13 @@ def via_wrapper(adata, true_label=None, embedding=None, knn=20, jac_std_global=0
     if true_label is None:
         true_label = v0.true_label
 
-    #p
+    if len(marker_genes) > 0:
+        df_ = pd.DataFrame(adata.X)
+        df_.columns = [i for i in adata.var_names]
+        df_magic = v0.do_impute(df_, magic_steps=3, gene_list=marker_genes)
+        v0.get_gene_expression(gene_exp=df_magic[marker_genes])
+
+    plt.show()
     draw_sc_lineage_probability(via_coarse=v0, via_fine=v0, embedding=embedding, )
 
     # plot coarse cluster heatmap
@@ -2228,12 +2091,8 @@ def via_wrapper(adata, true_label=None, embedding=None, knn=20, jac_std_global=0
         df_ = pd.DataFrame(adata.X)
         df_.columns = [i for i in adata.var_names]
         df_magic = v0.do_impute(df_, magic_steps=3, gene_list=marker_genes)
-        for gene_name in marker_genes:
-            # loc_gata = np.where(np.asarray(adata_counts_unfiltered.var_names) == gene_name)[0][0]
-            subset_ = df_magic[gene_name].values
-
-            v1.get_gene_expression(subset_, title_gene=gene_name)
-    plt.show()
+        v1.get_gene_expression(gene_exp=df_magic[marker_genes])
+        plt.show()
     return
 
 
@@ -2278,13 +2137,8 @@ def via_wrapper_disconnected(adata, true_label=None, embedding=None, knn=20, jac
         df_ = pd.DataFrame(adata.X)
         df_.columns = [i for i in adata.var_names]
         df_magic = v0.do_impute(df_, magic_steps=3, gene_list=marker_genes)
-        for gene_name in marker_genes:
-            # loc_gata = np.where(np.asarray(adata_counts_unfiltered.var_names) == gene_name)[0][0]
-            subset_ = df_magic[gene_name].values
-
-            v0.get_gene_expression(subset_, title_gene=gene_name)
-
-    plt.show()
+        v0.get_gene_expression(df_magic)
+        plt.show()
     return
 
 
@@ -2707,10 +2561,10 @@ def main_faced(cell_line='mcf7', cluster_graph_pruning_std=1.):
     print('ad.shape', ad.shape, 'true label length', len(true_label))
 
     embedding_pal = embedding  # ad.obsm['X_pca'][:,0:2]
-    paga_faced(ad, knn, embedding, true_label, cell_line=cell_line)  # use ad_paga for excluding corr vol
+    #paga_faced(ad, knn, embedding, true_label, cell_line=cell_line)  # use ad_paga for excluding corr vol
 
     #run_palantir_faced(ad, knn, embedding_pal, true_label, cell_line=cell_line, df_magic=df)
-    plt.show()
+    #plt.show()
 
     v0 = VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=3, knn=knn, resolution_parameter=1,
              cluster_graph_pruning_std=cluster_graph_pruning_std,
@@ -2755,7 +2609,11 @@ def main_faced(cell_line='mcf7', cluster_graph_pruning_std=1.):
         v0.get_gene_expression(subset_, title_gene=pheno_i)
         plt.show()
     '''
-
+    df_features = df[all_cols]
+    for col in df_features.columns:
+        df_features[col] = (df_features[col] - df_features[col].mean()) / df_features[col].std()
+    v0.get_gene_expression(df_features)
+    plt.show()
     df['via_coarse_cluster'] = v0.labels
     df['phases'] = true_label
     df['pt_coarse'] = v0.single_cell_pt_markov
@@ -2764,7 +2622,7 @@ def main_faced(cell_line='mcf7', cluster_graph_pruning_std=1.):
 
     v1 = VIA(X_in, true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
              cluster_graph_pruning_std=cluster_graph_pruning_std,
-             too_big_factor=0.05, root_user=root, is_coarse=False,
+             too_big_factor=0.05, root_user=root_user, is_coarse=False,
              preserve_disconnected=True, dataset='faced',
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2, random_seed=random_seed, pseudotime_threshold_TS=40, via_coarse=v0)
     v1.run_VIA()
@@ -2789,38 +2647,12 @@ def main_faced(cell_line='mcf7', cluster_graph_pruning_std=1.):
                 'Phase Fiber Centroid Displacement', 'Phase Fiber Pixel >Upper Percentile', 'Phase Fiber Pixel >Median',
                 'Mean Phase Arrangement', 'Phase Arrangement Var', 'Phase Arrangement Skewness',
                 'Phase Orientation Var', 'Phase Orientation Kurtosis']
-    plot_n = 7
-    fig, axs = plt.subplots(2, plot_n)  # (2,10)
-    for enum_i, pheno_i in enumerate(all_cols[0:14]):  # [0:14]
-        subset_ = df[pheno_i].values
-        subset_ = (subset_ - subset_.mean()) / subset_.std()
-        # print('subset shape', subset_.shape)
-        if enum_i >= plot_n:
-            row = 1
-            col = enum_i - plot_n
-        else:
-            row = 0
-            col = enum_i
 
-        ax = axs[row, col]
-        v1.get_gene_expression_multi(ax=ax, gene_exp=subset_, title_gene=pheno_i)
-    plt.title(cell_line)
-    plt.show()
-    fig2, axs2 = plt.subplots(2, plot_n)
-    for enum_i, pheno_i in enumerate(all_cols[2 * plot_n:2 * plot_n + 14]):
-        subset_ = df[pheno_i].values
-        # print('subset shape', subset_.shape)
-        if enum_i >= 10:
-            row = 1
-            col = enum_i - plot_n
-        else:
-            row = 0
-            col = enum_i
+    df_features = df[all_cols]
+    for col in df_features.columns:
+        df_features[col] = (df_features[col]-df_features.mean())/df_features.std()
+    v1.get_gene_expression(df_features)
 
-        ax2 = axs2[row, col]
-        v1.get_gene_expression_multi(ax=ax2, gene_exp=subset_, title_gene=pheno_i)  # usually v0
-    plt.title(cell_line)
-    plt.show()
 
     # draw overall pseudotime and main trajectories
 
@@ -2846,7 +2678,7 @@ def main1():
 
 
 def main():
-    dataset = 'Human'  #
+    dataset = 'wrapper'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
         main_Human(ncomps=100, knn=30, v0_random_seed=4,
@@ -2892,10 +2724,7 @@ def main():
         # list marker genes or genes of interest if known in advance. otherwise marker_genes = []
         marker_genes = ['Igll1', 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4', 'Sp7']  # irf4 down-up
         # call VIA
-        via_wrapper(adata, true_label, embedding, knn=15, ncomps=20, jac_std_global=0.15, root=[42], dataset='',
-                    random_seed=1,
-                    v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes, draw_all_curves=True,
-                    piegraph_edgeweight_scalingfactor=1.0, piegraph_arrow_head_width=0.05)
+        via_wrapper(adata, true_label, embedding, knn=15, ncomps=20, jac_std_global=0.15, root=[42], dataset='', random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes, draw_all_curves=True, piegraph_edgeweight_scalingfactor=1.0, piegraph_arrow_head_width=0.05)
 
 
 if __name__ == '__main__':

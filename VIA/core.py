@@ -14,12 +14,11 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.cm as cm
 from matplotlib.path import get_path_collection_extents
-import math
 import multiprocessing
 import pygam as pg
 from termcolor import colored
 from collections import Counter
-from pyVIA.velocity_utils import *#velocity_utils import *
+from pyVIA.velocity_utils import *
 from sklearn.preprocessing import normalize
 import math
 ###work in progress core
@@ -1976,7 +1975,7 @@ class VIA:
 
         return ig.Graph(list(zip(*csr_full_graph.nonzero()))).simplify(combine_edges='sum')
 
-    def get_gene_expression(self, gene_exp, title_gene="", spline_order=4, cmap='jet', verbose=False):
+    def get_gene_expression_solo(self, gene_exp, title_gene="", spline_order=4, cmap='jet', verbose=False):
         df_gene = pd.DataFrame()
         fig_0, ax = plt.subplots(dpi=300)
         sc_pt = self.single_cell_pt_markov
@@ -2045,45 +2044,103 @@ class VIA:
             plt.title(str_title)
         return
 
-    def get_gene_expression_multi(self, ax, gene_exp, title_gene=""):
+    def get_gene_expression(self, gene_exp, cmap='jet', dpi=150, marker_genes = [], linewidth = 2,n_splines=10, spline_order=4, fontsize_=8):
+        '''
+
+        :param gene_exp: dataframe where columns are features (gene)
+        :param cmap: default: 'jet'
+        :param dpi: default:150
+        :param marker_genes: Default is to use all genes in gene_exp. other provide a list of marker genes that will be used from gene_exp.
+        :param linewidth: default:2
+        :param n_slines: default:10
+        :param spline_order: default:4
+        :return:  None
+        '''
+
+        if len(marker_genes) >0: gene_exp=gene_exp[marker_genes]
         sc_pt = self.single_cell_pt_markov
         sc_bp_original = self.single_cell_bp
         n_terminal_states = sc_bp_original.shape[1]
 
-        jet = cm.get_cmap('jet', n_terminal_states)
-        cmap_ = jet(range(n_terminal_states))
+        palette = cm.get_cmap(cmap, n_terminal_states)
+        cmap_ = palette(range(n_terminal_states))
+        n_genes = gene_exp.shape[1]
 
-        for i in [0]:  # range(n_terminal_states):
-            sc_bp = sc_bp_original.copy()
-            if len(np.where(sc_bp[:, i] > 0.9)[
-                       0]) > 0:  # check in case this terminal state i cannot be reached (sc_bp is all 0)
+        fig_nrows, mod = divmod(n_genes, 4)
+        if mod == 0: fig_nrows = fig_nrows
+        if mod != 0: fig_nrows += 1
 
-                loc_i = np.where(sc_bp[:, i] > 0.9)[0]
-                val_pt = [sc_pt[pt_i] for pt_i in loc_i]  # TODO,  replace with array to speed up
+        fig_ncols = 4
+        fig, axs = plt.subplots(fig_nrows, fig_ncols, dpi=dpi)
 
-                max_val_pt = max(val_pt)
+        i_gene = 0  # counter for number of genes
+        i_terminal = 0 #counter for terminal cluster
+        # for i in range(n_terminal_states): #[0]
 
-                loc_i_bp = np.where(sc_bp[:, i] > 0.000)[0]  # 0.001
-                loc_i_sc = np.where(np.asarray(sc_pt) <= max_val_pt)[0]
+        for r in range(fig_nrows):
+            for c in range(fig_ncols):
+                if (i_gene < n_genes):
+                    for i_terminal in range(n_terminal_states):
+                        sc_bp = sc_bp_original.copy()
+                        if (len(np.where(sc_bp[:, i_terminal] > 0.9)[ 0]) > 0): # check in case this terminal state i cannot be reached (sc_bp is all 0)
+                            gene_i = gene_exp.columns[i_gene]
+                            loc_i = np.where(sc_bp[:, i_terminal] > 0.9)[0]
+                            val_pt = [sc_pt[pt_i] for pt_i in loc_i]  # TODO,  replace with array to speed up
 
-                loc_ = np.intersect1d(loc_i_bp, loc_i_sc)
+                            max_val_pt = max(val_pt)
 
-                gam_in = np.asarray(sc_pt)[loc_]
-                x = gam_in.reshape(-1, 1)
-                y = np.asarray(gene_exp)[loc_].reshape(-1, 1)
+                            loc_i_bp = np.where(sc_bp[:, i_terminal] > 0.000)[0]  # 0.001
+                            loc_i_sc = np.where(np.asarray(sc_pt) <= max_val_pt)[0]
 
-                weights = np.asarray(sc_bp[:, i])[loc_].reshape(-1, 1)
+                            loc_ = np.intersect1d(loc_i_bp, loc_i_sc)
 
-                if len(loc_) > 1:
-                    geneGAM = pg.LinearGAM(n_splines=10, spline_order=4, lam=10).fit(x, y, weights=weights)
-                    xval = np.linspace(min(sc_pt), max_val_pt, 100 * 2)
-                    yg = geneGAM.predict(X=xval)
+                            gam_in = np.asarray(sc_pt)[loc_]
+                            x = gam_in.reshape(-1, 1)
+
+                            y = np.asarray(gene_exp[gene_i])[loc_].reshape(-1, 1)
+
+                            weights = np.asarray(sc_bp[:, i_terminal])[loc_].reshape(-1, 1)
+
+                            if len(loc_) > 1:
+                                geneGAM = pg.LinearGAM(n_splines=n_splines, spline_order=spline_order, lam=10).fit(x, y, weights=weights)
+                                xval = np.linspace(min(sc_pt), max_val_pt, 100 * 2)
+                                yg = geneGAM.predict(X=xval)
+
+                            else:
+                                print('loc_ has length zero')
+
+                            if fig_nrows >1:
+                                axs[r,c].plot(xval, yg, color=cmap_[i_terminal], linewidth=linewidth, zorder=3, label=f"Lineage:{self.terminal_clusters[i_terminal]}")
+                                axs[r, c].set_title(gene_i,fontsize=fontsize_)
+                                # Set tick font size
+                                for label in (axs[r,c].get_xticklabels() + axs[r,c].get_yticklabels()):
+                                    label.set_fontsize(fontsize_-1)
+                                if i_gene == n_genes -1:
+                                    axs[r,c].legend(frameon=False, fontsize=fontsize_)
+                                    axs[r, c].set_xlabel('Time', fontsize=fontsize_)
+                                    axs[r, c].set_ylabel('Intensity', fontsize=fontsize_)
+                                axs[r,c].spines['top'].set_visible(False)
+                                axs[r,c].spines['right'].set_visible(False)
+                            else:
+                                axs[c].plot(xval, yg, color=cmap_[i_terminal], linewidth=linewidth, zorder=3,   label=f"Lineage:{self.terminal_clusters[i_terminal]}")
+                                axs[c].set_title(gene_i, fontsize=fontsize_)
+                                # Set tick font size
+                                for label in (axs[c].get_xticklabels() + axs[c].get_yticklabels()):
+                                    label.set_fontsize(fontsize_-1)
+                                if i_gene == n_genes -1:
+                                    axs[c].legend(frameon=False,fontsize=fontsize_)
+                                    axs[ c].set_xlabel('Time', fontsize=fontsize_)
+                                    axs[ c].set_ylabel('Intensity', fontsize=fontsize_)
+                                axs[c].spines['top'].set_visible(False)
+                                axs[c].spines['right'].set_visible(False)
+                    i_gene+=1
                 else:
-                    print('loc_ has length zero')
+                    if fig_nrows > 1: axs[r,c].axis('off')
+                    else: axs[c].axis('off')
+        return
 
-                ax.plot(xval, yg, color='navy', linewidth=3.5, zorder=3, label=f"TS:{self.terminal_clusters[i]}")
 
-            ax.set_title(title_gene)
+
 
     def do_impute(self, df_gene, magic_steps=3, gene_list=[]):
         # ad_gene is an ann data object from scanpy
