@@ -19,7 +19,7 @@ import multiprocessing
 import pygam as pg
 from termcolor import colored
 from collections import Counter
-from velocity_utils import *
+from pyVIA.velocity_utils import *#velocity_utils import *
 from sklearn.preprocessing import normalize
 import math
 ###work in progress core
@@ -567,17 +567,17 @@ def draw_sc_lineage_probability(via_coarse, via_fine, embedding, idx=None, cmap_
     n_terminal_clusters = len(via_fine.terminal_clusters)
     fig_nrows, mod = divmod(n_terminal_clusters, 4)
     if mod ==0: fig_nrows=fig_nrows
-    if mod != 0: fig_nrows+=1
+    if mod != 0:        fig_nrows+=1
+
     fig_ncols = 4
     fig, axs = plt.subplots(fig_nrows,fig_ncols,dpi=dpi)
     ti = 0 # counter for terminal cluster
     #for i, ti in enumerate(via_fine.terminal clusters):
-    print()
     for r in range(fig_nrows):
         for c in range(fig_ncols):
             if ti < n_terminal_clusters:
-
-                plot_sc_pb(axs[r,c], fig, embedding, p1_sc_bp[:, ti], ti= via_fine.terminal_clusters[ti], cmap_name=cmap_name, scatter_size=scatter_size)
+                if fig_nrows ==1: plot_sc_pb(axs[c], fig, embedding, p1_sc_bp[:, ti], ti= via_fine.terminal_clusters[ti], cmap_name=cmap_name, scatter_size=scatter_size)
+                else: plot_sc_pb(axs[r,c], fig, embedding, p1_sc_bp[:, ti], ti= via_fine.terminal_clusters[ti], cmap_name=cmap_name, scatter_size=scatter_size)
                 ti+=1
                 loc_i = np.where(p1_labels == ti)[0]
                 val_pt = [p1_sc_pt_markov[i] for i in loc_i]
@@ -619,7 +619,8 @@ def draw_sc_lineage_probability(via_coarse, via_fine, embedding, idx=None, cmap_
                             revised_sc_path.append(path[enum_i])  # index of single cell
                 print(f"{datetime.now()}\tCluster level path on sc-knnGraph from Root Cluster {via_fine.root[p1_cc[ti]]} to Terminal Cluster {ti} along path: {revised_cluster_path}")
             fig.patch.set_visible(False)
-            axs[r,c].axis('off')
+            if fig_nrows==1: axs[c].axis('off')
+            else: axs[r,c].axis('off')
 
 def get_biased_weights(edges, weights, pt, round=1):
     # small nu means less biasing (0.5 is quite mild)

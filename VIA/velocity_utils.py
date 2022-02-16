@@ -1,4 +1,3 @@
-#based on : https://github.com/theislab/scvelo/blob/1805ab4a72d3f34496f0ef246500a159f619d3a2/scvelo/plotting/velocity_embedding_grid.py#L27
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from scipy.stats import norm as normal
@@ -49,7 +48,7 @@ def compute_velocity_on_grid(
     cutoff_perc=None,
 ):
 
-    #print(X_emb.shape, V_emb.shape)
+    #adapted from: https://github.com/theislab/scvelo/blob/1805ab4a72d3f34496f0ef246500a159f619d3a2/scvelo/plotting/velocity_embedding_grid.py#L27
 
     # remove invalid cells
     idx_valid = np.isfinite(X_emb.sum(1) + V_emb.sum(1))

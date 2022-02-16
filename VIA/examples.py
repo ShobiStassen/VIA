@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 import umap
 import phate
 import seaborn as sns
-from pyVIA.core import *
+from pyVIA.core import * #pyVIA.core import *
 
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
     import scvelo as scv
@@ -241,6 +241,8 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     v0.draw_piechart_graph(type_data='gene', gene_exp=df_magic_cluster['GATA1'].values, title='GATA1', cmap='coolwarm')
     plt.show()
 
+    draw_sc_lineage_probability(v0,v0, tsnem)
+    plt.show()
     via_streamplot(v0, tsnem, scatter_size=20)
     plt.show()
 
@@ -289,7 +291,6 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
                       'IRF8',
                       'MPO', 'CSF1R', 'GATA2', 'CD79B',
                       'CD34', 'GATA1', 'IL3RA']:  # ,'SPI1', 'CD34','CSF1R','IL3RA','IRF4', 'CSF2RA','ITGAX']:
-        print('gene name', gene_name)
         # DC markers https://www.cell.com/pb-assets/products/nucleus/nucleus-phagocytes/rnd-systems-dendritic-cells-br.pdf
         gene_name_dict = {'GATA1': 'GATA1', 'GATA2': 'GATA2', 'ITGA2B': 'CD41 (Mega)', 'MPO': 'MPO (Mono)',
                           'CD79B': 'CD79B (B)', 'IRF8': 'IRF8 (DC)', 'SPI1': 'PU.1', 'CD34': 'CD34',
@@ -2182,6 +2183,10 @@ def via_wrapper(adata, true_label=None, embedding=None, knn=20, jac_std_global=0
     v0.run_VIA()
     if true_label is None:
         true_label = v0.true_label
+
+    #p
+    draw_sc_lineage_probability(via_coarse=v0, via_fine=v0, embedding=embedding, )
+
     # plot coarse cluster heatmap
     draw_trajectory_gams(via_coarse=v0, via_fine=v0, embedding=embedding, draw_all_curves=draw_all_curves)
     plt.show()
@@ -2215,9 +2220,10 @@ def via_wrapper(adata, true_label=None, embedding=None, knn=20, jac_std_global=0
 
 
     draw_trajectory_gams(via_coarse=v0, via_fine=v1, embedding=embedding,draw_all_curves=draw_all_curves)
+
     # draw trajectory and evolution probability for each lineage
-    #draw_sc_lineage_probability(v1, embedding, knn_hnsw, v0.full_graph_shortpath,                                          np.arange(0, len(true_label)), adata.X)
     draw_sc_lineage_probability(v0,v1,embedding)
+
     if len(marker_genes) > 0:
         df_ = pd.DataFrame(adata.X)
         df_.columns = [i for i in adata.var_names]
