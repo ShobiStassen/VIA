@@ -47,7 +47,7 @@ def run_generic_wrapper(foldername = "/home/shobi/Trajectory/Datasets/Bcell/", k
     marker_genes = ['Igll1', 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4', 'Sp7']  # irf4 down-up
     # call VIA. We identify an early (suitable) start cell root = [42]. Can also set an arbitrary value
     via.via_wrapper(adata, true_label, embedding, knn=knn, ncomps=ncomps, jac_std_global=0.15, root=[42], dataset='',
-                random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes, piegraph_edgeweight_scalingfactor=1, piegraph_arrow_head_width=.2)
+                random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes, piegraph_edgeweight_scalingfactor=1, piegraph_arrow_head_width=.1)
 
 def run_faced_cell_cycle(foldername = '/home/shobi/Trajectory/Datasets/FACED/'):
     #FACED imaging cytometry based biophysical features
@@ -198,14 +198,15 @@ def run_scATAC_Buenrostro_Hemato(foldername = '/home/shobi/Trajectory/Datasets/s
     root = [1200]  # HSC cell
 
     v0 = via.VIA(X_in, true_label, jac_std_global=0.5, dist_std_local=1, knn=knn,
-                 too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed, is_coarse=True, preserve_disconnected=False)
+                 too_big_factor=0.3, root_user=root, dataset='', random_seed=random_seed, is_coarse=True, preserve_disconnected=False)
     v0.run_VIA()
-    v0.via_streamplot(embedding)
+    via.via_streamplot(v0, embedding)
     plt.show()
-
+    via.draw_sc_lineage_probability(v0, v0, embedding, scatter_size=5)
+    plt.show()
     v1 = via.VIA(X_in, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
                  too_big_factor=0.1, super_cluster_labels=v0.labels, root_user=root, is_coarse=False,
-                 preserve_disconnected=True, dataset='scATAC',
+                 preserve_disconnected=True, dataset='',
                  random_seed=random_seed, via_coarse=v0)
     v1.run_VIA()
 
@@ -214,7 +215,7 @@ def run_scATAC_Buenrostro_Hemato(foldername = '/home/shobi/Trajectory/Datasets/s
     gene_dict = {'ENSG00000092067_LINE336_CEBPE_D_N1': 'CEBPE Eosophil (GMP/Mono)',
                  'ENSG00000102145_LINE2081_GATA1_D_N7': 'GATA1 (MEP)'}
     for key in gene_dict:
-        v1.draw_piechart_graph(type_pt='gene', gene_exp=df_mean[key].values, title=gene_dict[key])
+        v1.draw_piechart_graph(type_data='gene', gene_exp=df_mean[key].values, title=gene_dict[key])
         plt.show()
     # get knn-graph and locations of terminal states in the embedded space
         # draw overall pseudotime and main trajectories
@@ -222,7 +223,7 @@ def run_scATAC_Buenrostro_Hemato(foldername = '/home/shobi/Trajectory/Datasets/s
     via.draw_trajectory_gams(v0, v1, embedding)
     plt.show()
     # draw trajectory and evolution probability for each lineage
-    via.draw_sc_evolution_trajectory_dijkstra(v0, v1, embedding)
+    via.draw_sc_lineage_probability(v0, v1, embedding)
     plt.show()
 
 def run_generic_discon(foldername ="/home/shobi/Trajectory/Datasets/Toy4/"):
