@@ -41,8 +41,6 @@ Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Data
      <a href="https://shobistassen.github.io/bifurc.html"><img width="100%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_MainFig.png?raw=true"></a>
 </p> 
 
-
-
 ### Disconnected toy dataset
 <p align="center">
      <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_MainFig.png?raw=true" alt="Trulli" width="100%" >
@@ -52,7 +50,7 @@ Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Data
      <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/streamplotspng.png?raw=true" alt="Trulli" width="100%" >
 </p> 
 <p align="center">
-     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animcation.gif?raw=true" alt="Trulli" width="100%" >
+     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" alt="Trulli" width="100%" >
 </p>
 
 ### To run on Linux:
