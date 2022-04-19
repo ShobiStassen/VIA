@@ -8,7 +8,7 @@ Please refer to our [paper](https://www.nature.com/articles/s41467-021-25773-3) 
 </p>
 
 ## Examples and Visualization
-There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. The notebooks are best viewed when opening the URL through NB Viewer. **The NB for multifurcating data shows a step-by-step usage tutorial.** If you experience issues with opening the notebook from Github (opening from within Github can be patchy), then please copy the Jupyter Notebook URL and paste it into NB Viewer https://nbviewer.jupyter.org/  
+There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. :eight_spoked_asterisk: **The NB for multifurcating data shows a step-by-step usage tutorial.** If you experience issues with opening the notebook from Github (opening from within Github can be patchy), then please copy the Jupyter Notebook URL and paste it into NB Viewer https://nbviewer.jupyter.org/  
 
 **scATAC-seq dataset of Human Hematopoiesis represented by VIA graphs** *(click image to open interactive graph)*
 <p align="center">
@@ -19,7 +19,7 @@ There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/m
 ## Jupyter Notebook Tutorials
 notebook       | details         | dataset  | reference 
 ---------------| ---------------| ---------| ----------
-[*Multifurcation*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb) | 4-leaf simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | [DynToy](https://github.com/dynverse/dyntoy)
+[*Multifurcation: Starter Tutorial*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb) | 4-leaf simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | [DynToy](https://github.com/dynverse/dyntoy)
 [*Disconnected*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb) | disconnected simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | [DynToy](https://github.com/dynverse/dyntoy)
 [*Human Embryoid*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_EmbryoidBody.ipynb) | 16,825 ESCs | [EB scRNA-seq](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9Ew4RHf/view?usp=sharing) and [embedding](https://github.com/ShobiStassen/VIA/tree/master/Datasets)| Moon et al. (2019)
 [*FACED image-based*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb) | 2036 MCF7 cells in cell cycle | [MCF7 FACED](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | in-house data
