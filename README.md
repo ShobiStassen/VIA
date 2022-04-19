@@ -2,6 +2,11 @@
 VIA is a single-cell Trajectory Inference method that offers topology construction, pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. VIA combines lazy-teleporting random walks and Monte-Carlo Markov Chain simulations to overcome common challenges such as 1) accurate terminal state and lineage inference, 2) ability to capture combination of cyclic, disconnected and tree-like structures, 3) scalability in feature and sample space. 4) Generalizability to multi-omic analysis. In addition to transcriptomic data, VIA works on scATAC-seq, flow and imaging cytometry data. 
 Please refer to our [paper](https://www.nature.com/articles/s41467-021-25773-3) for more details. [![DOI](https://zenodo.org/badge/212254929.svg)](https://zenodo.org/badge/latestdoi/212254929)
 
+#### :eight_spoked_asterisk: Fine-grained vector field without using RNA-velocity
+<p align="center">
+     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" alt="Trulli" width="100%" >
+</p>
+
 ## Examples and Visualization
 There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. The notebooks are best viewed when opening the URL through NB Viewer. **The NB for multifurcating data shows a step-by-step usage tutorial.** If you experience issues with opening the notebook from Github (opening from within Github can be patchy), then please copy the Jupyter Notebook URL and paste it into NB Viewer https://nbviewer.jupyter.org/  
 
@@ -40,14 +45,14 @@ Two examples [toy datasets](https://github.com/ShobiStassen/VIA/tree/master/Data
 <p align="center">
      <a href="https://shobistassen.github.io/bifurc.html"><img width="100%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_MainFig.png?raw=true"></a>
 </p> 
-<p align="center">
-     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" alt="Trulli" width="100%" >
-</p>
+
 ### Disconnected toy dataset
 <p align="center">
      <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy4_MainFig.png?raw=true" alt="Trulli" width="100%" >
 </p> 
 
+#### :eight_spoked_asterisk: Fine-grained vector field without using RNA-velocity
+Refer to the Jupiter Notebooks to plot these fine-grained vector fields of the sc-trajectories even when there is no RNA-velocity available.
 <p align="center">
      <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/streamplotspng.png?raw=true" alt="Trulli" width="100%" >
 </p> 
