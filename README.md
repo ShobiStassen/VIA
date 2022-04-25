@@ -8,7 +8,8 @@ Please refer to our [paper](https://www.nature.com/articles/s41467-021-25773-3) 
 </p>
 
 ## Examples and Visualization
-There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. :eight_spoked_asterisk: **The NB for multifurcating data shows a step-by-step usage tutorial.** If you experience issues with opening the notebook from Github (opening from within Github can be patchy), then please copy the Jupyter Notebook URL and paste it into NB Viewer https://nbviewer.jupyter.org/  
+Installations and tutorials available on github and [readthedocs](https://pyvia.readthedocs.io/en/latest/)
+There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) with step-by-step code for real and simulated datasets. :eight_spoked_asterisk: *The NB for multifurcating data shows a step-by-step usage tutorial.*
 
 **scATAC-seq dataset of Human Hematopoiesis represented by VIA graphs** *(click image to open interactive graph)*
 <p align="center">
