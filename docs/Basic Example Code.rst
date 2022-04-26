@@ -7,12 +7,12 @@ The examples below show how to run VIA on generic connected and disconnected dat
 
 A `test script <https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py>`_ is available for some of the different datasets, please change the foldername accordingly to the folder containing relevant data files
 
-* 1.a Toy Data (multifurcation) [Multifurcation Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb)
-* 1.b Toy Data (disconnected) [Disconnected Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb)
+* 1.a Toy Data (multifurcation) `Multifurcation Jupyter NB <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb>`_
+* 1.b Toy Data (disconnected) `Disconnected Jupyter NB <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb>`_
 * 2.a **General input data** formatting and wrapper function
 * 2.b **General disconnected trajectories** wrapper function 
 * 3.a Human Embryoid Bodies (wrapper function for testing VIA)
-* 3.b Human Embryoid Bodies (Configuring VIA) [EB Jupyter NB](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_EmbryoidBody.ipynb)
+* 3.b Human Embryoid Bodies (Configuring VIA) `EB Jupyter NB <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_EmbryoidBody.ipynb>`_
        
 
 
@@ -23,13 +23,14 @@ Two examples `toy datasets <https://github.com/ShobiStassen/VIA/tree/master/Data
 **1.a/b Run on Linux**
 
 All examples are shown according to Linux OS, small modifications are required to run on a Windows OS (see below)::
+
   import pyVIA.core as via
   # ensure the data and label files are in csv format when you download/save them
-  #multifurcation
-  #the root is automatically set to  root_user = 'M1'
+  # multifurcation
+  # the root is automatically set to  root_user = 'M1'
   via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername = ".../Trajectory/Datasets/") #multifurcation
-  #disconnected trajectory
-  #In the wrapper for Toy, the root is automatically set as a list root_user = ['T1_M1', 'T2_M1'] # e.g. T2_M3 is a cell belonging to the 3rd Milestone (M3) of the   second Trajectory (T2)
+  # disconnected trajectory
+  # In the wrapper for Toy, the root is automatically set as a list root_user = ['T1_M1', 'T2_M1'] # e.g. T2_M3 is a cell belonging to the 3rd Milestone (M3) of the   second Trajectory (T2)
   via.main_Toy(ncomps=10, knn=30,dataset='Toy4',random_seed=2,foldername =".../Trajectory/Datasets/") #2 disconnected trajectories
 
 **1.a/b Run on Windows**
@@ -62,7 +63,7 @@ Windows may require minor modifications in calling the code due to the way multi
   <img src= "https://github.com/ShobiStassen/VIA/blob/master/Figures/streamplotspng.png?raw=true" width="600px" align="center" </a>
 
 
-**Disconnected toy dataset 1.b ** `*(click to open interactive graph)* <https://shobistassen.github.io/bifurc.html>`_
+**Disconnected toy dataset 1.b** `(click to open interactive graph) <https://shobistassen.github.io/bifurc.html>`_
 
 .. raw:: html
 
@@ -74,7 +75,7 @@ Windows may require minor modifications in calling the code due to the way multi
 -----------------------------------------------------------------------------------------------
 These wrapper functions are a good start but we highly recommend you look at the tutorials as you will be afforded a much higher degree of control without much added complexity. The below wrappers operate in the 2-iteration format (a coarse followed by a fine-grained), but this is not always needed and you will have more intuitive for the behaviour of your data by following the steps in the Tutorials. Nonetheless, the following wrappers are a great way to start to familiarize yourself with the various outputs from VIA. 
 
-Datasets and labels used in this example are provided in [Datasets](https://github.com/ShobiStassen/VIA/tree/master/Datasets).::
+Datasets and labels used in this example are provided in `Datasets <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_ ::
 
 	# Read the two files:
 	# 1) The first file contains 200PCs of the Bcell filtered and normalized data for the first 5000 HVG.
