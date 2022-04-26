@@ -21,7 +21,7 @@ There are several [Jupyter Notebooks](https://github.com/ShobiStassen/VIA/tree/m
 notebook       | details         | dataset  | reference 
 ---------------| ---------------| ---------| ----------
 [*Multifurcation: Starter Tutorial*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb) | 4-leaf simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | [DynToy](https://github.com/dynverse/dyntoy)
-[*Disconnected*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb) | disconnected simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | [DynToy](https://github.com/dynverse/dyntoy)
+[*Disconnected*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb) | disconnected simulation | [Disconnected](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | [DynToy](https://github.com/dynverse/dyntoy)
 [*Human Embryoid*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_EmbryoidBody.ipynb) | 16,825 ESCs | [EB scRNA-seq](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9Ew4RHf/view?usp=sharing) and [embedding](https://github.com/ShobiStassen/VIA/tree/master/Datasets)| Moon et al. (2019)
 [*FACED image-based*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb) | 2036 MCF7 cells in cell cycle | [MCF7 FACED](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | in-house data
 [*scATAC-seq Hematopoiesis*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_scATAC-seq_HumanHematopoiesis.ipynb) | Human hematopoiesis | [scATAC-seq](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | Buenrostro et al. (2018)
@@ -191,7 +191,7 @@ pip install pyVIA
 If the pip install doesn't work, it usually suffices to first install all the requirements (using pip) and subsequently install VIA (also using pip). 
 Note that on Windows if you do not have Visual C++ (required for hnswlib) you can install using [this link](https://www.scivision.dev/python-windows-visual-c-14-required/) . 
 ```
-pip install pybind11, hnswlib, python-igraph, leidenalg>=0.7.0, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate, matplotlib,scanpy
+pip install pybind11, hnswlib, igraph, leidenalg>=0.7.0, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate, matplotlib,scanpy
 pip install pyVIA
 ```
 ## Parameters and Attributes
@@ -222,12 +222,8 @@ As shown in the examples, VIA is built to run on a single or double iteration. F
 | Input Parameter | Description |
 | ---------- |----------|
 | `is_coarse` |  (optional, default = True) If running VIA in two steps, for the second fine-grained, set to "False'|
-|`super_cluster_labels`| Set this to v0.labels (clustering output of first pass "v0")|
-|`super_terminal_cells`| super_terminal_cells = via.get_loc_terminal_states(v0, data)|
-|`full_neighbor_array`|full_neighbor_array=v0.full_neighbor_array. KNN graph from first pass of via - neighbor array|
-|`full_distance_array`|full_distance_array=v0.full_distance_array. KNN graph from first pass of via - edge weights|
-|`ig_full_graph`|ig_full_graph=v0.ig_full_graph igraph of the KNN graph from first pass of via|
-|`csr_array_locally_pruned`|csr_array_locally_pruned=v0.csr_array_locally_pruned. CSR matrix of the locally pruned KNN graph|
+|`via_coarse`|(optional, default = None) If a second fine-grained iteration of VIA is run using the terminal states, roots and single-cell graph obtained in the first coarse-pass of VIA, then via_coarse = v0 (the VIA object from first iteration)|
+
 
 | Attributes | Description |
 | ---------- |----------|
@@ -236,3 +232,9 @@ As shown in the examples, VIA is built to run on a single or double iteration. F
 | `single_cell_pt_markov` | (list) computed pseudotime|
 |`single_cell_bp`|(array) computed single cell branch probabilities (lineage likelihoods). n_cells x n_terminal states. The columns each correspond to a terminal state, in the same order presented in the'terminal_clusters' attribute|
 | `terminal clusters` | (list) terminal clusters found by VIA|
+|`super_cluster_labels`| Set this to v0.labels (clustering output of first pass "v0")|
+|`super_terminal_cells`| super_terminal_cells = via.get_loc_terminal_states(v0, data)|
+|`full_neighbor_array`|full_neighbor_array=v0.full_neighbor_array. KNN graph from first pass of via - neighbor array|
+|`full_distance_array`|full_distance_array=v0.full_distance_array. KNN graph from first pass of via - edge weights|
+|`ig_full_graph`|ig_full_graph=v0.ig_full_graph igraph of the KNN graph from first pass of via|
+|`csr_array_locally_pruned`|csr_array_locally_pruned=v0.csr_array_locally_pruned. CSR matrix of the locally pruned KNN graph|
