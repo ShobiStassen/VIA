@@ -1,7 +1,7 @@
 |DOI|
 
-pyVIA - Multi-Omic Single-Cell Trajectory Inference 
-====================================================
+pyVIA
+======
 
 **VIA** is a single-cell Trajectory Inference method that offers topology construction, pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. VIA combines lazy-teleporting random walks and Monte-Carlo Markov Chain simulations to overcome common challenges such as 1) accurate terminal state and lineage inference, 2) ability to capture combination of cyclic, disconnected and tree-like structures, 3) scalability in feature and sample space. 4) Generalizability to multi-omic analysis. In addition to transcriptomic data, VIA works on scATAC-seq, flow and imaging cytometry data. 
 Please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`_ for more details. 
@@ -19,8 +19,8 @@ Examples and Visualization
 There are several `Jupyter Notebooks <https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks>`_ here and on the github page with step-by-step code for real and simulated datasets. :eight_spoked_asterisk: **The NB for multifurcating data shows a step-by-step usage tutorial.** 
 
 
-scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://shobistassen.github.io/toggle_data.html>`_
--------------------------------------------------------------------------------------------------------------------------------
+**scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://shobistassen.github.io/toggle_data.html>`_**
+
 
 .. raw:: html
 
@@ -62,28 +62,7 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
      - CD34 `scRNA-seq <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_
      - Setty et al. (2019)
 
-.. toctree::
-   :maxdepth: 1
-   :caption: General:
-   :hidden:
-   
-   pyVia-home
-   Installation
-   Parameters and Attributes 
-   Basic Example Code
 
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Tutorials:
-   :hidden:
-
-   Basic tutorial
-   Disconnected trajectories
-   Hematopoiesis-scRNAseq
-   Using RNA-velocity
-   Time-series
-   Imaging Cytometry (cell cycle)
 
 
 .. |DOI| image:: https://zenodo.org/badge/212254929.svg

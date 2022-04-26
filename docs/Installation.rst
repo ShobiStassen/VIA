@@ -1,5 +1,6 @@
 Installation
-----------------
+=============
+
 **install using pip** ::
   
   conda create --name ViaEnv python=3.7 

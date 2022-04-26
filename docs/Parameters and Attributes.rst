@@ -2,10 +2,12 @@
 Parameters and Attributes
 ==========================
 
+
 **Input Parameters**
 ----------------------
 
-.. list-table:: Parameters
+
+.. list-table:: 
    :widths: 25 25 
    :header-rows: 1
 
