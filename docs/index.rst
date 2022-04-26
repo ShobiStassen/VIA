@@ -16,7 +16,7 @@ Please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`
 
 Examples and Visualization
 --------------------------
-There are several `Jupyter Notebooks <https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks>`_ here and on the github page with step-by-step code for real and simulated datasets. :eight_spoked_asterisk: **The NB for multifurcating data shows a step-by-step usage tutorial.** 
+There are several `Jupyter Notebooks <https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks>`_ here and on the github page with step-by-step code for real and simulated datasets. |:eight_spoked_asterisk:| **The NB for multifurcating data shows a step-by-step usage tutorial.** 
 
 
 scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://shobistassen.github.io/toggle_data.html>`_
