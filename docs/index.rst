@@ -18,14 +18,48 @@ Examples and Visualization
 There are several `Jupyter Notebooks <https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks>`_ here and on the github page with step-by-step code for real and simulated datasets. :eight_spoked_asterisk: **The NB for multifurcating data shows a step-by-step usage tutorial.** 
 
 
-**scATAC-seq dataset of Human Hematopoiesis represented by VIA graphs** *(click image to open interactive graph)*
------------------------------------------------------------------------------------------------------------------------------
+scATAC-seq Human Hematopoiesis `*(click to open interactive VIA graph)* <https://shobistassen.github.io/toggle_data.html>`_
+-------------------------------------------------------------------------------------------------------------------------------
 
 .. raw:: html
 
-  <img src="https://shobistassen.github.io/toggle_data.html" width="250px" align="center" </a>
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/scATAC_BuenrostroPCs_MainFig.png?raw=true" width="250px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/scATAC_BuenrostroPCs_MainFig.png?raw=true" width="600px" align="center" </a>
 
+**Notebooks**
+
+.. list-table:: Parameters
+   :widths: 25 25 25 25
+   :header-rows: 1
+
+   * - Notebook
+     - details
+     - dataset
+     - reference
+
+   * - Multifurcation: `Starter Tutorial <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb>`_
+     - 4-leaf simulation
+     - `4-leaf <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_
+     - `DynToy <https://github.com/dynverse/dyntoy>`_
+
+   * - Disconnected `Tutorial <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb>`_
+     - disconnected simulation
+     - `4-leaf <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_
+     - `DynToy <https://github.com/dynverse/dyntoy>`_
+
+   * - Human `Embryoid <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_EmbryoidBody.ipynb>`_
+     - 16,825 ESCs
+     - EB `scRNA-seq <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_ and `embedding <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_
+     - Moon et al. (2019)
+
+   * - scATAC-seq `Hematopoiesis <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_scATAC-seq_HumanHematopoiesis.ipynb>`_
+     - Human hematopoiesis
+     - `scATAC-seq <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_
+     - Buenrostro et al. (2018)
+
+   * - scRNA-seq `Hematopoiesis <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_scRNA_Hematopoiesis.ipynb>`_
+     - Human hematopoiesis (5780 cells)
+     - CD34 `scRNA-seq <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_
+     - Setty et al. (2019)
 
 .. toctree::
    :maxdepth: 2
@@ -33,6 +67,8 @@ There are several `Jupyter Notebooks <https://github.com/ShobiStassen/VIA/tree/m
    :hidden:
 
    Installation
+   Parameters and Attributes 
+   Basic Example Code
 
 .. toctree::
    :maxdepth: 2
@@ -44,8 +80,7 @@ There are several `Jupyter Notebooks <https://github.com/ShobiStassen/VIA/tree/m
    Hematopoiesis-scRNAseq
    Using RNA-velocity
    Time-series
-   Cytometry
-
+   Imaging Cytometry (cell cycle)
 
 
 .. |DOI| image:: https://zenodo.org/badge/212254929.svg
