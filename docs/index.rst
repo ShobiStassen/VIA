@@ -84,6 +84,7 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
    Using RNA-velocity
    Time-series
    Imaging Cytometry (cell cycle)
+   mESC_timeseries
 
 
 .. |DOI| image:: https://zenodo.org/badge/212254929.svg
