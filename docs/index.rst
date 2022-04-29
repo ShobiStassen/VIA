@@ -86,6 +86,7 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
    Imaging Cytometry (cell cycle)
    mESC_timeseries
    ViaJupyter_Pancreas_RNAvelocity
+   ViaJupyter_scRNAVelocity_hematopoiesis
 
 
 .. |DOI| image:: https://zenodo.org/badge/212254929.svg
