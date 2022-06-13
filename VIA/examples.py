@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 import umap
 import phate
 import seaborn as sns
-from pyVIA.core import * #pyVIA.core import *
+from pyVIA.core import * #pyVIA.core import * core_working import*
 
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
     import scvelo as scv
@@ -213,7 +213,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
              too_big_factor=0.3,
              root_user=root_user, dataset='', preserve_disconnected=True, random_seed=v0_random_seed,
               is_coarse=True, pseudotime_threshold_TS=10,
-             neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1)  # *.4 root=1,
+             neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1, edgebundle_pruning_twice=True)  # *.4 root=1,
     v0.run_VIA()
 
     #MAKE JSON for interactive graph
@@ -259,7 +259,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
 
     draw_sc_lineage_probability(v0,v0, tsnem)
     plt.show()
-    via_streamplot(v0, tsnem, scatter_size=20)
+    via_streamplot(v0, tsnem, scatter_size=50)
     plt.show()
 
     draw_trajectory_gams(v0,v0, tsnem, draw_all_curves=False)
@@ -288,7 +288,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
              too_big_factor=0.1, root_user=root_user,
              x_lazy=0.95, alpha_teleport=0.99, dataset='humanCD34', preserve_disconnected=True,
              super_terminal_clusters=v0.terminal_clusters, is_coarse=False,
-             random_seed=v0_random_seed, pseudotime_threshold_TS=10, via_coarse=v0)
+             random_seed=v0_random_seed, pseudotime_threshold_TS=10, via_coarse=v0, edgebundle_pruning_twice=True)
     v1.run_VIA()
 
 
@@ -614,7 +614,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
         jac_std_global = 0.15
     import umap
 
-    embedding = umap.UMAP().fit_transform(adata_counts.obsm['X_pca'][:, 0:10])  # 50
+    embedding = umap.UMAP(min_dist=0.5).fit_transform(adata_counts.obsm['X_pca'][:, 0:10])  # 50
 
     # embedding = adata_counts.obsm['X_pca'][:, 0:2]
     # plt.scatter(embedding[:,0],embedding[:,1])
@@ -628,6 +628,8 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
              random_seed=random_seed, piegraph_arrow_head_width=0.2,
              piegraph_edgeweight_scalingfactor=1.0)  # *.4 root=2,
     v0.run_VIA()
+
+    animated_streamplot(v0, embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1, saveto='/home/shobi/Trajectory/Datasets/Toy3/test.gif' )
     via_streamplot(v0, embedding)
     plt.show()
     super_labels = v0.labels
@@ -2031,12 +2033,12 @@ def main_scATAC_Hemato(knn=20):
 def via_wrapper(adata, true_label=None, embedding=None, knn=20, jac_std_global=0.15, root=0, dataset='', random_seed=42,
                 v0_toobig=0.3, v1_toobig=0.1, marker_genes=[], ncomps=20, preserve_disconnected=False,
                 cluster_graph_pruning_std=0.15, draw_all_curves=True, piegraph_edgeweight_scalingfactor=1.5,
-                piegraph_arrow_head_width=0.2):
+                piegraph_arrow_head_width=0.2,edgebundle_pruning=None,edgebundle_pruning_twice=False):
     v0 = VIA(adata.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
              too_big_factor=v0_toobig, root_user=root, dataset=dataset, random_seed=random_seed, is_coarse=True, preserve_disconnected=preserve_disconnected,
              cluster_graph_pruning_std=cluster_graph_pruning_std, piegraph_arrow_head_width=piegraph_arrow_head_width,
              piegraph_edgeweight_scalingfactor=piegraph_edgeweight_scalingfactor, visual_cluster_graph_pruning=0.15,
-             max_visual_outgoing_edges=2)  # *.4 root=1,
+             max_visual_outgoing_edges=2, edgebundle_pruning_twice=edgebundle_pruning_twice, edgebundle_pruning=edgebundle_pruning)  # *.4 root=1,
     v0.run_VIA()
     if true_label is None:
         true_label = v0.true_label
@@ -2071,7 +2073,7 @@ def via_wrapper(adata, true_label=None, embedding=None, knn=20, jac_std_global=0
              preserve_disconnected=preserve_disconnected, dataset=dataset,
              random_seed=random_seed,
               cluster_graph_pruning_std=cluster_graph_pruning_std,
-             piegraph_edgeweight_scalingfactor=piegraph_edgeweight_scalingfactor, via_coarse=v0)
+             piegraph_edgeweight_scalingfactor=piegraph_edgeweight_scalingfactor, via_coarse=v0, piegraph_arrow_head_width=piegraph_arrow_head_width)
 
     v1.run_VIA()
     # plot fine cluster heatmap
@@ -2651,6 +2653,7 @@ def main_faced(cell_line='mcf7', cluster_graph_pruning_std=1.):
     df_features = df[all_cols]
     for col in df_features.columns:
         df_features[col] = (df_features[col]-df_features.mean())/df_features.std()
+
     v1.get_gene_expression(df_features)
 
 
@@ -2678,11 +2681,11 @@ def main1():
 
 
 def main():
-    dataset = 'wrapper'  #
+    dataset = 'faced'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
-        main_Human(ncomps=100, knn=30, v0_random_seed=4,
-                   run_palantir_func=False)  # 100 comps, knn30, seed=4 is great// pc=100, knn20 rs=1// pc80,knn30,rs3
+        main_Human(ncomps=80, knn=30, v0_random_seed=4,
+                   run_palantir_func=False)  # 100 comps, knn30, seed=4 is great too// pc=100, knn20 rs=1// pc80,knn30,rs3
         # cellrank_Human(ncomps = 20, knn=30)
     elif dataset == 'Bcell':
         main_Bcell(ncomps=20, knn=10, random_seed=1)  # 0 is good
@@ -2724,7 +2727,7 @@ def main():
         # list marker genes or genes of interest if known in advance. otherwise marker_genes = []
         marker_genes = ['Igll1', 'Myc', 'Slc7a5', 'Ldha', 'Foxo1', 'Lig4', 'Sp7']  # irf4 down-up
         # call VIA
-        via_wrapper(adata, true_label, embedding, knn=15, ncomps=20, jac_std_global=0.15, root=[42], dataset='', random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes, draw_all_curves=True, piegraph_edgeweight_scalingfactor=1.0, piegraph_arrow_head_width=0.05)
+        via_wrapper(adata, true_label, embedding, knn=15, ncomps=20, jac_std_global=0.15, root=[42], dataset='', random_seed=1,v0_toobig=0.3, v1_toobig=0.1, marker_genes=marker_genes, draw_all_curves=True, piegraph_edgeweight_scalingfactor=1.0, piegraph_arrow_head_width=0.05, edgebundle_pruning_twice = True)
 
 
 if __name__ == '__main__':

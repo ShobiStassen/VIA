@@ -18,7 +18,7 @@ import multiprocessing
 import pygam as pg
 from termcolor import colored
 from collections import Counter
-from pyVIA.velocity_utils import *
+from utils_via import *
 from sklearn.preprocessing import normalize
 import math
 ###work in progress core
@@ -33,6 +33,7 @@ def prob_reaching_terminal_state1(terminal_state,  A, root,  n_simulations, q,
     for i, r in enumerate(A):
         if np.all(r == 0):
             A[i, i] = 1
+    #ensure probabilities sum to 1 along the rows
     P = A / A.sum(axis=1).reshape((n, 1))
 
     n_steps, count_reach_terminal_state = 2*n, 0
@@ -195,7 +196,7 @@ def get_loc_terminal_states(via0, X_input):
 def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
     # ci_list first finds location in unsampled PCA space of the location of the super-cluster or sub-terminal-cluster and root
     # Returns location (index) of cell nearest to the ci_list in the downsampled space
-    print("dict of terminal state pairs, Super: sub: ", p1.dict_terminal_super_sub_pairs)
+    #print("dict of terminal state pairs, Super: sub: ", p1.dict_terminal_super_sub_pairs)
     p0_labels = np.asarray(p0.labels)
     p1_labels = np.asarray(p1.labels)
     p1_sc_markov_pt = p1.single_cell_pt_markov
@@ -253,8 +254,8 @@ def make_knn_embeddedspace(embedding):
     knn.set_ef(50)
     return knn
 
-def draw_clustergraph(via_coarse, type_data='gene', gene_exp='', gene_list='', arrow_head_w=0.4,
-                      edgeweight_scale=1.5, cmap=None):
+def draw_clustergraph(via_coarse, type_data='gene', gene_exp='', gene_list='', arrow_head=0.1,
+                      edgeweight_scale=1.5, cmap=None, label_=True):
     '''
     #draws the clustergraph for cluster level gene or pseudotime values
     # type_pt can be 'pt' pseudotime or 'gene' for gene expression
@@ -288,7 +289,7 @@ def draw_clustergraph(via_coarse, type_data='gene', gene_exp='', gene_list='', a
     for i in range(n):
         ax_i = axs[i]
         gene_i = gene_list[i]
-
+        '''
         for e_i, (start, end) in enumerate(edgelist):
             if pt[start] > pt[end]:
                 start, end = end, start
@@ -309,7 +310,7 @@ def draw_clustergraph(via_coarse, type_data='gene', gene_exp='', gene_list='', a
             ax_i.arrow(xp[250], smooth[250], xp[250 + direction * step] - xp[250],
                        smooth[250 + direction * step] - smooth[250],
                        shape='full', lw=0, length_includes_head=True, head_width=arrow_head_w, color='grey')
-
+        '''
         c_edge, l_width = [], []
         for ei, pti in enumerate(pt):
             if ei in via_coarse.terminal_clusters:
@@ -318,16 +319,20 @@ def draw_clustergraph(via_coarse, type_data='gene', gene_exp='', gene_list='', a
             else:
                 c_edge.append('gray')
                 l_width.append(0.0)
-
+        ax_i = plot_edge_bundle(ax_i, via_coarse.hammer_bundle, layout=via_coarse.graph_node_pos, CSM=via_coarse.CSM,
+                                velocity_weight=via_coarse.velo_weight, pt=pt, headwidth_bundle=arrow_head, alpha_bundle=0.4, linewidth_bundle=edgeweight_scale)
         group_pop_scale = .5 * group_pop * 1000 / max(group_pop)
         pos = ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=gene_exp[gene_i].values, cmap=cmap,
                            edgecolors=c_edge, alpha=1, zorder=3, linewidth=l_width)
-        for ii in range(node_pos.shape[0]):
-            ax_i.text(node_pos[ii, 0] + 0.5, node_pos[ii, 1] + 0.5, str(round(gene_exp[gene_i].values[ii], 1)),
-                      color='black', zorder=4, fontsize=4)
+        if label_==True:
+            for ii in range(node_pos.shape[0]):
+                ax_i.text(node_pos[ii, 0] + 0.1, node_pos[ii, 1] + 0.1, 'C'+str(ii)+' '+str(round(gene_exp[gene_i].values[ii], 1)),
+                          color='black', zorder=4, fontsize=6)
         divider = make_axes_locatable(ax_i)
         cax = divider.append_axes('right', size='10%', pad=0.05)
-        fig.colorbar(pos, cax=cax, orientation='vertical')
+
+        cbar=fig.colorbar(pos, cax=cax, orientation='vertical')
+        cbar.ax.tick_params(labelsize=8)
         ax_i.set_title(gene_i)
         ax_i.grid(False)
         ax_i.set_xticks([])
@@ -335,8 +340,229 @@ def draw_clustergraph(via_coarse, type_data='gene', gene_exp='', gene_list='', a
         ax_i.axis('off')
     fig.patch.set_visible(False)
 
+
+def animated_streamplot(via_coarse, embedding , density_grid=1,
+ linewidth=0.5,min_mass = 1, cutoff_perc = None,scatter_size=500, scatter_alpha=0.2,marker_edgewidth=0.1, smooth_transition=1, smooth_grid=0.5, color_scheme = 'annotation', other_labels=[] ,add_outline_clusters=False, cluster_outline_edgewidth = 0.001,gp_color = 'white', bg_color='black' ,  title='Streamplot', b_bias=20, n_neighbors_velocity_grid=None, fontsize=8, alpha_animate=0.7,
+                        cmap_scatter = 'rainbow', cmap_stream='Blues_r', color_stream = None, segment_length=1, saveto='/home/shobi/Trajectory/Datasets/animation.gif',use_sequentially_augmented=False):
+    '''
+    #Animated vector plots
+    :param via_coarse:
+    :param embedding:
+    :param density_grid:
+    :param linewidth:
+    :param min_mass:
+    :param cutoff_perc:
+    :param scatter_size:
+    :param scatter_alpha:
+    :param marker_edgewidth:
+    :param smooth_transition:
+    :param smooth_grid:
+    :param color_scheme: 'annotation', 'cluster', 'other'
+    :param add_outline_clusters:
+    :param cluster_outline_edgewidth:
+    :param gp_color:
+    :param bg_color:
+    :param title:
+    :param b_bias:
+    :param n_neighbors_velocity_grid:
+    :param fontsize:
+    :param alpha_animate:
+    :param cmap_scatter:
+    :param cmap_stream: string of a cmap, default 'Blues_r' 'Greys_r'
+    :param color_stream: string like 'white'. will override cmap_stream
+    :param segment_length:
+    :return:
+    '''
+    import tqdm
+
+    import matplotlib.pyplot as plt
+    from matplotlib.animation import FuncAnimation, writers
+    from matplotlib.collections import LineCollection
+    from windmap import Streamlines
+    import matplotlib.patheffects as PathEffects
+
+    #import cartopy.crs as ccrs
+
+    V_emb = via_coarse.velocity_embedding(embedding, smooth_transition, b=b_bias, use_sequentially_augmented=use_sequentially_augmented)
+
+    V_emb *= 100 #the velocity of the samples has shape (n_samples x 2).
+
+    #interpolate the velocity along all grid points based on the velocities of the samples in V_emb
+    X_grid, V_grid = compute_velocity_on_grid(
+        X_emb=embedding,
+        V_emb=V_emb,
+        density=density_grid,
+        smooth=smooth_grid,
+        min_mass=min_mass,
+        autoscale=False,
+        adjust_for_stream=True,
+        cutoff_perc=cutoff_perc, n_neighbors=n_neighbors_velocity_grid)
+    print(f'{datetime.now()}\tInside animated. File will be saved to location {saveto}')
+
+    '''
+    #inspecting V_grid. most values are close to zero except those along data points of cells  
+    print('U', V_grid.shape, V_grid[0].shape)
+    print('sum is nan of each column', np.sum(np.isnan(V_grid[0]),axis=0))
+    msk = np.isnan(V_grid[0])
+    V_grid[0][msk]=0
+    print('sum is nan of each column', np.sum(np.isnan(V_grid[0]), axis=0))
+    print('max of each U column', np.max(V_grid[0], axis=0))
+    print('max V', np.max(V_grid[1], axis=0))
+    print('V')
+    print( V_grid[1])
+    '''
+    #lengths = np.sqrt((V_grid ** 2).sum(0))
+
+    fig = plt.figure(figsize=(10, 6))
+    ax = plt.subplot(1, 1, 1)
+
+    if color_scheme == 'time': ax.scatter(embedding[:, 0], embedding[:, 1], c=via_coarse.single_cell_pt_markov, alpha=scatter_alpha, zorder=0,
+               s=scatter_size, linewidths=marker_edgewidth, cmap='viridis_r')
+    else:
+        if color_scheme == 'annotation': color_labels = via_coarse.true_label
+        if color_scheme == 'cluster': color_labels = via_coarse.labels
+        if color_scheme == 'other': color_labels = other_labels
+
+        n_true = len(set(color_labels))
+        lin_col = np.linspace(0, 1, n_true)
+        col = 0
+        cmap = matplotlib.cm.get_cmap(cmap_scatter) #'twilight' is nice too
+        cmap = cmap(np.linspace(0.01, 0.95, n_true))
+        for color, group in zip(lin_col, sorted(set(color_labels))):
+            color_ = np.asarray(cmap[col]).reshape(-1, 4)
+
+            color_[0,3]=scatter_alpha
+
+            where = np.where(np.array(color_labels) == group)[0]
+
+            ax.scatter(embedding[where, 0], embedding[where, 1], label=group,
+                       c=color_,
+                       alpha=scatter_alpha, zorder=0, s=scatter_size, linewidths=marker_edgewidth) #plt.cm.rainbow(color))
+
+            x_mean = embedding[where, 0].mean()
+            y_mean = embedding[where, 1].mean()
+            ax.text(x_mean, y_mean, str(group), fontsize=fontsize, zorder=4,
+                    path_effects=[PathEffects.withStroke(linewidth=linewidth, foreground='w')], weight='bold')
+            col += 1
+
+    lengths = []
+    colors = []
+    lines = []
+    linewidths = []
+    count  =0
+    #X, Y, U, V = interpolate_static_stream(X_grid[0], X_grid[1], V_grid[0],V_grid[1])
+    s = Streamlines(X_grid[0], X_grid[1], V_grid[0], V_grid[1])
+    #s = Streamlines(X,Y,U,V)
+    for streamline in s.streamlines:
+
+        count +=1
+        x, y = streamline
+        #interpolate x, y data to handle nans
+        x_ = np.array(x)
+        nans, func_ = nan_helper(x_)
+        x_[nans] = np.interp(func_(nans), func_(~nans), x_[~nans])
+
+
+        y_ = np.array(y)
+        nans, func_ = nan_helper(y_)
+        y_[nans] = np.interp(func_(nans), func_(~nans), y_[~nans])
+
+
+        # test=proj.transform_points(x=np.array(x),y=np.array(y),src_crs=proj)
+        #points = np.array([x, y]).T.reshape(-1, 1, 2)
+        points = np.array([x_, y_]).T.reshape(-1, 1, 2)
+        #print('points')
+        #print(points.shape)
+
+
+        segments = np.concatenate([points[:-1], points[1:]], axis=1) #nx2x2
+        #print('segments', segments.shape,len(segments))
+        #print(segments[1,0,:])
+        #print (segments[:,::2,:].shape)#segment 1, starting point x,y [11.13  17.181]
+        #print('squeezed seg shape', np.squeeze(segments[:,::2,:]).shape)
+        #C_locationbased = map_velocity_to_color(X_grid[0], X_grid[1], V_grid[0], V_grid[1], segments)
+        n = len(segments)
+
+        D = np.sqrt(((points[1:] - points[:-1]) ** 2).sum(axis=-1))/segment_length
+        L = D.cumsum().reshape(n, 1) + np.random.uniform(0, 1)
+
+        C = np.zeros((n, 4)) #3
+        C[::-1] = (L * 1.5) % 1
+        C[:,3]= alpha_animate
+        #print('C shape', C.shape)
+        #print('shape L', L.shape)
+        #print('L')
+        #print(L)
+        #print('C', C)
+        lw = L.flatten().tolist()
+        #print('L list', L.flatten().tolist())
+        line = LineCollection(segments, color=C, linewidth=1)# 0.1 when changing linewidths in update
+        #line = LineCollection(segments, color=C_locationbased, linewidth=1)
+        lengths.append(L)
+        colors.append(C)
+        linewidths.append(lw)
+        lines.append(line)
+
+        ax.add_collection(line)
+    print('total number of stream lines', count)
+
+    ax.set_xlim(min(X_grid[0]), max(X_grid[0]), ax.set_xticks([]))
+    ax.set_ylim(min(X_grid[1]), max(X_grid[1]), ax.set_yticks([]))
+    plt.tight_layout()
+    #print('colors', colors)
+    def update(frame_no):
+        cmap = matplotlib.cm.get_cmap(cmap_stream)
+        #cmap = cmap(np.linspace(0.8, 0.9, 100))
+        for i in range(len(lines)):
+            lengths[i] += 0.05
+            # esthetic factors here by adding 0.1 and doing some clipping, 0.1 ensures no "hard blacks"
+            colors[i][::-1] =  np.clip(0.1+(lengths[i] * 1.5) % 1,0.2,0.9)
+            colors[i][:, 3] = alpha_animate
+            temp = (lengths[i] * 1.5) % 1
+            linewidths[i] = temp.flatten().tolist()
+            #if i==5: print('temp', linewidths[i])
+            '''
+            if i%5 ==0:
+                print('lengths',i, lengths[i])
+                colors[i][::-1] = (lengths[i] * 1.5) % 1
+                colors[i][:, 0] = 1
+            '''
+
+            #CMAP COLORS
+            cmap_colors = [cmap(j) for j in colors[i][:,0]]
+            '''
+            cmap_colors = [cmap[int(j*100)] for j in colors[i][:, 0]]
+            linewidths[i] = [f[0]*2 for f in cmap_colors]
+            if i ==5: print('colors', [f[0]for f in cmap_colors])
+            '''
+            for row in range(colors[i].shape[0]):
+                colors[i][row,:] = cmap_colors[row][0:4]
+                #colors[i][row, 3] = (1-colors[i][row][0])*0.6#alpha_animate
+                linewidths[i][row] = (1-colors[i][row][0])
+                #if color_stream is not None: colors[i][row, :] =  matplotlib.colors.to_rgba_array(color_stream)[0] #monochrome is nice 1 or 0
+            #if i == 5: print('lw', linewidths[i])
+            colors[i][:, 3] = alpha_animate
+            lines[i].set_linewidth(linewidths[i])
+            lines[i].set_color(colors[i])
+        pbar.update()
+
+    n = 27
+
+    animation = FuncAnimation(fig, update, frames=n, interval=20)
+    pbar = tqdm.tqdm(total=n)
+    pbar.close()
+    animation.save(saveto, writer='imagemagick', fps=30)
+    #animation.save('/home/shobi/Trajectory/Datasets/Toy3/wind_density_ffmpeg.mp4', writer='ffmpeg', fps=60)
+
+    #fig.patch.set_visible(False)
+    #ax.axis('off')
+    plt.show()
+
+    return
+
+
 def via_streamplot(via_coarse, embedding , density_grid=0.5, arrow_size=.7, arrow_color = 'k',
-arrow_style="-|>",  max_length=4, linewidth=1,min_mass = 1, cutoff_perc = None,scatter_size=500, scatter_alpha=0.5,marker_edgewidth=0.1, density_stream = 2, smooth_transition=1, smooth_grid=0.5, color_scheme = 'annotation', add_outline_clusters=False, cluster_outline_edgewidth = 0.001,gp_color = 'white', bg_color='black' , dpi=300 , title='Streamplot'):
+arrow_style="-|>",  max_length=4, linewidth=1,min_mass = 1, cutoff_perc = 5,scatter_size=500, scatter_alpha=0.5,marker_edgewidth=0.1, density_stream = 2, smooth_transition=1, smooth_grid=0.5, color_scheme = 'annotation', add_outline_clusters=False, cluster_outline_edgewidth = 0.001,gp_color = 'white', bg_color='black' , dpi=300 , title='Streamplot', b_bias=20, n_neighbors_velocity_grid=None, other_labels=[],use_sequentially_augmented=False):
 
     """
    Construct vector streamplot on the embedding to show a fine-grained view of inferred directions in the trajectory
@@ -348,11 +574,15 @@ arrow_style="-|>",  max_length=4, linewidth=1,min_mass = 1, cutoff_perc = None,s
 
    scatter_size: int, default = 500
 
-   linewidth: width of arrows in streamplot, defalt = 1
+   linewidth: width of  lines in streamplot, defaolt = 1
 
    marker_edgewidth: width of outline arround each scatter point, default = 0.1
 
-   color_scheme: str, default = 'annotation' corresponds to self.true_labels. Other options are 'time' (uses single-cell pseudotime) and 'cluster' (via cluster graph)
+   color_scheme: str, default = 'annotation' corresponds to self.true_labels. Other options are 'time' (uses single-cell pseudotime) and 'cluster' (via cluster graph) and 'other'
+
+   other_labels: list (will be used for the color scheme)
+
+   b_bias: default = 20. higher value makes the forward bias of pseudotime stronger
 
    Returns
    -------
@@ -362,19 +592,20 @@ arrow_style="-|>",  max_length=4, linewidth=1,min_mass = 1, cutoff_perc = None,s
     import matplotlib.patheffects as PathEffects
 
 
-    X_emb, V_emb = via_coarse.velocity_embedding(embedding, smooth_transition)
+    V_emb = via_coarse.velocity_embedding(embedding, smooth_transition,b=b_bias, use_sequentially_augmented=use_sequentially_augmented)
 
-    V_emb *=20
+    V_emb *=20 #5
+
 
     X_grid, V_grid = compute_velocity_on_grid(
-        X_emb=X_emb,
+        X_emb=embedding,
         V_emb=V_emb,
         density=density_grid,
         smooth=smooth_grid,
         min_mass=min_mass,
         autoscale=False,
         adjust_for_stream=True,
-        cutoff_perc=cutoff_perc )
+        cutoff_perc=cutoff_perc, n_neighbors=n_neighbors_velocity_grid )
 
     lengths = np.sqrt((V_grid ** 2).sum(0))
 
@@ -391,35 +622,30 @@ arrow_style="-|>",  max_length=4, linewidth=1,min_mass = 1, cutoff_perc = None,s
 
     if add_outline_clusters:
         # add black outline to outer cells and a white inner rim
-        #adapted from scanpy (scVelo utils also adapts this from scanpy)
+        #adapted from scanpy (scVelo utils adapts this from scanpy)
         gp_size = (2 * (scatter_size * cluster_outline_edgewidth *.1) + 0.1*scatter_size) ** 2
 
         bg_size = (2 * (scatter_size * cluster_outline_edgewidth)+ math.sqrt(gp_size)) ** 2
 
-        ax.scatter(X_emb[:, 0], X_emb[:, 1], s=bg_size, marker=".", c=bg_color, zorder=-2)
-        ax.scatter(X_emb[:, 0], X_emb[:, 1], s=gp_size, marker=".", c=gp_color, zorder=-1)
-    line = np.linspace(0, 1, len(set(via_coarse.true_label)))
+        ax.scatter(embedding[:, 0],embedding[:, 1], s=bg_size, marker=".", c=bg_color, zorder=-2)
+        ax.scatter(embedding[:, 0], embedding[:, 1], s=gp_size, marker=".", c=gp_color, zorder=-1)
+
     if color_scheme == 'time':
-        ax.scatter(X_emb[:,0],X_emb[:,1], c=via_coarse.single_cell_pt_markov,alpha=scatter_alpha,  zorder = 0, s=scatter_size, linewidths=marker_edgewidth, cmap = 'viridis_r')
-    if color_scheme == 'annotation':
-        for color, group in zip(line, sorted(set(via_coarse.true_label))):
-            where = np.where(np.array(via_coarse.true_label) == group)[0]
-            ax.scatter(X_emb[where, 0], X_emb[where, 1], label=group,
+        ax.scatter(embedding[:,0],embedding[:,1], c=via_coarse.single_cell_pt_markov,alpha=scatter_alpha,  zorder = 0, s=scatter_size, linewidths=marker_edgewidth, cmap = 'viridis_r')
+    else:
+        if color_scheme == 'annotation':color_labels = via_coarse.true_label
+        if color_scheme == 'cluster': color_labels= via_coarse.labels
+        if color_scheme == 'other':        color_labels = other_labels
+
+        line = np.linspace(0, 1, len(set(color_labels)))
+        for color, group in zip(line, sorted(set(color_labels))):
+            where = np.where(np.array(color_labels) == group)[0]
+            ax.scatter(embedding[where, 0], embedding[where, 1], label=group,
                         c=np.asarray(plt.cm.rainbow(color)).reshape(-1, 4),
                         alpha=scatter_alpha,  zorder = 0, s=scatter_size, linewidths=marker_edgewidth)
 
-            x_mean = X_emb[where, 0].mean()
-            y_mean = X_emb[where, 1].mean()
-            ax.text(x_mean, y_mean, str(group), fontsize=5, zorder=4, path_effects = [PathEffects.withStroke(linewidth=1, foreground='w')], weight = 'bold')
-
-    if color_scheme == 'cluster':
-        for color, group in zip(line, sorted(set(via_coarse.labels))):
-            where = np.where(np.array(via_coarse.labels) == group)[0]
-            ax.scatter(X_emb[where, 0], X_emb[where, 1], label=group,
-                        c=np.asarray(plt.cm.rainbow(color)).reshape(-1, 4),
-                        alpha=scatter_alpha,  zorder = 0, s=scatter_size, linewidths=marker_edgewidth)
-            x_mean = X_emb[where, 0].mean()
-            y_mean = X_emb[where, 1].mean()
+            x_mean = embedding[where, 0].mean()
+            y_mean = embedding[where, 1].mean()
             ax.text(x_mean, y_mean, str(group), fontsize=5, zorder=4, path_effects = [PathEffects.withStroke(linewidth=1, foreground='w')], weight = 'bold')
 
     fig.patch.set_visible(False)
@@ -560,7 +786,7 @@ def draw_sc_lineage_probability(via_coarse, via_fine, embedding, idx=None, cmap_
         for fst_i in via_fine.terminal_clusters:
             path_orange = G_orange.get_shortest_paths(via_fine.root[ii], to=fst_i)[0]
             #if the roots is in the same component as the terminal cluster, then print the path to output
-            if len(path_orange)>0: print(colored('Cluster path on clustergraph starting from Root Cluster', 'blue'), via_fine.root[ii], colored('to Terminal Cluster','blue'), fst_i, colored(':','blue'), path_orange)
+            if len(path_orange)>0: print(f'{datetime.now()}\tCluster path on clustergraph starting from Root Cluster {via_fine.root[ii]}to Terminal Cluster {fst_i}')
 
     # single-cell branch probability evolution probability
     n_terminal_clusters = len(via_fine.terminal_clusters)
@@ -657,7 +883,7 @@ def absorption_probability(N, R, absorption_state_j):
 def draw_trajectory_gams(via_coarse,via_fine, embedding, idx=None,
                          title_str="Pseudotime", draw_all_curves=True, arrow_width_scale_factor=15,
                          scatter_size=50, scatter_alpha=0.5,
-                         linewidth=1.5, marker_edgewidth=1, cmap_pseudotime = 'viridis_r',dpi=150):
+                         linewidth=1.5, marker_edgewidth=1, cmap_pseudotime = 'viridis_r',dpi=150,highlight_terminal_states = True):
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
     if idx is None: idx = np.arange(0, via_coarse.nsamples)
@@ -857,13 +1083,18 @@ def draw_trajectory_gams(via_coarse,via_fine, embedding, idx=None,
 
     for i in sc_supercluster_nn:
         if i in final_super_terminal:
-            print('super cluster', i, 'is a super terminal with sub_terminal cluster',
+            print(f'{datetime.now()}\tSuper cluster {i} is a super terminal with sub_terminal cluster',
                   sub_terminal_clusters[terminal_count_])
-            width_edge.append(2)
             c_edge.append('yellow')  # ('yellow')
+            if highlight_terminal_states == True:
+                width_edge.append(2)
+                super_cluster_label.append('TS' + str(sub_terminal_clusters[terminal_count_]))
+            else:
+                width_edge.append(0)
+                super_cluster_label.append('')
             pen_color.append('black')
             # super_cluster_label.append('TS' + str(i))  # +'('+str(i)+')')
-            super_cluster_label.append('TS' + str(sub_terminal_clusters[terminal_count_]))  # +'('+str(i)+')')
+             # +'('+str(i)+')')
             dot_size.append(60)  # 60
             terminal_count_ = terminal_count_ + 1
         else:
@@ -910,7 +1141,9 @@ def connect_all_components(MSTcsr, cluster_graph_csr, adjacency):
     n, labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
     while n > 1:
         sub_td = MSTcsr[labels == 0, :][:, labels != 0]
+
         locxy = scipy.sparse.find(MSTcsr == np.min(sub_td.data))
+
         for i in range(len(locxy[0])):
             if (labels[locxy[0][i]] == 0) & (labels[locxy[1][i]] != 0):
                 x, y = locxy[0][i], locxy[1][i]
@@ -943,6 +1176,7 @@ def pruning_clustergraph(adjacency, global_pruning_std=1, max_outgoing=30, prese
     for i in range(adjacency.shape[0]):
         row = np.asarray(adjacency[i, :]).flatten()
         n_nonz = min(np.sum(row > 0), max_outgoing)
+
         to_keep_index = np.argsort(row)[::-1][0:n_nonz]  # np.where(row>np.mean(row))[0]#
         # print('to keep', to_keep_index)
         updated_nn_weights = list(row[to_keep_index])
@@ -956,6 +1190,9 @@ def pruning_clustergraph(adjacency, global_pruning_std=1, max_outgoing=30, prese
 
     cluster_graph_csr = csr_matrix((weight_list, (row_list, col_list)), shape=adjacency.shape)
 
+    n_comp, comp_labels = connected_components(csgraph=adjacency, directed=False, return_labels=True)
+    print(f"{datetime.now()}\tGraph has {n_comp} connected components before pruning n_nonz", n_nonz, max_outgoing)
+
     sources, targets = cluster_graph_csr.nonzero()
     mask = np.zeros(len(sources), dtype=bool)
 
@@ -967,8 +1204,8 @@ def pruning_clustergraph(adjacency, global_pruning_std=1, max_outgoing=30, prese
     cluster_graph_csr.eliminate_zeros()
 
 
-    prev_n_comp, prev_comp_labels = n_comp, comp_labels
-    n_comp, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+    prev_n_comp, prev_comp_labels = n_comp, comp_labels #before pruning
+    n_comp, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True) #n comp after pruning
     n_comp_preserve = n_comp if preserve_disconnected_after_pruning else prev_n_comp
 
     # preserve initial disconnected components
@@ -1029,6 +1266,7 @@ def get_sparse_from_igraph(graph: ig.Graph, weight_attr=None):
 
 def recompute_weights(graph: ig.Graph, label_counts: Counter):
     graph = get_sparse_from_igraph(graph, weight_attr='weight')
+
     weights, scale_factor, w_min = [], 1., 0
     for s, t, w in zip(*[*graph.nonzero(), graph.data]):
         ns, nt = label_counts[s], label_counts[t]
@@ -1051,20 +1289,24 @@ class VIA:
                  num_threads=-1, distance='l2', time_smallpop=15,
                  super_cluster_labels=False,
                  super_node_degree_list=False, super_terminal_cells=False, x_lazy=0.95, alpha_teleport=0.99,
-                 root_user="root_cluster", preserve_disconnected=True, dataset="humanCD34", super_terminal_clusters=[],
+                 root_user=None, preserve_disconnected=True, dataset="humanCD34", super_terminal_clusters=[],
                  is_coarse=True, csr_full_graph='', csr_array_locally_pruned='', ig_full_graph='',
                  full_neighbor_array='', full_distance_array='', embedding=None, df_annot=None,
                  preserve_disconnected_after_pruning=False,
                  secondary_annotations=None, pseudotime_threshold_TS=30, cluster_graph_pruning_std=0.15,
                  visual_cluster_graph_pruning=0.15, neighboring_terminal_states_threshold=3, num_mcmc_simulations=1300,
                  piegraph_arrow_head_width=0.1,
-                 piegraph_edgeweight_scalingfactor=1.5, max_visual_outgoing_edges=2, via_coarse=None):
+                 piegraph_edgeweight_scalingfactor=1.5, max_visual_outgoing_edges=2, via_coarse=None, velocity_matrix=None, gene_matrix=None, velo_weight=0.5, edgebundle_pruning=None, A_velo = None, CSM = None, edgebundle_pruning_twice=False, pca_loadings = None, time_series=False, time_series_labels=None, knn_sequential = 10,t_diff_step = 1,single_cell_transition_matrix = None):
 
         self.data = data
         self.nsamples, self.ncomp = data.shape
         if true_label is not None:
             self.true_label = true_label
         else: self.true_label = [1] * self.nsamples
+        if velocity_matrix is None: velo_weight = 0
+        self.velo_weight = velo_weight
+        if edgebundle_pruning is None: edgebundle_pruning = cluster_graph_pruning_std
+        self.edgebundle_pruning = edgebundle_pruning
 
         self.knn_struct = None
         self.labels = None
@@ -1091,6 +1333,7 @@ class VIA:
         self.small_pop = small_pop  # smallest cluster population to be considered a community
         self.jac_weighted_edges = jac_weighted_edges
         self.knn = knn
+        self.knn_sequential = knn_sequential #number of knn in the adjacent time-point for time-series data
         self.n_iter_leiden = n_iter_leiden
         self.random_seed = random_seed  # enable reproducible Leiden clustering
         self.num_threads = num_threads  # number of threads used in KNN search/construction
@@ -1125,7 +1368,7 @@ class VIA:
         self.is_coarse = is_coarse #set to True for first round of VIA. if one chooses to run a second iteration of VIA that uses the terminal states from the first round, then set this to False for second iteration
         self.embedding = embedding
         self.df_annot = df_annot
-        self.preserve_disconnected_after_pruning = preserve_disconnected_after_pruning
+        self.preserve_disconnected_after_pruning = preserve_disconnected_after_pruning #pruning can cause some fragmentation of small clusters, these should be reattached to the relevant component (so typically this is False as we dont want to preserve these small extra components resulting from pruning)
         self.secondary_annotations = secondary_annotations
         self.pseudotime_threshold_TS = pseudotime_threshold_TS
         self.cluster_graph_pruning_std = cluster_graph_pruning_std
@@ -1135,6 +1378,18 @@ class VIA:
         self.piegraph_arrow_head_width = piegraph_arrow_head_width
         self.piegraph_edgeweight_scalingfactor = piegraph_edgeweight_scalingfactor
         self.max_visual_outgoing_edges = max_visual_outgoing_edges  # higher value means more edges retained. This is applied to the clustergraph and is a strong threshold for number of edges shown
+        if velocity_matrix is not None: velocity_matrix[np.isnan(velocity_matrix)]=0
+        self.velocity_matrix = velocity_matrix #matrix from scVelo with velocities
+        self.gene_matrix = gene_matrix #matrix (not numpy array) with gene expression #such as adata.X.todense() or adata.layers["Mu"] from scVelo (first moments of spliced gene counts
+        self.A_velo = A_velo #the transition matrix weighted by the rna velocity
+        self.CSM = CSM #the cosine similarity matrix used to weight the transition matrix by velocity
+        self.edgebundle_pruning_twice = edgebundle_pruning_twice #default: False. this bundles the edges of transition matrix used in the pseudotime comutations rather than allow for a second round of pruning that can sometimes be beneficial for visualization
+        self.pca_loadings =pca_loadings#the loadings of the pcs used to project the cells (to projected euclidean location based on velocity)
+        self.time_series = time_series
+        self.time_series_labels = time_series_labels
+        self.t_diff_step = t_diff_step
+        self.single_cell_transition_matrix=single_cell_transition_matrix
+
 
     def knngraph_visual(self, data_visual, knn_umap=15, downsampled=False):
         k_umap = knn_umap
@@ -1237,7 +1492,7 @@ class VIA:
         outdegree_score_takeout_outlier = out_deg[out_deg < (np.mean(out_deg) + n_outlier_std * np.std(out_deg))]
         loc_deg = [i for i, score in enumerate(out_deg) if
                    score < (np.mean(outdegree_score_takeout_outlier) - 0 * np.std(outdegree_score_takeout_outlier))]
-        print(colored(f"{datetime.now()}\tIdentifying terminal clusters corresponding to unique lineages...", "blue"))
+        print(f"{datetime.now()}\tIdentifying terminal clusters corresponding to unique lineages...")
         print(f"{datetime.now()}\tCloseness:{closeness_list}")
         print(f"{datetime.now()}\tBetweenness:{betweenness_list}")
         print(f"{datetime.now()}\tOut Degree:{loc_deg}")
@@ -1274,7 +1529,7 @@ class VIA:
                         if item == root_ai:  # if the terminal state is a neighbor of
                             if terminal_i in terminal_clusters:
                                 terminal_clusters.remove(terminal_i)
-                                print('we removed cluster', terminal_i, 'from the shortlist of terminal states ')
+                                print(f"{datetime.now()}\tWe removed cluster {terminal_i} from the shortlist of terminal states")
                                 removed_terminal_i = True
                 if count_nn >= self.neighboring_terminal_states_threshold:  # 2
                     if removed_terminal_i == False:
@@ -1285,9 +1540,7 @@ class VIA:
                                 temp_remove = to_remove_i
                                 temp_time = markov_pt[to_remove_i]
                         terminal_clusters.remove(temp_remove)
-                        print('TS', terminal_i, 'had', self.neighboring_terminal_states_threshold,
-                              'or more neighboring terminal states, namely', ts_neigh, ' and so we removed,',
-                              temp_remove)
+                        print(f"{datetime.now()}\tCluster {terminal_i} had {self.neighboring_terminal_states_threshold} or more neighboring terminal states {ts_neigh} and so we removed cluster {temp_remove}")
         if len(terminal_clusters) == 0: terminal_clusters = loc_deg
         # print('terminal_clusters', terminal_clusters)
         return terminal_clusters
@@ -1320,7 +1573,7 @@ class VIA:
         # Calculate only diagonal elements of Xv_Xu @ t
         return np.abs((Xv_Xu * t.T).sum(-1)), (hitting_matrix + hitting_matrix.T)[root]
 
-    def simulate_branch_probability(self, terminal_state, all_terminal_states, A, root, pt, num_sim=500):
+    def simulate_branch_probability(self, terminal_state,  A, root, num_sim=500):
 
         n_states = A.shape[0]
 
@@ -1363,10 +1616,14 @@ class VIA:
 
             count_reached = count_reached + q[i][1][0, terminal_state]
 
-        print('From root', root, ' to Terminal state', terminal_state, 'is found', int(count_reached), ' times.')
-
-        cumhistory_vec_all[cumhistory_vec_all == 0] = 1
+        print(f"{datetime.now()}\tFrom root {root},  the Terminal state {terminal_state} is reached {int(count_reached)} times.")
+        #print('cumhistory_vec_all', cumhistory_vec_all)
+        cumhistory_vec_all[cumhistory_vec_all == 0] = 1 #to avoid division by zero we say that the state has been visited once
+        #print('cumhistory_vec_all', cumhistory_vec_all)
+        #print('cumhistory_vec', cumhistory_vec)
         prob_ = cumhistory_vec / cumhistory_vec_all
+        #given a cluster is traversed (cumhistory_vec_all), how many of these traversals led to a successful path to Terminal State X
+        # i.e. with what probability does traversal of a cluster lead to the desired terminal state (number of times traversed along a sucessful path)  #cumhistory_vec: number of times cluster is traversed on a successful path
 
         np.set_printoptions(precision=3)
 
@@ -1382,8 +1639,8 @@ class VIA:
             # print('zerod out prob', prob_)
             temp_ = np.max(prob_)
             if temp_ == 0: temp_ = 1
-            prob_ = prob_ / min(1, 1.1 * temp_)
-        prob_[0, loc_1] = 1
+            prob_ = prob_ / min(1, 1.1 * temp_) #do some scaling to amplify the probabiltiies of those clusters that are not 1 to make the range of values more compact
+        prob_[0, loc_1] = 1 #put back probability =1
 
         return list(prob_)[0]
 
@@ -1433,7 +1690,7 @@ class VIA:
         for j in jobs:
             j.join()
 
-        print('ended all multiprocesses, will retrieve and reshape')
+        #print(f"{datetime.now()}\t ended all multiprocesses, will retrieve and reshape")
         hitting_array = q[0]
         for qi in q[1:]:
             hitting_array = np.append(hitting_array, qi, axis=1)  # .get(), axis=1)
@@ -1509,6 +1766,8 @@ class VIA:
         return abs(final_hitting_times), roundtrip_times
 
     def project_branch_probability_sc(self, bp_array_clus, pt):
+
+        #print('sum of branch probabilities at cluster level', np.sum(bp_array_clus, axis=1))
         n_clus = len(list(set(self.labels)))
         n_cells = self.data.shape[0]
 
@@ -1525,7 +1784,7 @@ class VIA:
 
         weights = csr_matrix((weights, (rows, cols)), shape=(n_cells, n_clus))
         bp_array_sc = weights.dot(bp_array_clus)
-        bp_array_sc /= np.max(bp_array_sc, axis=0)  # divide cell by max value in that column
+        bp_array_sc /= np.max(bp_array_sc, axis=0)  # divide cell probability by max value in that column
 
         for i, label_ts in enumerate(list(self.terminal_clusters)):
             loc_i = np.where(self.labels == label_ts)[0]
@@ -1538,56 +1797,126 @@ class VIA:
 
         return bp_array_sc, pt_sc.flatten()
 
-    def sc_transition_matrix(self,smooth_transition,perc = 10):
+    def sc_transition_matrix(self,smooth_transition,b=10, use_sequentially_augmented=False):
+        '''
+        #computes the single cell level transition directions that are later used to calculate velocity of embedding
+        #based on changes at single cell level in genes and single cell level velocity
+        :param smooth_transition:
+        :param b: slope of logistic function
+        :return:
+        '''
         #n_clus = len(list(set(self.labels)))
         #n_cells = self.data.shape[0]
+        pt = self.single_cell_pt_markov *2/max(self.single_cell_pt_markov) #some scaling so that the input to the logistic function covers a range of sensible inputs
+        labels = self.labels
+        if use_sequentially_augmented: T = self.csr_array_locally_pruned_augmented #single cell edges are weighted as inverse of distance
 
-        #global pruning of the locally pruned sc knn graph
+        else:T = self.csr_array_locally_pruned
+        #T = self.csr_full_graph #single cell
 
-        T = self.csr_array_locally_pruned.copy()
-        '''
-        thr_global = np.mean(T.data) - 3*np.std(T.data)
+
+        thr_global = np.mean(T.data) - 2*np.std(T.data)#2*
         T.data[T.data < thr_global] = 0
+        T.setdiag(0)
         T.eliminate_zeros()
-        '''
+
         size_T = T.size
-        T.data = T.data.clip(np.percentile(T.data, 10), np.percentile(T.data, 80))
+
+        T.data = T.data.clip(np.percentile(T.data, 10), np.percentile(T.data, 90))
         find_T = find(T)
-        bias_weight, K, c, C, nu, b = [], 1, 0, 1, 1, 1
+        bias_weight, K, c, C, nu = [], 1, 0, 1, 1
+        bias_weight_pt,  bias_weight_velo = [],[]
         #print('transition before biasing')
         #print(T)
-        for i in range(size_T):
+        if self.CSM is not None:
+            for i in range(size_T):
 
-            #start = find_T[0][i]
-            #end = find_T[1][i]
-            weight = find_T[2][i]
-            t_dif = self.single_cell_pt_markov[find_T[0][i]] - self.single_cell_pt_markov[find_T[1][i]]
+                start = find_T[0][i]
+                end = find_T[1][i]
+                weight = find_T[2][i]
+                t_dif = pt[find_T[1][i]] -pt[find_T[0][i]]
 
-            bias_weight.append(weight * K / ((C + math.exp(b * (t_dif + c))) ** nu))
-        T = csr_matrix((bias_weight/np.mean(np.array(bias_weight)), (np.array(find_T[0]), np.array(find_T[1]))), shape=T.shape)
-        #T = T.multiply(csr_matrix(1.0 / np.abs(T).sum(1)))
+                delta_gene = np.array(self.gene_matrix[end, :] - self.gene_matrix[start, :])  # change in gene expression when going from start cell to end cells
+
+                # print('shape delta_gene', delta_gene.shape, delta_gene)
+
+
+                #csm_ = 1- distance.cosine(delta_gene[0,:], self.velocity_matrix[start, :])
+                #print(csm_)
+                csm_ = 0
+
+                csm_ = cosine_sim(delta_gene, self.velocity_matrix[start, :])[0]*10 #based on sc level CSM
+
+
+                #csm_ = self.CSM[labels[find_T[0][i]],labels[find_T[1][i]]] #based on cluster level CSM
+                #if (csm_<0)&(t_dif<0): csm_ *=10
+                #if (csm_ >0) & (t_dif > 0): csm_ *= 10
+                #if i%100000==0:  print(i,'out of', size_T, 'start', labels[start], 'end', labels[end], 'csm_', round(csm_,3), 't_diff', round(t_dif,3))
+                #print('shape gene_matrix', self.gene_matrix.shape)
+                #print('start-end, csm', start, end, csm_)
+                #bias_weight_pt.append(t_dif)
+                #bias_weight_velo.append(csm_)
+                bias_weight_pt.append(1 * K / ((C + math.exp(b * (-t_dif+ c))) ** nu))
+                #bias_weight_velo.append(csm_)
+                bias_weight_velo.append(1 * K / ((C + math.exp(b * (- csm_ + c))) ** nu))
+            #scale both the pt and velocity weights
+            bias_weight_pt = 2.0* np.asarray(bias_weight_pt)/np.mean(np.array(bias_weight_pt)) #need to normalize the pt and velo weights
+            #print('list shape',bias_weight_pt.shape)
+            #print('argwhere is nan')
+            #argwhere=np.argwhere(np.isnan(bias_weight_velo))
+            #print(argwhere.shape)
+            #print('bias weight velo is anywhere nan', np.isnan(bias_weight_velo).any(), np.mean(np.array(bias_weight_velo)))
+            bias_weight_velo = np.nan_to_num(bias_weight_velo)
+            2.0 * np.asarray(bias_weight_velo) / np.mean(np.array(bias_weight_velo))  # USE THIS
+            #bias_weight_velo = np.asarray(bias_weight_velo)#
+            #bias_weight_velo = np.clip(bias_weight_velo, 0, 1) #this approach zeros out negative edges
+            #print('pt weight ', bias_weight_pt)
+            bias_weight_velo = np.multiply(np.asarray(weight), bias_weight_velo) ## consider changing this weight to the weight based on projected "i" -to- current "neighbor"
+            bias_weight_pt = np.multiply(np.asarray(weight), bias_weight_pt)
+            #print('velo weight * weigt', bias_weight_velo)
+            #print('pt weight *weight', bias_weight_pt)
+            bias_weight =(1-self.velo_weight)*bias_weight_pt+ self.velo_weight*bias_weight_velo
+            #print('bias_weight size', bias_weight.shape)
+            T = csr_matrix((bias_weight / np.mean(np.array(bias_weight)), (np.array(find_T[0]), np.array(find_T[1]))),shape=T.shape)
+            #print('sc transition weights T',np.isnan(T.data).any())
+            T.data = np.nan_to_num(T.data)
+            #print('sc transition weights T', np.isnan(T.data).any())
+        else:
+            b=10
+            for i in range(size_T):
+                #start = find_T[0][i]
+                #end = find_T[1][i]
+                weight = find_T[2][i]
+                t_dif = pt[find_T[1][i]] -pt[find_T[0][i]]
+                bias_weight.append(weight * K / ((C + math.exp(b * (-t_dif + c))) ** nu)) #b * (-t_dif
+
+            T = csr_matrix((bias_weight/np.mean(np.array(bias_weight)), (np.array(find_T[0]), np.array(find_T[1]))), shape=T.shape)
 
         T.setdiag(0)
+
         T.eliminate_zeros()
         T = np.expm1(T)
 
-        #thr_perc = np.percentile(T.data, 10)
-        #T.data[T.data < thr_perc] = 0
-        #T.eliminate_zeros()
-        #print('T rows')
-        #print(find(T)[0].shape)
-        #print(np.unique(find(T)[0]).size)
         T = normalize(T, norm='l1', axis=1) **smooth_transition
 
         T = T.multiply(csr_matrix(1.0 / np.abs(T).sum(1)))  # rows sum to one
-
         return T
 
-    def velocity_embedding(self, X_emb, smooth_transition):
+    def velocity_embedding(self, X_emb, smooth_transition, b,use_sequentially_augmented=False ):
+        '''
+
+        :param X_emb:
+        :param smooth_transition:
+        :return: V_emb
+        '''
         #T transition matrix at single cell level
         n_obs = X_emb.shape[0]
         V_emb = np.zeros(X_emb.shape)
-        T = self.sc_transition_matrix(smooth_transition)
+        if self.single_cell_transition_matrix is None:
+            self.single_cell_transition_matrix = self.sc_transition_matrix(smooth_transition, b,use_sequentially_augmented=use_sequentially_augmented)
+            T = self.single_cell_transition_matrix
+        else: T = self.single_cell_transition_matrix
+
 
         #the change in embedding distance when moving from cell i to its neighbors is given by dx
         for i in range(n_obs):
@@ -1598,12 +1927,47 @@ class VIA:
             dX[np.isnan(dX)] = 0  # zero diff in a steady-state
             #neighbor edge weights are used to weight the overall dX or velocity from cell i.
             probs =  T[i].data
-            if probs.size ==0: print(probs, i)
+            #if probs.size ==0: print('velocity embedding probs=0 length', probs, i, self.true_label[i])
             V_emb[i] = probs.dot(dX) - probs.mean() * dX.sum(0)
         V_emb /= 3 * quiver_autoscale(X_emb, V_emb)
+        return V_emb
 
-        return X_emb, V_emb
+    def sequential_knn(self, data: np.ndarray, time_series_labels: list, neighbors: np.ndarray, distances: np.ndarray, k: int) -> np.ndarray:
+        all_new_nn = np.ones((data.shape[0],k))
+        all_new_nn_data = np.ones((data.shape[0], k))
+        time_series_set = sorted(list(set(time_series_labels))) #values sorted in ascending order
+        print(f"{datetime.now()}\tTime series ordered set{time_series_set}")
+        time_series_labels = np.asarray(time_series_labels)
 
+        for counter, tj in enumerate(time_series_set[1:]):
+            ti = time_series_set[counter]
+            #print(f"ti {ti} and tj {tj}")
+            tj_loc = np.where(time_series_labels==tj)[0]
+            ti_loc = np.where(time_series_labels == ti)[0]
+            tj_data= data[tj_loc,:]
+            ti_data = data[ti_loc, :]
+            tj_knn = self.construct_knn(tj_data)
+            #ti_knn = self.construct_knn(ti_data)
+            #print('tj_data', tj_data[0,:])
+            #print('ti_data', ti_data[0, :])
+            #print('ti_loc', ti_loc)
+            #print('tj_loc', tj_loc)
+            ti_query_nn, d_ij = tj_knn.knn_query(ti_data, k =k) #find the cells in tj that are closest to those in ti
+            #tj_query_nn, d_ji = ti_knn.knn_query(tj_data, k=k)
+            #print('ti_nn',ti_query_nn[0,:])
+            for xx_i, xx in enumerate(ti_loc):
+                all_new_nn[xx,:] = tj_loc[ti_query_nn[xx_i]] #need to convert the ti_query_nn indices back to the indices of tj_loc in full data
+                all_new_nn_data[xx,:] =  d_ij[xx_i]
+            '''
+            for xx_i, xx in enumerate(tj_loc):
+                all_new_nn[xx,:] = ti_loc[tj_query_nn[xx_i]] #need to convert the ti_query_nn indices back to the indices of tj_loc in full data
+                all_new_nn_data[xx,:] =  d_ji[xx_i]
+            '''
+        #print('shape neighbors', neighbors.shape, 'all_new_nn shape', all_new_nn.shape)
+        augmented_nn = np.concatenate((neighbors, all_new_nn), axis=1).astype('int')
+        augmented_nn_data = np.concatenate((distances, all_new_nn_data), axis=1)
+        #augmented_nn_data = np.ones_like(augmented_nn)
+        return augmented_nn, augmented_nn_data
 
     def construct_knn(self, data: np.ndarray, too_big: bool = False) -> hnswlib.Index:
         """
@@ -1621,7 +1985,7 @@ class VIA:
         Initialized instance of hnswlib.Index to be used over given data
         """
         if self.knn > 100:
-            print(colored(f'Passed number of neighbors exceeds max value. Setting number of neighbors too 100', 'blue'))
+            print(colored(f'Passed number of neighbors exceeds max value. Setting number of neighbors too 100'))
         k = min(100, self.knn + 1)
 
         nsamples, dim = data.shape
@@ -1640,9 +2004,9 @@ class VIA:
         return p
 
     def make_csrmatrix_noselfloop(self, neighbors: np.ndarray, distances: np.ndarray,
-                                  auto_: bool = True, distance_factor=.01) -> csr_matrix:
+                                  auto_: bool = True, distance_factor=.01, weights_as_inv_dist = True, min_max_scale=False, time_series=False, time_series_labels=None, t_diff_step=2) -> csr_matrix:
         """
-        Create sparse matrix from weighted knn graph
+        Create sparse matrix from weighted knn graph. Default does local pruning
 
         Parameters
         ----------
@@ -1658,28 +2022,100 @@ class VIA:
 
         distance_factor: float, default=0.01
             Factor used in calculation of edge weights. mean(sqrt(distances))^2 / (sqrt(distances) + distance_factor)
-
+        weights_as_inv_dist: bool, default = True
+            Whether to convert the distances into weights that are proportional to inverse of the distance
+        min_max_scale: bool, default = False
+            This is called with True for constructing the sc-knn used for vertexclustergraph.
+            we use the inverse of the distance but scaled from 0.5-2 such that we can combine the distance derived weights with the
+            Jaccard similarity (0-1). The jaccard similiarity in igraph does not consider weights, so we re-introduce the impact of the
+            distances which then play a role in the transition matrix for trajectories as well as the visualization of edge-weights
+            In the case of the sc-KNN used for clustering, we do not re-introduce the distance based weights but leave it at the
+            jaccard similarity as this empirically seems to work well
+        time_series: bool, default = False. Whether or not this is a time course data set. will require time_series_labels in order to be actioned on
+        time_series_labels: list, default = None. a list of numerical values reflecting the sampling time of each cell
+        t_diff_step=int, default =2, number of sequential time steps permissible between edges. (e.g. edges allowed to be 2 or fewer time steps apart)
         Returns
         -------
             sparse matrix representing the locally pruned weighted knn graph
         """
         distances = np.sqrt(distances.astype(np.float64))
 
-        if auto_ and not self.keep_all_local_dist:
-            # Local pruning based on neighbor being too far
+        #print(neighbors[0,:])
+        #print(distances[0,:])
+        neigh01 = neighbors[0,1]
+        #print('norm2', np.linalg.norm(self.data[0,:]-self.data[neigh01,:]))
+        if time_series:
+            msk = np.full_like(distances, True, dtype=np.bool_)
+            '''
+            #doing local pruning and then adding back the augmented edges does not work so well because when the edge weights are scaled and inverted,
+            # the sequentially added edges appear very weak and noisy compared to the fairly strong edges that remain after the local pruning from the inital round of knngraph. If you retain all edges from initial graph construction,
+            # then the average weight of edges is exaggeratedly higher than those edge weights from the sequentially added edges, and creates a better gradient of edge weights
+            # Local pruning based on neighbor being too far. msk where we want to keep neighbors
+            msk = distances <= (np.mean(distances, axis=1) + self.dist_std_local * np.std(distances, axis=1))[:,
+                               np.newaxis]
+            # Remove self-loops
+            msk &= (neighbors != np.arange(neighbors.shape[0])[:, np.newaxis])
+            last_n_columns = self.knn_sequential+1
+            msk[:,-last_n_columns:] = True # add back the edges belonging to knn-sequentially built part of the graph
+            '''
+            #remove edges between nodes that >t_diff_step far apart in time_series_labels
+            time_series_set_order = list(sorted(list(set(time_series_labels))))
+            t_diff_mean = np.mean(np.array([int(abs(y - x)) for x, y in zip(time_series_set_order [:-1], time_series_set_order [1:])]))
+            print(f"{datetime.now()}\tActual average allowable time difference between nodes is {round(t_diff_mean*t_diff_step,2)}")
+            time_series_labels = np.asarray(time_series_labels)
+            #print(colored(f"inside time_series msk"))
+
+            rr= 0
+            count = 0
+            for row in neighbors:
+                #if rr%20000==0: print(row, type(row), row[0])
+                rr +=1
+                t_row = time_series_labels[row[0]] #first neighbor is itself
+
+                for e_i, n_i in enumerate(row):
+                    if abs(time_series_labels[n_i] - t_row)>t_diff_mean*t_diff_step:
+                        count= count+1
+                        if np.sum(msk[row[0]])>4: msk[row[0],e_i]=False # we want to ensure that each cell has at least 5 nn
+
+
+        elif auto_ and not self.keep_all_local_dist:
+            #print('elif condition')
+            # Local pruning based on neighbor being too far. msk where we want to keep neighbors
             msk = distances <= (np.mean(distances, axis=1) + self.dist_std_local * np.std(distances, axis=1))[:, np.newaxis]
             # Remove self-loops
             msk &= (neighbors != np.arange(neighbors.shape[0])[:, np.newaxis])
+
         else:
+            #print('elsecondition')
             msk = np.full_like(distances, True, dtype=np.bool_)
 
         # Inverting the distances outputs values in range [0-1]. This also causes many ``good'' neighbors ending up
         # having a weight near zero (misleading as non-neighbors have a weight of zero). Therefore we scale by the
-        # mean distance.
-        weights = (np.mean(distances[msk]) ** 2) / (distances[msk] + distance_factor) #larger weight is a stronger edge
-        #weights = 1 / (distances[msk] + distance_factor)
-        rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
-        cols = neighbors[msk]
+        # mean distance. The inversted weights without min_max_scaling are used for the community detection graph
+        if self.distance=='cosine':
+            rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
+            cols = neighbors[msk]
+            weights = distances[msk]
+            weights.fill(1)
+            #weights = logistic_function(weights)
+
+        elif (weights_as_inv_dist==True) & (min_max_scale==False):
+            #print('apply msk', np.sum(msk), msk.size)
+            weights = (np.mean(distances[msk]) ** 2) / (distances[msk] + distance_factor) #larger weight is a stronger edge
+            #weights = 1 / (distances[msk] + distance_factor)
+            rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
+            cols = neighbors[msk]
+        elif min_max_scale==True: #the jaccard similarity does not consider edge weights, we will use these min-max scaled weights to make a composite weight together with Jaccard to retain the distance based info
+            weights = distances[msk]  # larger weight is a stronger edge
+            weights = np.clip(weights, a_min=np.percentile(weights,10), a_max=None) #the first neighbor is usually itself and hence has distance 0
+            #print('min clip',np.percentile(weights,10))
+            #print('clipped weights for current pc-dist', weights)
+            weights = 0.5 + (weights - np.min(weights))*(2-0.5)/(np.max(weights)-np.min(weights))
+            weights = 1/weights #all weights between 0.5 and 2. these will later be multiplied by the Jac similarity which are between 0-1 to create a composite weight
+
+
+            rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
+            cols = neighbors[msk]
 
         return csr_matrix((weights, (rows, cols)), shape=(len(neighbors), len(neighbors)), dtype=np.float64)
 
@@ -1694,6 +2130,7 @@ class VIA:
         from networkx.readwrite import json_graph
         from collections import defaultdict
         edgelist = self.edgelist_maxout
+
         weightlist = self.edgeweights_maxout
         min_w = min(weightlist)
         max_w = max(weightlist)
@@ -1745,7 +2182,7 @@ class VIA:
 
         j = json_graph.node_link_data(G)
 
-        js = json.dumps(j, ensure_ascii=False, indent=2)
+        js = json.dumps(['var gData=', j], ensure_ascii=False, indent=2)
         with open(folderpath + filename, "w") as file:
             file.write(js)
         return
@@ -1855,6 +2292,7 @@ class VIA:
     def find_root_group(self, graph_dense, PARC_labels_leiden, root_user, true_labels, super_cluster_labels_sub,
                         super_node_degree_list):
         # PARC_labels_leiden is the subset belonging to the component of the graph being considered. graph_dense is a component of the full graph
+        #returns the cluster most likely corresponding to the root (initial) state on the cluster the graph
         majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
         graph_node_label = []
         min_deg = 1000
@@ -1873,15 +2311,14 @@ class VIA:
                 super_majority_cluster_loc = np.where(np.asarray(super_cluster_labels_sub) == super_majority_cluster)[0]
                 super_majority_truth = self.func_mode(list(true_labels[super_majority_cluster_loc]))
                 super_node_degree = super_node_degree_list[super_majority_cluster]
-                if (str(root_user) in majority_truth) & ( str(root_user) in str(super_majority_truth)):  # sub == with 'in'
+                if (str(root_user) in majority_truth) & ( str(root_user) in str(super_majority_truth)):
                     if super_node_degree < super_min_deg:
                         found_super_and_sub_root = True
                         root = cluster_i
                         found_any_root = True
                         min_deg = deg_list[ci]
                         super_min_deg = super_node_degree
-                        print('new root is', root, ' with degree %.2f' % min_deg,
-                              'and super node degree %.2f' % super_min_deg)
+                        print(f"{datetime.now()}\tNew root is {root}")
             majority_truth_labels[cluster_i_loc] = str(majority_truth) + 'c' + str(cluster_i)
 
             graph_node_label.append(str(majority_truth) + 'c' + str(cluster_i))
@@ -1901,13 +2338,29 @@ class VIA:
                         root = cluster_i
                         found_any_root = True
                         min_deg = deg_list[ic]
-                        print('new root is', root, ' with degree %.2f' % min_deg, majority_truth)
+                        print(f"{datetime.now()}\tNew root is {root} and majority {majority_truth}")
         # print('len graph node label', graph_node_label)
         if found_any_root == False:
-            print('setting arbitrary root', cluster_i)
+            print(f"{datetime.now()}\tSetting arbitrary root {cluster_i}")
             root = cluster_i
         return graph_node_label, majority_truth_labels, deg_list, root
 
+    def make_majority_truth_cluster_labels(self,PARC_labels_leiden, true_labels, graph_dense):
+        majority_truth_labels = np.empty((len(PARC_labels_leiden), 1), dtype=object)
+        graph_node_label = []
+        true_labels = np.asarray(true_labels)
+        deg_list = graph_dense.sum(axis=1).reshape((1, -1)).tolist()[0]
+
+        for ci, cluster_i in enumerate(sorted(list(set(PARC_labels_leiden)))):
+            cluster_i_loc = np.where(np.asarray(PARC_labels_leiden) == cluster_i)[0]
+            majority_truth = str(self.func_mode(list(true_labels[cluster_i_loc])))
+
+            majority_truth_labels[cluster_i_loc] = str(majority_truth) + 'c' + str(cluster_i)
+
+            graph_node_label.append(str(majority_truth) + 'c' + str(cluster_i))
+            deg_list = graph_dense.sum(axis=1).reshape((1, -1)).tolist()[0]
+
+        return graph_node_label, majority_truth_labels, deg_list
 
     def find_root(self, graph_dense, PARC_labels_leiden, root_user, true_labels):
         # root-user is the singlecell index given by the user when running VIA
@@ -1954,8 +2407,9 @@ class VIA:
         # make igraph object of very low-K KNN using the knn_struct PCA-dimension space made in PARC.
         # This is later used by find_shortest_path for sc_bp visual
         # neighbor array is not listed in in any order of proximity
-        print('number of components in the original full graph', n_components_original)
-        print('for downstream visualization purposes we are also constructing a low knn-graph ')
+
+        print(f"{datetime.now()}\tThe number of components in the original full graph is {n_components_original}")
+        print(            f"{datetime.now()}\tFor downstream visualization purposes we are also constructing a low knn-graph ")
         first, k0, n_comp = True, 3, n_components_original+1
         while (n_components_original == 1 and n_comp > 1) or \
                 (n_components_original > 1 and k0 <= 5 and n_comp > n_components_original):
@@ -1967,7 +2421,7 @@ class VIA:
             else:
                 k0 += 1
 
-        print('size neighbor array in low-KNN in pca-space for visualization', neighbors.shape)
+        #print(f"{datetime.now()}\t the size of neighbor array in low-KNN in pca-space for visualization is {neighbors.shape}")
         n_cells, n_neighbors = neighbors.shape
         rows = np.transpose(np.ones((n_neighbors, n_cells)) * range(0, n_cells)).flatten()
         cols = neighbors.flatten()
@@ -2152,43 +2606,149 @@ class VIA:
         return pd.DataFrame(transition_full_graph.dot(subset), index=df_gene.index, columns=gene_list)
 
     def run_subPARC(self):
-        print(f"{datetime.now()}\tGlobal pruning of weighted knn graph")
+
         # Construct graph or obtain from previous run
         if self.is_coarse:
-            neighbors, distances = self.knn_struct.knn_query(self.data, k=self.knn)
-            adjacency = self.make_csrmatrix_noselfloop(neighbors, distances) #this function has local pruning
+
+            neighbors, distances = self.knn_struct.knn_query(self.data, k=self.knn) #these n, d will be used as a basis for both the clustergraph and graph which we apply community detection. These two graphs are constructed differently because in the community detection we want to emphasize dissimiliarities,
+            # but the in the clustergraph we want to enhance connectivity
+            if (self.time_series is not None) and (self.time_series_labels is not None): # refine the graph for clustering (leiden) using time_series labels if available
+                print(f"{datetime.now()}\tUsing time series information to guide knn graph construction ")
+
+
+                '''
+                embedding = run_umap_hnsw(self.data, adjacency_non_augmented, n_epochs=100, min_dist=0.1, spread=1,
+                                          distance_metric='cosine')
+                plt.scatter(embedding[:, 0], embedding[:, 1], c=self.true_label, cmap='rainbow', s=2, alpha=0.3)
+                title = 'euclidean non Augmented' + 'k_kseq_pc' + str(self.knn) + '_' + str(
+                    self.knn_sequential) + '_' + str(self.data.shape[1])
+                plt.title(title)
+                plt.show()
+
+                embedding = run_umap_hnsw(self.data, adjacency_non_augmented, n_epochs=100, min_dist=0.1, spread=1,
+                                          distance_metric='cosine')
+                plt.scatter(embedding[:, 0], embedding[:, 1], c=self.true_label, cmap='viridis', s=2, alpha=0.3)
+                title = 'cosine Non augmented' + 'k_kseq_pc' + str(self.knn) + '_' + str(
+                    self.knn_sequential) + '_' + str(self.data.shape[1])
+                plt.title(title)
+                plt.show()
+                '''
+
+                n_augmented, d_augmented = self.sequential_knn(self.data, self.time_series_labels, neighbors, distances, k=self.knn_sequential)
+
+
+                adjacency_augmented = self.make_csrmatrix_noselfloop(n_augmented, d_augmented, time_series=self.time_series, time_series_labels = self.time_series_labels, t_diff_step=self.t_diff_step)  # this function has local pruning which removes neighbors that are more than t_dif apart. Since the same type of local pruning wrt t_dif is applied pre-clustergraph, we only need to call this function once in the case of time_series data
+                #adjacency_augmented.data.fill(1)
+
+                '''
+                embedding = run_umap_hnsw(self.data, adjacency_augmented, n_epochs=100, min_dist=0.1, spread=1, distance_metric = 'cosine')
+                plt.scatter(embedding[:, 0], embedding[:, 1], c=self.true_label, cmap='viridis', s=2, alpha=0.3)
+                title = 'cosine augmented' + 'k_kseq_pc' + str(self.knn) + '_' + str(
+                    self.knn_sequential) + '_' + str(self.data.shape[1])
+                plt.title(title)
+                plt.show()
+
+                
+
+                embedding = run_umap_hnsw(self.data, adjacency_augmented, n_epochs=100, min_dist=0.1, spread=1,
+                                          distance_metric='euclidean')
+                plt.scatter(embedding[:, 0], embedding[:, 1], c=self.true_label, cmap='rainbow', s=2, alpha=0.3)
+                title = 'euclidean augmented' + 'k_kseq_pc' + str(self.knn) + '_' + str(
+                    self.knn_sequential) + '_' + str(self.data.shape[1])
+                plt.title(title)
+                plt.show()
+                '''
+                #adjacency_augmented_clus = self.make_csrmatrix_noselfloop(neighbors, distances,   time_series=self.time_series,  time_series_labels=self.time_series_labels, t_diff_step=0.5)  # this function has loca
+
+                #adjacency =adjacency_augmented_clus
+                #adjacency.data.fill(1)
+                adjacency = self.make_csrmatrix_noselfloop(neighbors, distances) #not augmented or tiff'ed
+            else:
+                adjacency =    self.make_csrmatrix_noselfloop(neighbors, distances) #this function has local pruning based on edge distances
+
+
         else:
             neighbors, distances = self.full_neighbor_array, self.full_distance_array
             adjacency = self.csr_array_locally_pruned
 
         edges = np.array(list(zip(*adjacency.nonzero())))
-        sim = np.array(ig.Graph(n=self.nsamples, edges=edges.tolist(), edge_attrs={'weight': adjacency.data})\
-                       .similarity_jaccard(pairs=edges))
+        sim = np.array(ig.Graph(n=self.nsamples, edges=edges.tolist(), edge_attrs={'weight': adjacency.data}).similarity_jaccard(pairs=edges)) #used to do igraph jaccard does not use  weight information to compute Jacc
+        #sim = adjacency.data
         tot = len(sim)
 
-        # Prune edges off graph on global level
+
+        # Prune Jacc weighted edges off graph on global level
         threshold = np.median(sim) if self.jac_std_global == 'median' else sim.mean() - self.jac_std_global * sim.std()
         strong_locs = np.asarray(np.where(sim > threshold)[0])
-        #strong_locs = np.where(sim > threshold)[0]
-        pruned_similarities = ig.Graph(n=self.nsamples, edges=list(edges[strong_locs]),
-                                       edge_attrs={'weight': list(sim[strong_locs])}).simplify(combine_edges='sum') #used for clustering
-        #pruned_similarities = ig.Graph(n=self.nsamples, edges=edges[strong_locs],    edge_attrs={'weight': sim[strong_locs]})\    .simplify(combine_edges='sum')
-        print(f"{datetime.now()}\tFinished global pruning. Kept {round(100 * len(strong_locs) / tot, 2)} of edges. ")
+        #to be used for leiden paritionining clustering
+        g_local_global_jac = ig.Graph(n=self.nsamples, edges=list(edges[strong_locs]),
+                                       edge_attrs={'weight': list(sim[strong_locs])}).simplify(combine_edges='sum') #used for the clustering step and has been locally and globally pruned
+        #jac_sim_list = g_local_global_jac.similarity_jaccard(pairs=list(edges[strong_locs]))
+        #g_local_global_jac =ig.Graph(n=self.nsamples, edges=list(edges[strong_locs]), edge_attrs={'weight': jac_sim_list}).simplify(combine_edges='sum') #used for clustering (globally and locally pruned) and then jacc weighted (Jacc does not consider weights)
+        self.sparse_glob_loc_pruned = get_sparse_from_igraph(g_local_global_jac, weight_attr='weight')
+
+        print(f"{datetime.now()}\tFinished global pruning of {self.knn}-knn graph used for clustering. Kept {round(100 * len(strong_locs) / tot, 1)} % of edges. ")
 
         if self.is_coarse:
             # Construct full graph with no pruning - used for cluster graph edges, not listed in any order of proximity
-            csr_full_graph = self.make_csrmatrix_noselfloop(neighbors, distances, auto_=False, distance_factor=0.05) #no local pruning: auto_ set to false
+            #csr_full_graph = self.make_csrmatrix_noselfloop(neighbors, distances, auto_=False, distance_factor=0.05),
+
+
+            if (self.time_series is not None) and (self.time_series_labels is not None):
+
+                csr_full_graph = adjacency_augmented.copy() #when time_series data is available
+
+
+            # when no time-series data is available, in this iteration of weighting the edges we do not locally prune based on edge-weights becasue we intend to use all neighborhood info towards the edges in the clustergraph and ensuring the clustergraph is connected
+            else: csr_full_graph = self.make_csrmatrix_noselfloop(neighbors, distances, auto_=False, min_max_scale=False, time_series=self.time_series, time_series_labels = self.time_series_labels) #no local pruning: auto_ set to false #min_max_scale=True
             n_original_comp, n_original_comp_labels = connected_components(csr_full_graph, directed=False)
+            print(f"{datetime.now()}\tNumber of connected components used for clustergraph  is { n_original_comp}")
 
+
+
+
+            #print('csr_full_graph.data (weights for normal distances)', csr_full_graph.data.shape)
+            #print('csr_full_graph.data', csr_full_graph.data)
             #edges = list(zip(*adjacency.nonzero()))
-            edges = list(zip(*csr_full_graph.nonzero()))
-            sim = ig.Graph(edges, edge_attrs={'weight': csr_full_graph.data}).similarity_jaccard(pairs=edges)
-            #ig_fullgraph = ig.Graph(edges, edge_attrs={'weight': sim}).simplify(combine_edges='sum')
-            self.ig_full_graph = ig.Graph(edges, edge_attrs={'weight': sim}).simplify(combine_edges='sum') # for VIA we prune the vertex cluster graph *after* making the clustergraph
+            edges_preClustergraph= list(zip(*csr_full_graph.nonzero()))
+            #Jaccard computation in igraph does not consider weights. However, doing the global pruning on distance based weights seems less effective than pruning on Jaccard similarities
+            global_jac_preClustergraph_sim_list = ig.Graph(edges_preClustergraph, edge_attrs={'weight': csr_full_graph.data}).similarity_jaccard(pairs=edges_preClustergraph)
+            # the graph has self loops, so we need to clip these values as they have a jacc of 1, and much higher than other neighbors
+            global_jac_preClustergraph_sim_list = np.clip(np.array(global_jac_preClustergraph_sim_list),a_max=np.percentile(np.array(global_jac_preClustergraph_sim_list),95), a_min = None).tolist()
 
-            self.csr_array_locally_pruned = adjacency #used for clustering
+
+            if ((self.pca_loadings is not None) & (self.velocity_matrix is not None)) &(self.gene_matrix is not None):
+                #projected_distances are the inverted Projected_distances based on velocity adjusted location of neighbors
+                projected_distances = get_projected_distances(loadings=self.pca_loadings, gene_matrix=self.gene_matrix,
+                                                          velocity_matrix=self.velocity_matrix,
+                                                          edgelist=edges_preClustergraph, current_pc=self.data)
+                #print('projected distances,', projected_distances)
+                #print('projected distances', len(projected_distances))
+                #print([round(i,3) for i in projected_distances[0:20]])
+                composite_weight_projected = np.multiply(projected_distances,
+                                                         np.array(global_jac_preClustergraph_sim_list))
+                #print('composite weight projected', [round(i,3) for i in composite_weight_projected[0:20]])
+                self.ig_full_graph = ig.Graph(edges_preClustergraph,
+                                              edge_attrs={'weight': composite_weight_projected.tolist()}).simplify( combine_edges='sum') #used for clustergraph
+            #print('edges_preClustergraph',edges_preClustergraph)
+            #ig_fullgraph = ig.Graph(edges, edge_attrs={'weight': g_global_jac_preClustergraph}).simplify(combine_edges='sum')
+            else:
+                #print('jacc weight without min-max-dist', global_jac_preClustergraph_sim_list[0:10])
+                composite_weight = np.multiply(csr_full_graph.data, np.array(global_jac_preClustergraph_sim_list)) #0<J<1
+
+                #print('composite weight', [round(i,3) for i in composite_weight[0:20]])
+                # simplify (sum) is done to avoid isolated clusters in the subsequent clustergraph that would hinder mobility along the transition matrix.
+                #self.ig_full_graph = ig.Graph(edges_preClustergraph, edge_attrs={'weight': global_jac_preClustergraph_sim_list}).simplify(combine_edges='sum')
+                self.ig_full_graph = ig.Graph(edges_preClustergraph,    edge_attrs={'weight': composite_weight.tolist()}).simplify(combine_edges='sum') #used for clustergraph
+
+            # for VIA we local and global prune the vertex cluster graph *after* making the clustergraph
+            self.csr_array_locally_pruned = adjacency # this graph has only been locally pruned and in the case of time-series, it is not the augmented knn. it then subsequently in later code will be subject to global pruning, followed by Leiden clustering. saving it here for non-coarse runs
+
+            if self.time_series:
+                self.csr_array_locally_pruned_augmented = adjacency_augmented #t_diff edges removed and is sequentially augmented
+            else: self.csr_array_locally_pruned_augmented=None
             #self.ig_full_graph = ig_fullgraph
-            self.csr_full_graph = csr_full_graph
+            self.csr_full_graph = csr_full_graph #for timeseries, this is the sequentially augmented graph, and later used in sc_transitions. This can also be used for hnsw_umap
             self.full_neighbor_array = neighbors
             self.full_distance_array = distances
 
@@ -2197,10 +2757,10 @@ class VIA:
             neighbors = self.full_neighbor_array
 
 
-        print(colored(f"{datetime.now()}\tCommencing community detection", 'blue'))
+        print(f"{datetime.now()}\tCommencing community detection")
         weights = 'weight' if self.jac_weighted_edges else None
         type = leidenalg.ModularityVertexPartition if self.partition_type == 'ModularityVP' else leidenalg.RBConfigurationVertexPartition
-        partition = leidenalg.find_partition(pruned_similarities, partition_type=type, weights=weights,
+        partition = leidenalg.find_partition(g_local_global_jac, partition_type=type, weights=weights,
                                              n_iterations=self.n_iter_leiden, seed=self.random_seed)
         labels = np.array(partition.membership)
 
@@ -2209,7 +2769,7 @@ class VIA:
         # Searching for clusters that are too big and split them
         too_big_clusters = [k for k, v in Counter(labels).items() if v > self.too_big_factor * self.nsamples]
         if len(too_big_clusters):
-            print(colored(f"{datetime.now()}\tFound {len(too_big_clusters)} clusters that are too big", "blue"))
+            print(f"{datetime.now()}\tFound {len(too_big_clusters)} clusters that are too big")
 
         time0_big = time.time()
         count_big_pop = len(too_big_clusters)
@@ -2217,7 +2777,7 @@ class VIA:
         # TODO - add max running time condition
         while len(too_big_clusters)>0 & (not ((time.time() - time0_big > 200) & (num_times_expanded >= count_big_pop))):
         #while len(too_big_clusters) & (not((time.time() - time0_big >200) & (num_times_expanded >= count_big_pop))):
-            print('inside handle too big')
+            print(f"{datetime.now()}\tExamining clusters that are above the too_big threshold")
             cluster = too_big_clusters.pop(0)
             idx = labels == cluster
             print(f"{datetime.now()}\tCluster {cluster} contains "
@@ -2232,7 +2792,7 @@ class VIA:
                 too_big_clusters.extend(
                     [k for k, v in Counter(membership).items() if v > self.too_big_factor * self.nsamples])
             else:
-                print(f"{datetime.now()}\t\tCould not expand cluster {cluster}")
+                print(f"{datetime.now()}\tCould not expand cluster {cluster}")
 
         # Search for clusters that are too small (like singletons) and merge them to non-small clusters based on neighbors' majority vote
         #first we make a quick pass through all clusters to remove very small outliers by merging with a larger cluster
@@ -2287,37 +2847,69 @@ class VIA:
             pop_list.append((item, pop_item))
             pop_list_raw.append(pop_item)
         '''
-
-        # Make cluster-graph
+      # Make cluster-graph
         print(f"{datetime.now()}\tMaking cluster graph. Global cluster graph pruning level: {self.cluster_graph_pruning_std}")
         graph = ig.VertexClustering(self.ig_full_graph, membership=self.labels).cluster_graph(combine_edges='sum')
 
-        graph = recompute_weights(graph, Counter(labels)) #this is the cluster graph we want to use to weight velocity. before global pruning.
-        edgeweights, edges, comp_labels = pruning_clustergraph(graph,
+        graph = recompute_weights(graph, Counter(labels))
+        edgeweights_pruned_clustergraph, edges_pruned_clustergraph, comp_labels = pruning_clustergraph(graph,
             global_pruning_std=self.cluster_graph_pruning_std,
             preserve_disconnected=self.preserve_disconnected,
             preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning)
+
+
         self.connected_comp_labels = comp_labels
 
-        locallytrimmed_g = ig.Graph(edges, edge_attrs={'weight': edgeweights}).simplify(combine_edges='sum')
+        locallytrimmed_g = ig.Graph(edges_pruned_clustergraph, edge_attrs={'weight': edgeweights_pruned_clustergraph}).simplify(combine_edges='sum')
         locallytrimmed_sparse_vc = get_sparse_from_igraph(locallytrimmed_g, weight_attr='weight')
-        weights_for_layout = np.asarray(locallytrimmed_sparse_vc.data)
+        if self.edgebundle_pruning == self.cluster_graph_pruning_std:
+            weights_for_layout = np.asarray(locallytrimmed_sparse_vc.data)
+            #clip weights to prevent distorted visual scale
+            weights_for_layout= np.clip(weights_for_layout, np.percentile(weights_for_layout, 10), np.percentile(weights_for_layout, 90)) #want to clip the weights used to get the layout
+            weights_for_layout = list(weights_for_layout)
+            g_layout = ig.Graph(list(zip(*locallytrimmed_sparse_vc.nonzero())), edge_attrs={'weight': weights_for_layout})
 
-        weights_for_layout= np.clip(weights_for_layout, np.percentile(weights_for_layout, 10), np.percentile(weights_for_layout, 90)) #want to clip the weights used to get the layout
-        weights_for_layout = list(weights_for_layout)
+        #if using a different pruning for visualized edge bundles than the one specified in self.cluster_graph_pruning_std
+        else:
+            edgeweights_layout, edges_layout, comp_labels_layout = pruning_clustergraph(graph,
+                                                                                        global_pruning_std=self.edgebundle_pruning,
+                                                                                        preserve_disconnected=self.preserve_disconnected,
+                                                                                        preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning)
 
-        g_layout = ig.Graph(list(zip(*locallytrimmed_sparse_vc.nonzero())), edge_attrs={'weight': weights_for_layout})
-        #layout = locallytrimmed_g.layout_fruchterman_reingold(weights='weight') #uses non-clipped weights but this can skew layout due to one or two outlier edges
+            #layout = locallytrimmed_g.layout_fruchterman_reingold(weights='weight') #uses non-clipped weights but this can skew layout due to one or two outlier edges
+            layout_g =ig.Graph(edges_layout, edge_attrs={'weight': edgeweights_layout}).simplify(combine_edges='sum')
+            layout_g_csr =get_sparse_from_igraph(layout_g, weight_attr='weight')
+            weights_for_layout = np.asarray(layout_g_csr.data)
+            # clip weights to prevent distorted visual scale in layout
+            weights_for_layout = np.clip(weights_for_layout, np.percentile(weights_for_layout, 10),  np.percentile(weights_for_layout, 90))
+            weights_for_layout = list(weights_for_layout)
+            g_layout=ig.Graph(list(zip(*layout_g_csr.nonzero())), edge_attrs={'weight': weights_for_layout})
+        #the layout of the graph is determine by a pruned clustergraph and the directionality of edges will be based on the final markov pseudotimes
+        #the edgeweights of the bundle-edges is determined by the distance based metrics and jaccard similarities and not by the pseudotimes
+        #for the transition matrix used in the markov pseudotime and differentiation probability computations, the edges will be further biased by the hittings times and markov pseudotimes
         layout = g_layout.layout_fruchterman_reingold(weights='weight')
+        if self.edgebundle_pruning_twice ==False:
+            #print('creating bundle with single round of global pruning at a level of', self.edgebundle_pruning)
+            self.hammer_bundle =make_edgebundle(layout,g_layout)
 
         # globally trimmed link
         self.edgelist_unique = set(tuple(sorted(l)) for l in zip(*locallytrimmed_sparse_vc.nonzero()))  # keep only one of (0,1) and (1,0)
-        self.edgelist = edges
+        self.edgelist = edges_pruned_clustergraph #after one round of global and local pruning of graph to be used for MCMCs
 
         # number of components
         n_components, labels_cc = connected_components(csgraph=locallytrimmed_sparse_vc, directed=False, return_labels=True)
 
         df_graph = pd.DataFrame(locallytrimmed_sparse_vc.todense())
+        if (self.velocity_matrix is not None) & (self.gene_matrix is not None):
+            df_velocity = pd.DataFrame(self.velocity_matrix)
+            df_velocity['labels'] = self.labels
+            velocity_mean =df_velocity.groupby('labels', as_index=True).mean().to_numpy()
+            gene_mean =pd.DataFrame(self.gene_matrix)
+            gene_mean['labels'] = self.labels
+            gene_mean = gene_mean.groupby('labels', as_index=True).mean().to_numpy()
+
+            self.A_velo, self.CSM, velo_root_top3 = velocity_transition(A=df_graph.values, V=velocity_mean,
+                                              G=gene_mean)  # velocity directed transition matrix
 
         df_graph['cc'] = labels_cc
         df_graph['pt'] = float('NaN')
@@ -2328,7 +2920,7 @@ class VIA:
         set_parc_labels = list(set(PARC_labels_leiden))
         set_parc_labels.sort()
 
-        #root_user = self.root_user
+
         tsi_list = []
         df_graph['markov_pt'] = float('NaN')
         terminal_clus = []
@@ -2345,8 +2937,11 @@ class VIA:
         for comp_i in large_components:  # range(n_components):
             loc_compi = np.where(labels_cc == comp_i)[0]
 
-            a_i = df_graph.iloc[loc_compi][loc_compi].values
+            a_i = df_graph.iloc[loc_compi][loc_compi].values #transition matrix of relevant component
+            #A_velo, CSM = velocity_transition(A=a_i, V=velocity_mean,   G=gene_mean)  # velocity directed transition matrix
+            if self.A_velo is not None: A_velo, CSM = self.A_velo[loc_compi,:][loc_compi,:], self.CSM[loc_compi,:][loc_compi,:]
             a_i = csr_matrix(a_i, (a_i.shape[0], a_i.shape[0]))
+
             cluster_labels_subi = [x for x in loc_compi]
             # print('cluster_labels_subi', cluster_labels_subi)
             sc_labels_subi = [PARC_labels_leiden[i] for i in range(len(PARC_labels_leiden)) if
@@ -2355,12 +2950,35 @@ class VIA:
             sc_truelabels_subi = [self.true_label[i] for i in range(len(PARC_labels_leiden)) if
                                   (PARC_labels_leiden[i] in cluster_labels_subi)]
 
-            # TODO - remove this code and dataset specific `find_root` methods to external file
-            if self.dataset in ['toy','faced','mESC','iPSC','group']:#((self.dataset == 'toy') | (self.dataset == 'faced')):
+            if (self.root_user is None) and (self.velocity_matrix is not None):
+                #in case the root cluster is a singleton, move on to the next nominee in initial states
+                root_i = velo_root_top3[0]
+                cluster_i_loc = np.where(np.asarray(sc_labels_subi) == root_i)[0]
+                if len(cluster_i_loc) < 2:
+                    root_i = velo_root_top3[1]
+                    cluster_i_loc = np.where(np.asarray(sc_labels_subi) == root_i)[0]
+                    if len(cluster_i_loc) < 2:
+                        root_i = velo_root_top3[2]
+                        cluster_i_loc = np.where(np.asarray(sc_labels_subi) == root_i)[0]
+                        if len(cluster_i_loc) < 2:
+                            root_i = velo_root_top3[0]
+
+                graph_node_label, majority_truth_labels, node_deg_list_i = self.make_majority_truth_cluster_labels(PARC_labels_leiden=sc_labels_subi, true_labels=sc_truelabels_subi, graph_dense=a_i)
+                for velo_root_candidate_i in velo_root_top3:
+                    cluster_i_loc = np.where(np.asarray(sc_labels_subi) == velo_root_candidate_i)[0]
+                    majority_truth = str(self.func_mode(list(np.asarray(sc_truelabels_subi)[cluster_i_loc])))
+                    if velo_root_candidate_i==root_i: majority_truth_veloroot0 = majority_truth
+                    print(
+                        f"{datetime.now()}\tUsing the RNA velocity graph, A top3 candidate for initial state is {velo_root_candidate_i} comprising predominantly of {majority_truth} cells",
+                        )
+                print(f"{datetime.now()}\tUsing the RNA velocity graph, the suggested initial root state is {root_i} comprising predominantly of {majority_truth_veloroot0} cells")
+
+
+            elif (self.dataset in ['toy','faced','mESC','iPSC','group']) and (self.root_user is not None):#((self.dataset == 'toy') | (self.dataset == 'faced')):
 
                 for ri in self.root_user:
                     if ri in sc_truelabels_subi: root_user_ = ri
-                if self.super_cluster_labels:# != False:
+                if self.super_cluster_labels: #entering a fine-grained iteration of via - therefore using information from coarse via iteration
                     # find which sub-cluster has the super-cluster root
 
                     super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if
@@ -2383,8 +3001,7 @@ class VIA:
             elif self.dataset in ['humanCD34' 'bcell','EB']:#(self.dataset == 'humanCD34'):  # | (self.dataset == '2M'):
                 for ri in self.root_user:
                     if PARC_labels_leiden[ri] in cluster_labels_subi: root_user_ = ri
-                graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root(a_i,
-                                                                                                            sc_labels_subi,
+                graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root(a_i,    sc_labels_subi,
                                                                                                             root_user_,
                                                                                                             sc_truelabels_subi)
 
@@ -2396,11 +3013,13 @@ class VIA:
                                                                                                           root_user_,
                                                                                                           sc_truelabels_subi)
 
+            # when root_user is given as a cell index
             else:
-                if comp_i > len(self.root_user) - 1:
-                    root_generic = 0
+                if (comp_i > len(self.root_user) - 1): root_user_ = 0
+
                 else:
                     for ri in self.root_user:
+
                         if PARC_labels_leiden[ri] in cluster_labels_subi:
                             root_user_ = ri
                             print(f"{datetime.now()}\tThe root index, {ri} provided by the user belongs to cluster number {PARC_labels_leiden[ri]}                                  and corresponds to cell type {self.true_label[ri]}")
@@ -2442,6 +3061,7 @@ class VIA:
             edgeweights_ai = a_i.data
             # print('edgelist ai', edgelist_ai)
             # print('edgeweight ai', edgeweights_ai)
+            #bias the edges based on pseudotime from "undirected" pruned graph
             biased_edgeweights_ai = get_biased_weights(edgelist_ai, edgeweights_ai, hitting_times)
 
             # biased_sparse = csr_matrix((biased_edgeweights, (row, col)))
@@ -2466,20 +3086,27 @@ class VIA:
             markov_hitting_times_ai = np.asarray(new_markov_hitting_times_ai)
             scaling_fac = 10 / max(markov_hitting_times_ai)
             markov_hitting_times_ai = markov_hitting_times_ai * scaling_fac
-            # for eee, ttt in enumerate(markov_hitting_times_ai):print('cluster ', eee, ' had markov time', ttt)
+            #for eee, ttt in enumerate(markov_hitting_times_ai):print('cluster ', eee, ' had markov time', ttt)
 
             # print('markov hitting times', [(i, j) for i, j in enumerate(markov_hitting_times_ai)])
             # print('hitting times', [(i, j) for i, j in enumerate(hitting_times)])
-            markov_hitting_times_ai = (markov_hitting_times_ai)  # + hitting_times)*.5 #consensus
+            #markov_hitting_times_ai = (markov_hitting_times_ai)  # + hitting_times)*.5 #consensus
             adjacency_matrix_csr_ai = sparse.csr_matrix(adjacency_matrix_ai)
+            #A_velo = velocity_transition(A=adjacency_matrix_ai, V=velocity_mean, G=gene_mean) #velocity directed transition matrix
+            #print('A_velo', A_velo.shape)
+            #print(A_velo)
             (sources, targets) = adjacency_matrix_csr_ai.nonzero()
             edgelist_ai = list(zip(sources, targets))
             weights_ai = adjacency_matrix_csr_ai.data
             bias_weights_2_ai = get_biased_weights(edgelist_ai, weights_ai, markov_hitting_times_ai, round=2)
-            adjacency_matrix2_ai = np.zeros((adjacency_matrix_ai.shape[0], adjacency_matrix_ai.shape[0]))
-
+            adjacency_matrix2_ai = np.zeros((adjacency_matrix_ai.shape[0], adjacency_matrix_ai.shape[0])) #this will be the cluster transition matrix biased by pseudotimes
             for i, (start, end) in enumerate(edgelist_ai):
                 adjacency_matrix2_ai[start, end] = bias_weights_2_ai[i]
+            #print('adjacency_matrix2_ai col sum', np.sum(adjacency_matrix2_ai, axis=1))
+            #adjacency matrix used for branch prob and terminal states will be the weighted average of the pt_trans_matrix and the velo_trans_matrix
+            #note that although A_velo and adjaccency_matrix2_ai do not have rows that sum to one due to the biasing steps, the transition matrix used for simulating branch probabilities will be normalized such that each row_sum = 1. This is done in the simulate_branch_prob function
+            #however the biased weights without row normalization is used for visualization
+            if self.A_velo is not None: adjacency_matrix2_ai = (1-self.velo_weight)*adjacency_matrix2_ai + self.velo_weight*A_velo
 
             if self.super_terminal_cells == False: # when is_coarse = True, there is no list of terminal clusters/cells that are passed into VIA based on a previous iteration.
                 # print('new_root_index', new_root_index, ' before get terminal')
@@ -2570,7 +3197,7 @@ class VIA:
                             terminal_clus_ai.append(
                                 np.where(np.asarray(cluster_labels_subi) == most_likely_sub_terminal)[0][0])  # =i
 
-                            print('the sub terminal cluster that best captures the super terminal', i, 'is', most_likely_sub_terminal)
+                            #print('the sub terminal cluster that best captures the super terminal', i, 'is', most_likely_sub_terminal)
                         else:
                             print('the sub terminal cluster that best captures the super terminal', i, 'is',
                                   most_likely_sub_terminal, 'but the pseudotime is too low')
@@ -2590,9 +3217,9 @@ class VIA:
 
             #print('final terminal clus', terminal_clus)
             for target_terminal in terminal_clus_ai:
-                prob_ai = self.simulate_branch_probability(target_terminal, terminal_clus_ai,
+                prob_ai = self.simulate_branch_probability(target_terminal,
                                                            adjacency_matrix2_ai,
-                                                           new_root_index, pt=markov_hitting_times_ai,
+                                                           new_root_index,
                                                            num_sim=500)
                 df_graph['terminal_clus' + str(cluster_labels_subi[target_terminal])] = 0.0000000
 
@@ -2603,13 +3230,14 @@ class VIA:
                         cluster_labels_subi[target_terminal])] = prob_ii
             bp_array = df_graph[pd_columnnames_terminal].values
             bp_array[np.isnan(bp_array)] = 1e-8
+
             bp_array = bp_array / bp_array.sum(axis=1)[:, None]
             bp_array[np.isnan(bp_array)] = 1e-8
 
             for ei, ii in enumerate(loc_compi):
                 df_graph.at[ii, 'pt'] = hitting_times[ei]
                 df_graph.at[ii, 'graph_node_label'] = graph_node_label[ei]
-                df_graph.at[ii, 'majority_truth'] = graph_node_label[ei]
+                df_graph.at[ii, 'majority_truth'] =graph_node_label[ei]
                 df_graph.at[ii, 'markov_pt'] = markov_hitting_times_ai[ei]
 
             locallytrimmed_g.vs["label"] = df_graph['graph_node_label'].values
@@ -2622,29 +3250,50 @@ class VIA:
         self.hitting_times = hitting_times
         self.markov_hitting_times = df_graph['markov_pt'].values  # hitting_times#
         self.terminal_clusters = terminal_clus
-        print(colored(f"{datetime.now()}\tTerminal clusters corresponding to unique lineages are {self.terminal_clusters} ", "blue"))
+        print(f"{datetime.now()}\tTerminal clusters corresponding to unique lineages are {self.terminal_clusters} ")
         self.node_degree_list = node_deg_list
-        print(colored(f"{datetime.now()}\tBegin projection of pseudotime and lineage likelihood", "blue"))
+        print(f"{datetime.now()}\tBegin projection of pseudotime and lineage likelihood")
         self.single_cell_bp, self.single_cell_pt_markov = self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
-        #print('testing sc_transition')
-        #self.sc_transition_matrix()
 
         self.dict_terminal_super_sub_pairs = dict_terminal_super_sub_pairs
         hitting_times = self.markov_hitting_times
 
-        bias_weights_2_all = get_biased_weights(self.edgelist, edgeweights, self.markov_hitting_times, round=2)
+        ### CONSTRUCT GRAPH USED FOR VISUALIZATION by doing further pruning so we can easily visualize the TI
+
+        # rebias the edge weights based on the recomputed final markov hitting time and do a final pruning used for visualization (not MCMCs)
+        bias_weights_2_all = get_biased_weights(self.edgelist, edgeweights_pruned_clustergraph, self.markov_hitting_times, round=2) #edgeweights of initial globally and locally pruned graph (all components) need to be forward biased
 
         n_clus = len(set(self.labels))
-        temp_csr = csr_matrix((bias_weights_2_all, tuple(zip(*self.edgelist))), shape=(n_clus, n_clus))
+        temp_csr = csr_matrix((bias_weights_2_all, tuple(zip(*self.edgelist))), shape=(n_clus, n_clus)) #locally and globally pruned and used for adjacencyMatrix2ai
+
+        if self.A_velo is None: final_transition_matrix_all_components =temp_csr.toarray()
+        else:
+            final_transition_matrix_all_components = (self.velo_weight)*self.A_velo + (1-self.velo_weight)*(temp_csr.toarray())
+            print(f"{datetime.now()}\tTransition matrix with weight of {self.velo_weight} on RNA velocity")
+        #the final array used for making the visual edgelists will be weighted average of A_velo and pt_based_trans (temp_csr)
+        final_transition_matrix_all_components =csr_matrix(final_transition_matrix_all_components)
 
         #visual_g = ig.Graph(self.edgelist, edge_attrs={'weight': bias_weights_2_all}).simplify(combine_edges='sum')
         #layout = visual_g.layout_fruchterman_reingold(weights='weight')
         #self.layout =layout
         # simplifying structure of edges used on the visual layout
-        edgeweights_maxout_2, edgelist_maxout_2, comp_labels_2 = pruning_clustergraph(temp_csr,
+        edgeweights_maxout_2, edgelist_maxout_2, comp_labels_2 = pruning_clustergraph(final_transition_matrix_all_components,
                                  global_pruning_std=self.visual_cluster_graph_pruning,
                                  max_outgoing=self.max_visual_outgoing_edges,
                                  preserve_disconnected=self.preserve_disconnected)
+
+        if self.edgebundle_pruning_twice == True:
+            print(f"{datetime.now()}\tAdditional Visual cluster graph pruning for edge bundling at level:' {self.visual_cluster_graph_pruning}")
+            layout_g = ig.Graph(edgelist_maxout_2, edge_attrs={'weight': edgeweights_maxout_2}).simplify(combine_edges='sum')
+            layout_g_csr = get_sparse_from_igraph(layout_g, weight_attr='weight')
+            weights_for_layout = np.asarray(layout_g_csr.data)
+            # clip weights to prevent distorted visual scale in layout
+            weights_for_layout = np.clip(weights_for_layout, np.percentile(weights_for_layout, 10),
+                                         np.percentile(weights_for_layout, 90))
+            weights_for_layout = list(weights_for_layout)
+            g_layout = ig.Graph(list(zip(*layout_g_csr.nonzero())), edge_attrs={'weight': weights_for_layout})
+            #edge bundle is based on the visually (double) pruned graph rather than the inital graph used for Velo and Pseudotime
+            self.hammer_bundle = make_edgebundle(layout, g_layout)
 
         temp_csr = csr_matrix((np.array(edgeweights_maxout_2), tuple(zip(*edgelist_maxout_2))), shape=(n_clus, n_clus))
         temp_csr = temp_csr.transpose().todense() + temp_csr.todense()
@@ -2693,7 +3342,10 @@ class VIA:
         self.graph_node_pos = layout.coords
 
 
-        self.draw_piechart_graph()
+        #print('To draw viagraph edges without bundling and plot piechart composition of cell types: use self.draw_piechart_graph_nobundle()')
+        #self.draw_piechart_graph_nobundle()
+        #print('drawing with bundle piechart... Use self.draw_piechart_graph() to reproduce this plot')
+        self.draw_piechart_graph(headwidth_arrow=self.piegraph_arrow_head_width)
         self.labels = list(self.labels)
 
 
@@ -2725,7 +3377,7 @@ class VIA:
             plt.show()
         return
 
-    def draw_piechart_graph(self, type_data='pt', gene_exp='', title='', cmap=None, ax_text=True,dpi=150):
+    def draw_piechart_graph_nobundle(self, type_data='pt', gene_exp='', title='', cmap=None, ax_text=True,dpi=150):
         # type_data can be 'pt' pseudotime or 'gene' for gene expression
 
         import matplotlib.lines as lines
@@ -2742,7 +3394,7 @@ class VIA:
         if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'viridis_r'
         graph_node_label = self.graph_node_label
         if type_data == 'pt':
-            pt = self.scaled_hitting_times  # these are the final MCMC refined pt then slightly scaled
+            pt = self.scaled_hitting_times  # these are the final MCMC refined pt then slightly scaled at cluster level
             title_ax1 = "Pseudotime"
 
         if type_data == 'gene':
@@ -2773,6 +3425,12 @@ class VIA:
         for e_i, (start, end) in enumerate(edgelist):
             if pt[start] > pt[end]:
                 start, end = end, start
+                if self.velocity_matrix is not None:
+                    print('using velocity to guide direction in clustergraph visualization')
+                    direction_edge = infer_direction_piegraph(start_node=start, end_node=end, CSM=self.CSM,
+                                                     velocity_weight=self.velo_weight, pt=pt)
+                    if direction_edge<0: start, end = end, start
+
 
             ax.add_line(lines.Line2D([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]],
                                      color='black', lw=edgeweight[e_i] * edgeweight_scale, alpha=0.6))
@@ -2780,6 +3438,8 @@ class VIA:
             minx = np.min(np.array([node_pos[start, 0], node_pos[end, 0]]))
 
             direction = 1 if node_pos[start, 0] < node_pos[end, 0] else -1
+
+            print('direction of start to end',start,'to',end,'is', direction)
             maxx = np.max(np.array([node_pos[start, 0], node_pos[end, 0]]))
 
             xp = np.linspace(minx, maxx, 500)
@@ -2801,7 +3461,7 @@ class VIA:
         ax_len_y = ax_y_max - ax_y_min
         trans2 = ax.transAxes.inverted().transform
         pie_axs = []
-        pie_size_ar = ((group_pop - np.min(group_pop)) / (np.max(group_pop) - np.min(group_pop)) + 0.5) / 10
+        pie_size_ar = ((group_pop - np.min(group_pop)) / (np.max(group_pop) - np.min(group_pop)) + 0.5) / 20#10
         # print('pie_size_ar', pie_size_ar)
 
         for node_i in range(n_groups):
@@ -2833,13 +3493,13 @@ class VIA:
         labels = list(set(self.true_label))
         plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon = False)
 
-        ti = 'Cluster Composition. K=' + str(self.knn) + '. ncomp = ' + str(self.ncomp)  # "+ is_sub
+        ti = 'Cluster Composition. K=' + str(self.knn) + '. ncomp = ' + str(self.ncomp) +'knnseq_'+str(self.knn_sequential) # "+ is_sub
         ax.set_title(ti)
         ax.grid(False)
         ax.set_xticks([])
         ax.set_yticks([])
 
-        title_list = [title_ax1]  # , "PT on undirected original graph"]
+        title_list = [title_ax1]
         for i, ax_i in enumerate([ax1]):
             pt = self.markov_hitting_times if type_data == 'pt' else gene_exp
 
@@ -2849,7 +3509,7 @@ class VIA:
 
                 ax_i.add_line(
                     lines.Line2D([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]],
-                                 color='black', lw=edgeweight[e_i] * edgeweight_scale, alpha=0.6))
+                                 color='black', lw=edgeweight[e_i] * edgeweight_scale, alpha=0.2))
                 z = np.polyfit([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]], 1)
                 minx = np.min(np.array([node_pos[start, 0], node_pos[end, 0]]))
 
@@ -2860,7 +3520,7 @@ class VIA:
                 p = np.poly1d(z)
                 smooth = p(xp)
                 step = 1
-                ax_i.arrow(xp[250], smooth[250], xp[250 + direction_arrow*step] - xp[250], smooth[250 + direction_arrow*step] - smooth[250],shape='full', lw=0,length_includes_head=True, head_width=arrow_head_w,color='grey')
+                ax_i.arrow(xp[250], smooth[250], xp[250 + direction_arrow*step] - xp[250], smooth[250 + direction_arrow*step] - smooth[250],shape='full', lw=0,length_includes_head=True, head_width=arrow_head_w, head_length = 1*arrow_head_w, color='grey')
 
             c_edge, l_width = [], []
             for ei, pti in enumerate(pt):
@@ -2874,7 +3534,7 @@ class VIA:
             gp_scaling = 1000 / max(group_pop)  # 500 / max(group_pop)
             # print(gp_scaling, 'gp_scaling')
             group_pop_scale = group_pop * gp_scaling * 0.5
-
+            #ax_i.plot(hammer_bundle.x, hammer_bundle.y, 'y', zorder=2, linewidth=2, color='gray', alpha=0.8)
             im1=ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap=cmap, edgecolors=c_edge,
                          alpha=1, zorder=3, linewidth=l_width)
             if ax_text:
@@ -2895,6 +3555,165 @@ class VIA:
         cax = divider.append_axes('right', size='5%', pad=0.05)
         if type_data=='pt':  f.colorbar(im1, cax=cax, orientation='vertical', label = 'pseudotime')
         else:  f.colorbar(im1, cax=cax, orientation='vertical', label = 'Gene expression')
+        f.patch.set_visible(False)
+
+        ax1.axis('off')
+        ax.axis('off')
+        plt.show()
+
+    def draw_piechart_graph(self, type_data='pt', gene_exp='', title='', cmap=None, ax_text=True, dpi=150,headwidth_arrow = 0.1, alpha_edge=0.4, linewidth_edge=2, edge_color='darkblue',reference=None):
+        '''
+
+        :param type_data:string:  default 'pt' for pseudotime colored nodes. or 'gene'
+        :param gene_exp: list of values (column of dataframe) corresponding to feature or gene expression to be used to color nodes
+        :param title: string
+        :param cmap: default None. automatically chooses coolwarm for gene expression or viridis_r for pseudotime
+        :param ax_text: Bool default: True. Annotates each node with cluster number and population of membership
+        :param dpi: int default 150
+        :param headwidth_bundle: default = 0.1. width of arrowhead used to directed edges
+        :param reference=None. list of labels for cluster composition
+        :return: matplotlib figure with two axes that plot the clustergraph using edge bundling
+                 left axis shows the clustergraph with each node colored by annotated ground truth membership.
+                 right axis shows the same clustergraph with each node colored by the pseudotime or gene expression
+        '''
+        # type_data can be 'pt' pseudotime or 'gene' for gene expression
+
+
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True, dpi=dpi)
+
+
+        node_pos = self.graph_node_pos
+
+        node_pos = np.asarray(node_pos)
+        if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'viridis_r'
+        graph_node_label = self.graph_node_label
+        if type_data == 'pt':
+            pt = self.scaled_hitting_times  # these are the final MCMC refined pt then slightly scaled at cluster level
+            title_ax1 = "Pseudotime"
+
+        if type_data == 'gene':
+            pt = gene_exp
+            title_ax1 = title
+        if reference is None: reference_labels=self.true_label
+        else: reference_labels = reference
+        n_groups = len(set(self.labels))
+        n_truegroups = len(set(reference_labels))
+        group_pop = np.zeros([n_groups, 1])
+        group_frac = pd.DataFrame(np.zeros([n_groups, n_truegroups]), columns=list(set(reference_labels)))
+        self.cluster_population_dict = {}
+        for group_i in set(self.labels):
+            loc_i = np.where(self.labels == group_i)[0]
+
+            group_pop[group_i] = len(loc_i)  # np.sum(loc_i) / 1000 + 1
+            self.cluster_population_dict[group_i] = len(loc_i)
+            true_label_in_group_i = list(np.asarray(reference_labels)[loc_i])
+            for ii in set(true_label_in_group_i):
+                group_frac[ii][group_i] = true_label_in_group_i.count(ii)
+
+        line_true = np.linspace(0, 1, n_truegroups)
+        color_true_list = [plt.cm.rainbow(color) for color in line_true]
+
+        sct = ax.scatter(node_pos[:, 0], node_pos[:, 1],
+                         c='white', edgecolors='face', s=group_pop, cmap='jet')
+
+        bboxes = getbb(sct, ax)
+
+        ax = plot_edge_bundle(ax, self.hammer_bundle, layout=self.graph_node_pos, CSM=self.CSM,
+                                velocity_weight=self.velo_weight, pt=pt, headwidth_bundle=headwidth_arrow,
+                                alpha_bundle=alpha_edge,linewidth_bundle=linewidth_edge, edge_color=edge_color)
+
+        trans = ax.transData.transform
+        bbox = ax.get_position().get_points()
+        ax_x_min = bbox[0, 0]
+        ax_x_max = bbox[1, 0]
+        ax_y_min = bbox[0, 1]
+        ax_y_max = bbox[1, 1]
+        ax_len_x = ax_x_max - ax_x_min
+        ax_len_y = ax_y_max - ax_y_min
+        trans2 = ax.transAxes.inverted().transform
+        pie_axs = []
+        pie_size_ar = ((group_pop - np.min(group_pop)) / (np.max(group_pop) - np.min(group_pop)) + 0.5) / 10  # 10
+        # print('pie_size_ar', pie_size_ar)
+
+        for node_i in range(n_groups):
+
+            cluster_i_loc = np.where(np.asarray(self.labels) == node_i)[0]
+            majority_true = self.func_mode(list(np.asarray(reference_labels)[cluster_i_loc]))
+            pie_size = pie_size_ar[node_i][0]
+
+            x1, y1 = trans(node_pos[node_i])  # data coordinates
+            xa, ya = trans2((x1, y1))  # axis coordinates
+
+            xa = ax_x_min + (xa - pie_size / 2) * ax_len_x
+            ya = ax_y_min + (ya - pie_size / 2) * ax_len_y
+            # clip, the fruchterman layout sometimes places below figure
+            if ya < 0: ya = 0
+            if xa < 0: xa = 0
+            rect = [xa, ya, pie_size * ax_len_x, pie_size * ax_len_y]
+            frac = np.asarray([ff for ff in group_frac.iloc[node_i].values])
+
+            pie_axs.append(plt.axes(rect, frameon=False))
+            pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
+            pie_axs[node_i].set_xticks([])
+            pie_axs[node_i].set_yticks([])
+            pie_axs[node_i].set_aspect('equal')
+            # pie_axs[node_i].text(0.5, 0.5, graph_node_label[node_i])
+            pie_axs[node_i].text(0.5, 0.5, majority_true)
+
+        patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
+        labels = list(set(reference_labels))
+        plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon=False)
+
+        ti = 'Cluster Composition. K=' + str(self.knn) + '. ncomp = ' + str(self.ncomp)  +'knnseq_'+str(self.knn_sequential)# "+ is_sub
+        ax.set_title(ti)
+        ax.grid(False)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        title_list = [title_ax1]
+        for i, ax_i in enumerate([ax1]):
+            pt = self.markov_hitting_times if type_data == 'pt' else gene_exp
+
+            c_edge, l_width = [], []
+            for ei, pti in enumerate(pt):
+                if ei in self.terminal_clusters:
+                    c_edge.append('red')
+                    l_width.append(1.5)
+                else:
+                    c_edge.append('gray')
+                    l_width.append(0.0)
+
+            gp_scaling = 1000 / max(group_pop)  # 500 / max(group_pop)
+            # print(gp_scaling, 'gp_scaling')
+            group_pop_scale = group_pop * gp_scaling * 0.5
+            ax_i=plot_edge_bundle(ax_i, self.hammer_bundle, layout=self.graph_node_pos,CSM=self.CSM, velocity_weight=self.velo_weight, pt=pt,headwidth_bundle=headwidth_arrow, alpha_bundle=alpha_edge, linewidth_bundle=linewidth_edge, edge_color=edge_color)
+            ## ax_i.plot(hammer_bundle.x, hammer_bundle.y, 'y', zorder=2, linewidth=2, color='gray', alpha=0.8)
+            im1 = ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap=cmap,
+                               edgecolors=c_edge,
+                               alpha=1, zorder=3, linewidth=l_width)
+            if ax_text:
+                x_max_range = np.amax(node_pos[:, 0]) / 100
+                y_max_range = np.amax(node_pos[:, 1]) / 100
+
+                for ii in range(node_pos.shape[0]):
+                    ax_i.text(node_pos[ii, 0] + max(x_max_range, y_max_range),
+                              node_pos[ii, 1] + min(x_max_range, y_max_range),
+                              'C' + str(ii) + 'pop' + str(int(group_pop[ii][0])),
+                              color='black', zorder=4)
+
+            title_pt = title_list[i]
+            ax_i.set_title(title_pt)
+            ax_i.grid(False)
+            ax_i.set_xticks([])
+            ax_i.set_yticks([])
+
+        divider = make_axes_locatable(ax1)
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        if type_data == 'pt':
+            f.colorbar(im1, cax=cax, orientation='vertical', label='pseudotime')
+        else:
+            f.colorbar(im1, cax=cax, orientation='vertical', label='Gene expression')
         f.patch.set_visible(False)
 
         ax1.axis('off')
@@ -2979,7 +3798,7 @@ class VIA:
         st = time.time()
         self.run_subPARC()
         run_time = time.time() - st
-        print('time elapsed {:.1f} seconds'.format(run_time))
+        print(f'{datetime.now()}\tTime elapsed {round(run_time,1)} seconds')
 
         targets = set(self.true_label)
         N = len(self.true_label)
