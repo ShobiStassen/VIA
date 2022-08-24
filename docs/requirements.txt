@@ -4,6 +4,6 @@
 #sphinx==4.0.2
 sphinx==5.0.1
 sphinxemoji==0.2.0
-myst-parser==0.17.2
-nbsphinx==0.8.8
+myst-parser==0.18.0
+nbsphinx==0.8.9
 pyVIA
