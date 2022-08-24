@@ -4,7 +4,7 @@ API
 pyvia
 -----
 
-.. autoclass:: VIA.core.VIA
+.. autoclass:: pyVIA.core.VIA
    :members: knngraph_visual, __init__
    :inherited-members:
    :exclude-members: 
@@ -12,7 +12,7 @@ pyvia
 Plotting
 --------
 
-.. automodule:: VIA.utils_via
+.. automodule:: pyVIA.utils_via
     :members:
     :inherited-members:
     :show-inheritance:
