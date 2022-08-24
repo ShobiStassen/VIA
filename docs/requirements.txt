@@ -5,3 +5,4 @@ sphinx==4.0.2
 sphinxemoji==0.2.0
 myst-parser==0.17.2
 nbsphinx==0.8.8
+pyVIA
