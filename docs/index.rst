@@ -71,6 +71,7 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
    Installation
    Parameters and Attributes 
    Basic Example Code
+   api
 
 
 .. toctree::
