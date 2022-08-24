@@ -18,7 +18,7 @@ import multiprocessing
 import pygam as pg
 from termcolor import colored
 from collections import Counter
-from utils_via import *
+from pyVIA.utils_via import *
 from sklearn.preprocessing import normalize
 import math
 ###work in progress core
@@ -378,7 +378,7 @@ def animated_streamplot(via_coarse, embedding , density_grid=1,
     import matplotlib.pyplot as plt
     from matplotlib.animation import FuncAnimation, writers
     from matplotlib.collections import LineCollection
-    from windmap import Streamlines
+    from pyVIA.windmap import Streamlines
     import matplotlib.patheffects as PathEffects
 
     #import cartopy.crs as ccrs
