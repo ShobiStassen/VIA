@@ -19,8 +19,11 @@ import pygam as pg
 from termcolor import colored
 from collections import Counter
 from pyVIA.utils_via import *
+from pyVIA.plotting_via import *
+
 from sklearn.preprocessing import normalize
 import math
+
 ###work in progress core
 
 def prob_reaching_terminal_state1(terminal_state,  A, root,  n_simulations, q,
@@ -108,7 +111,7 @@ def simulate_markov_sub(A, num_sim, hitting_array, q, root):
 def getbb(sc, ax):
     """
     Function to return a list of bounding boxes in data coordinates for a scatter plot.
-    Directly taken from https://stackoverflow.com/questions/55005272/
+    Adapted from https://stackoverflow.com/questions/55005272/
     """
     ax.figure.canvas.draw()  # need to draw before the transforms are set.
     transform = sc.get_transform()
@@ -146,206 +149,14 @@ def getbb(sc, ax):
     return bboxes
 
 
-def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name='plasma', scatter_size=None):
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    prob = np.sqrt(prob)  # scale values to improve visualization of colors
-    cmap = matplotlib.cm.get_cmap(cmap_name)
-    norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
-    if scatter_size is None:
-        size_point = 10 if embedding.shape[0] > 10000 else 30
-    else: size_point = scatter_size
-    # changing the alpha transparency parameter for plotting points
-    im =ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=0.01, cmap=cmap_name,    edgecolors = 'none')
-    ax.set_title('Lineage: ' + str(ti))
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
-
-    c = cmap(norm(prob)).reshape(-1, 4)
-    loc_c = np.where(prob <= 0.3)[0]
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none',alpha=0.2, cmap=cmap_name)
-    c[loc_c, 3] = 0.2
-    loc_c = np.where((prob > 0.3) & (prob <= 0.5))[0]
-    c[loc_c, 3] = 0.5
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.5, cmap=cmap_name)
-    loc_c = np.where((prob > 0.5) & (prob <= 0.7))[0]
-    c[loc_c, 3] = 0.8
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name)
-    loc_c = np.where((prob > 0.7))[0]
-    c[loc_c, 3] = 0.8
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name)
-
-
-
-
-def get_loc_terminal_states(via0, X_input):
-    # we need the location of terminal states from first iteration (Via0) to pass onto the second iterations of Via (Via1)
-    # this will allow identification of the terminal-cluster in fine-grained Via1 that best captures the terminal state from coarse Via0
-    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster in PCA space (
-    for tsi in via0.terminal_clusters:
-        loc_i = np.where(np.asarray(via0.labels) == tsi)[0]
-        val_pt = [via0.single_cell_pt_markov[i] for i in loc_i]
-        th_pt = np.percentile(val_pt, 50)  # 50
-        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-        temp = np.mean(X_input[loc_i], axis=0)
-        labelsq, distances = via0.knn_struct.knn_query(temp, k=1)
-        tsi_list.append(labelsq[0][0])
-    return tsi_list
-
-
-def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
-    # ci_list first finds location in unsampled PCA space of the location of the super-cluster or sub-terminal-cluster and root
-    # Returns location (index) of cell nearest to the ci_list in the downsampled space
-    #print("dict of terminal state pairs, Super: sub: ", p1.dict_terminal_super_sub_pairs)
-    p0_labels = np.asarray(p0.labels)
-    p1_labels = np.asarray(p1.labels)
-    p1_sc_markov_pt = p1.single_cell_pt_markov
-    ci_list = []
-    for ci in range(len(list(set(p0.labels)))):
-        if ci in p1.revised_super_terminal_clusters:  # p0.terminal_clusters:
-            loc_i = np.where(p1_labels == p1.dict_terminal_super_sub_pairs[ci])[0]
-            # loc_i = np.where(p0_labels == ci)[0]
-            # val_pt = [p1.single_cell_pt_markov[i] for i in loc_i]
-            val_pt = [p1_sc_markov_pt[i] for i in loc_i]
-            th_pt = np.percentile(val_pt, 0)  # 80
-            loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-            temp = np.mean(p0.data[loc_i], axis=0)
-            labelsq, distances = p0.knn_struct.knn_query(temp, k=1)
-            ci_list.append(labelsq[0][0])
-
-        elif (ci in p0.root) & (len(p0.root) == 1):
-            loc_root = np.where(np.asarray(p0.root) == ci)[0][0]
-
-            p1_root_label = p1.root[loc_root]
-            loc_i = np.where(np.asarray(p1_labels) == p1_root_label)[0]
-
-            # loc_i = np.where(p0.labels == ci)[0]
-            val_pt = [p1_sc_markov_pt[i] for i in loc_i]
-            th_pt = np.percentile(val_pt, 20)  # 50
-            loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] <= th_pt]
-            temp = np.mean(p0.data[loc_i], axis=0)
-            labelsq, distances = p0.knn_struct.knn_query(temp, k=1)
-            ci_list.append(labelsq[0][0])
-        else:
-            loc_i = np.where(p0_labels == ci)[0]
-            temp = np.mean(p0.data[loc_i], axis=0)
-            labelsq, distances = p0.knn_struct.knn_query(temp, k=1)
-            ci_list.append(labelsq[0][0])
-
-        X_ds = p0.data[idx]
-        p_ds = hnswlib.Index(space='l2', dim=p0.data.shape[1])
-        p_ds.init_index(max_elements=X_ds.shape[0], ef_construction=200, M=16)
-        p_ds.add_items(X_ds)
-        p_ds.set_ef(50)
-
-        new_superclust_index_ds = {}
-        for en_item, item in enumerate(ci_list):
-            labelsq, distances = p_ds.knn_query(p0.data[item, :], k=1)
-            # new_superclust_index_ds.append(labelsq[0][0])
-            new_superclust_index_ds.update({en_item: labelsq[0][0]})
-    # print('new_superclust_index_ds',new_superclust_index_ds)
-    return new_superclust_index_ds
-
-def make_knn_embeddedspace(embedding):
-    # knn struct built in the embedded space to be used for drawing the lineage trajectories onto the 2D plot
-    knn = hnswlib.Index(space='l2', dim=embedding.shape[1])
-    knn.init_index(max_elements=embedding.shape[0], ef_construction=200, M=16)
-    knn.add_items(embedding)
-    knn.set_ef(50)
-    return knn
-
-def draw_clustergraph(via_coarse, type_data='gene', gene_exp='', gene_list='', arrow_head=0.1,
-                      edgeweight_scale=1.5, cmap=None, label_=True):
-    '''
-    #draws the clustergraph for cluster level gene or pseudotime values
-    # type_pt can be 'pt' pseudotime or 'gene' for gene expression
-    # ax1 is the pseudotime graph
-    '''
-    n = len(gene_list)
-
-    fig, axs = plt.subplots(1, n)
-    pt = via_coarse.markov_hitting_times
-    if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'viridis_r'
-
-    node_pos = via_coarse.graph_node_pos
-    edgelist = list(via_coarse.edgelist_maxout)
-    edgeweight = via_coarse.edgeweights_maxout
-
-    node_pos = np.asarray(node_pos)
-
-    import matplotlib.lines as lines
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-    n_groups = len(set(via_coarse.labels))  # node_pos.shape[0]
-    n_truegroups = len(set(via_coarse.true_label))
-    group_pop = np.zeros([n_groups, 1])
-    via_coarse.cluster_population_dict = {}
-    for group_i in set(via_coarse.labels):
-        loc_i = np.where(via_coarse.labels == group_i)[0]
-
-        group_pop[group_i] = len(loc_i)  # np.sum(loc_i) / 1000 + 1
-        via_coarse.cluster_population_dict[group_i] = len(loc_i)
-
-    for i in range(n):
-        ax_i = axs[i]
-        gene_i = gene_list[i]
-        '''
-        for e_i, (start, end) in enumerate(edgelist):
-            if pt[start] > pt[end]:
-                start, end = end, start
-
-            ax_i.add_line(
-                lines.Line2D([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]],
-                             color='black', lw=edgeweight[e_i] * edgeweight_scale, alpha=0.5))
-            z = np.polyfit([node_pos[start, 0], node_pos[end, 0]], [node_pos[start, 1], node_pos[end, 1]], 1)
-            minx = np.min(np.array([node_pos[start, 0], node_pos[end, 0]]))
-
-            direction = 1 if node_pos[start, 0] < node_pos[end, 0] else -1
-            maxx = np.max([node_pos[start, 0], node_pos[end, 0]])
-            xp = np.linspace(minx, maxx, 500)
-            p = np.poly1d(z)
-            smooth = p(xp)
-            step = 1
-
-            ax_i.arrow(xp[250], smooth[250], xp[250 + direction * step] - xp[250],
-                       smooth[250 + direction * step] - smooth[250],
-                       shape='full', lw=0, length_includes_head=True, head_width=arrow_head_w, color='grey')
-        '''
-        c_edge, l_width = [], []
-        for ei, pti in enumerate(pt):
-            if ei in via_coarse.terminal_clusters:
-                c_edge.append('red')
-                l_width.append(1.5)
-            else:
-                c_edge.append('gray')
-                l_width.append(0.0)
-        ax_i = plot_edge_bundle(ax_i, via_coarse.hammer_bundle, layout=via_coarse.graph_node_pos, CSM=via_coarse.CSM,
-                                velocity_weight=via_coarse.velo_weight, pt=pt, headwidth_bundle=arrow_head, alpha_bundle=0.4, linewidth_bundle=edgeweight_scale)
-        group_pop_scale = .5 * group_pop * 1000 / max(group_pop)
-        pos = ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=gene_exp[gene_i].values, cmap=cmap,
-                           edgecolors=c_edge, alpha=1, zorder=3, linewidth=l_width)
-        if label_==True:
-            for ii in range(node_pos.shape[0]):
-                ax_i.text(node_pos[ii, 0] + 0.1, node_pos[ii, 1] + 0.1, 'C'+str(ii)+' '+str(round(gene_exp[gene_i].values[ii], 1)),
-                          color='black', zorder=4, fontsize=6)
-        divider = make_axes_locatable(ax_i)
-        cax = divider.append_axes('right', size='10%', pad=0.05)
-
-        cbar=fig.colorbar(pos, cax=cax, orientation='vertical')
-        cbar.ax.tick_params(labelsize=8)
-        ax_i.set_title(gene_i)
-        ax_i.grid(False)
-        ax_i.set_xticks([])
-        ax_i.set_yticks([])
-        ax_i.axis('off')
-    fig.patch.set_visible(False)
 
 
 def animated_streamplot(via_coarse, embedding , density_grid=1,
- linewidth=0.5,min_mass = 1, cutoff_perc = None,scatter_size=500, scatter_alpha=0.2,marker_edgewidth=0.1, smooth_transition=1, smooth_grid=0.5, color_scheme = 'annotation', other_labels=[] ,add_outline_clusters=False, cluster_outline_edgewidth = 0.001,gp_color = 'white', bg_color='black' ,  title='Streamplot', b_bias=20, n_neighbors_velocity_grid=None, fontsize=8, alpha_animate=0.7,
-                        cmap_scatter = 'rainbow', cmap_stream='Blues_r', color_stream = None, segment_length=1, saveto='/home/shobi/Trajectory/Datasets/animation.gif',use_sequentially_augmented=False):
+ linewidth=0.5,min_mass = 1, cutoff_perc = None,scatter_size=500, scatter_alpha=0.2,marker_edgewidth=0.1, smooth_transition=1, smooth_grid=0.5, color_scheme = 'annotation', other_labels=[] , b_bias=20, n_neighbors_velocity_grid=None, fontsize=8, alpha_animate=0.7,
+                        cmap_scatter = 'rainbow', cmap_stream='Blues_r', segment_length=1, saveto='/home/shobi/Trajectory/Datasets/animation.gif',use_sequentially_augmented=False):
     '''
-    #Animated vector plots
+    Draw Animated vector plots
+
     :param via_coarse:
     :param embedding:
     :param density_grid:
@@ -371,6 +182,7 @@ def animated_streamplot(via_coarse, embedding , density_grid=1,
     :param cmap_stream: string of a cmap, default 'Blues_r' 'Greys_r'
     :param color_stream: string like 'white'. will override cmap_stream
     :param segment_length:
+
     :return:
     '''
     import tqdm
@@ -557,7 +369,6 @@ def animated_streamplot(via_coarse, embedding , density_grid=1,
     #fig.patch.set_visible(False)
     #ax.axis('off')
     plt.show()
-
     return
 
 
@@ -651,6 +462,7 @@ arrow_style="-|>",  max_length=4, linewidth=1,min_mass = 1, cutoff_perc = 5,scat
     fig.patch.set_visible(False)
     ax.axis('off')
     ax.set_title(title)
+
 def draw_sc_lineage_probability_solo(via_coarse, via_fine, embedding, idx=None, cmap_name='plasma', dpi=150):
     # embedding is the full or downsampled 2D representation of the full dataset.
     # idx is the list of indices of the full dataset for which the embedding is available. if the dataset is very large the the user only has the visual embedding for a subsample of the data, then these idx can be carried forward
@@ -745,107 +557,6 @@ def draw_sc_lineage_probability_solo(via_coarse, via_fine, embedding, idx=None, 
         fig.patch.set_visible(False)
         ax.axis('off')
 
-def draw_sc_lineage_probability(via_coarse, via_fine, embedding, idx=None, cmap_name='plasma', dpi=150, scatter_size =None):
-
-    # embedding is the full or downsampled 2D representation of the full dataset.
-    # idx is the list of indices of the full dataset for which the embedding is available. if the dataset is very large the the user only has the visual embedding for a subsample of the data, then these idx can be carried forward
-    # idx is the selected indices of the downsampled samples used in the visualization
-    # G is the igraph knn (low K) used for shortest path in high dim space. no idx needed as it's made on full sample
-    # knn_hnsw is the knn made in the embedded space used for query to find the nearest point in the downsampled embedding
-    #   that corresponds to the single cells in the full graph
-    if idx is None: idx = np.arange(0, via_coarse.nsamples)
-    G = via_coarse.full_graph_shortpath
-    knn_hnsw = make_knn_embeddedspace(embedding)
-    y_root = []
-    x_root = []
-    root1_list = []
-    p1_sc_bp = via_fine.single_cell_bp[idx, :]
-    p1_labels = np.asarray(via_fine.labels)[idx]
-    p1_cc = via_fine.connected_comp_labels
-    p1_sc_pt_markov = list(np.asarray(via_fine.single_cell_pt_markov)[idx])
-    X_data = via_fine.data
-
-    X_ds = X_data[idx, :]
-    p_ds = hnswlib.Index(space='l2', dim=X_ds.shape[1])
-    p_ds.init_index(max_elements=X_ds.shape[0], ef_construction=200, M=16)
-    p_ds.add_items(X_ds)
-    p_ds.set_ef(50)
-    num_cluster = len(set(via_fine.labels))
-    G_orange = ig.Graph(n=num_cluster, edges=via_fine.edgelist_maxout, edge_attrs={'weight':via_fine.edgeweights_maxout})
-    for ii, r_i in enumerate(via_fine.root):
-        loc_i = np.where(p1_labels == via_fine.root[ii])[0]
-        x = [embedding[xi, 0] for xi in loc_i]
-        y = [embedding[yi, 1] for yi in loc_i]
-
-        labels_root, distances_root = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]), k=1)
-        x_root.append(embedding[labels_root, 0][0])
-        y_root.append(embedding[labels_root, 1][0])
-
-        labelsroot1, distances1 = via_fine.knn_struct.knn_query(X_ds[labels_root[0][0], :], k=1)
-        root1_list.append(labelsroot1[0][0])
-        for fst_i in via_fine.terminal_clusters:
-            path_orange = G_orange.get_shortest_paths(via_fine.root[ii], to=fst_i)[0]
-            #if the roots is in the same component as the terminal cluster, then print the path to output
-            if len(path_orange)>0: print(f'{datetime.now()}\tCluster path on clustergraph starting from Root Cluster {via_fine.root[ii]}to Terminal Cluster {fst_i}')
-
-    # single-cell branch probability evolution probability
-    n_terminal_clusters = len(via_fine.terminal_clusters)
-    fig_nrows, mod = divmod(n_terminal_clusters, 4)
-    if mod ==0: fig_nrows=fig_nrows
-    if mod != 0:        fig_nrows+=1
-
-    fig_ncols = 4
-    fig, axs = plt.subplots(fig_nrows,fig_ncols,dpi=dpi)
-    ti = 0 # counter for terminal cluster
-    #for i, ti in enumerate(via_fine.terminal clusters):
-    for r in range(fig_nrows):
-        for c in range(fig_ncols):
-            if ti < n_terminal_clusters:
-                if fig_nrows ==1: plot_sc_pb(axs[c], fig, embedding, p1_sc_bp[:, ti], ti= via_fine.terminal_clusters[ti], cmap_name=cmap_name, scatter_size=scatter_size)
-                else: plot_sc_pb(axs[r,c], fig, embedding, p1_sc_bp[:, ti], ti= via_fine.terminal_clusters[ti], cmap_name=cmap_name, scatter_size=scatter_size)
-                ti+=1
-                loc_i = np.where(p1_labels == ti)[0]
-                val_pt = [p1_sc_pt_markov[i] for i in loc_i]
-                th_pt = np.percentile(val_pt, 50)  # 50
-                loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-                x = [embedding[xi, 0] for xi in
-                     loc_i]  # location of sc nearest to average location of terminal clus in the EMBEDDED space
-                y = [embedding[yi, 1] for yi in loc_i]
-                labels, distances = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]),
-                                                       k=1)  # knn_hnsw is knn of embedded space
-                x_sc = embedding[labels[0], 0]  # terminal sc location in the embedded space
-                y_sc = embedding[labels[0], 1]
-
-                labelsq1, distances1 =via_fine.knn_struct.knn_query(X_ds[labels[0][0], :],
-                                                               k=1)  # find the nearest neighbor in the PCA-space full graph
-
-                path = G.get_shortest_paths(root1_list[p1_cc[ti]], to=labelsq1[0][0])  # weights='weight')
-                # G is the knn of all sc points
-
-                path_idx = []  # find the single-cell which is nearest to the average-location of a terminal cluster
-                # get the nearest-neighbor in this downsampled PCA-space graph. These will make the new path-way points
-                path = path[0]
-
-                # clusters of path
-                cluster_path = []
-                for cell_ in path:
-                    cluster_path.append(via_fine.labels[cell_])
-
-                revised_cluster_path = []
-                revised_sc_path = []
-                for enum_i, clus in enumerate(cluster_path):
-                    num_instances_clus = cluster_path.count(clus)
-                    if (clus == cluster_path[0]) | (clus == cluster_path[-1]):
-                        revised_cluster_path.append(clus)
-                        revised_sc_path.append(path[enum_i])
-                    else:
-                        if num_instances_clus > 1:  # typically intermediate stages spend a few transitions at the sc level within a cluster
-                            if clus not in revised_cluster_path: revised_cluster_path.append(clus)  # cluster
-                            revised_sc_path.append(path[enum_i])  # index of single cell
-                print(f"{datetime.now()}\tCluster level path on sc-knnGraph from Root Cluster {via_fine.root[p1_cc[ti]]} to Terminal Cluster {ti} along path: {revised_cluster_path}")
-            fig.patch.set_visible(False)
-            if fig_nrows==1: axs[c].axis('off')
-            else: axs[r,c].axis('off')
 
 def get_biased_weights(edges, weights, pt, round=1):
     # small nu means less biasing (0.5 is quite mild)
@@ -1296,7 +1007,7 @@ class VIA:
                  secondary_annotations=None, pseudotime_threshold_TS=30, cluster_graph_pruning_std=0.15,
                  visual_cluster_graph_pruning=0.15, neighboring_terminal_states_threshold=3, num_mcmc_simulations=1300,
                  piegraph_arrow_head_width=0.1,
-                 piegraph_edgeweight_scalingfactor=1.5, max_visual_outgoing_edges=2, via_coarse=None, velocity_matrix=None, gene_matrix=None, velo_weight=0.5, edgebundle_pruning=None, A_velo = None, CSM = None, edgebundle_pruning_twice=False, pca_loadings = None, time_series=False, time_series_labels=None, knn_sequential = 10,t_diff_step = 1,single_cell_transition_matrix = None):
+                 piegraph_edgeweight_scalingfactor=1.5, max_visual_outgoing_edges=2, via_coarse=None, velocity_matrix=None, gene_matrix=None, velo_weight=0.5, edgebundle_pruning=None, A_velo = None, CSM = None, edgebundle_pruning_twice=False, pca_loadings = None, time_series=False, time_series_labels=None, knn_sequential = 10, knn_sequential_reverse = 0,t_diff_step = 1,single_cell_transition_matrix = None):
 
         self.data = data
         self.nsamples, self.ncomp = data.shape
@@ -1334,6 +1045,7 @@ class VIA:
         self.jac_weighted_edges = jac_weighted_edges
         self.knn = knn
         self.knn_sequential = knn_sequential #number of knn in the adjacent time-point for time-series data
+        self.knn_sequential_reverse = knn_sequential_reverse #number of knn made between timepoint and previous time point
         self.n_iter_leiden = n_iter_leiden
         self.random_seed = random_seed  # enable reproducible Leiden clustering
         self.num_threads = num_threads  # number of threads used in KNN search/construction
@@ -1932,9 +1644,9 @@ class VIA:
         V_emb /= 3 * quiver_autoscale(X_emb, V_emb)
         return V_emb
 
-    def sequential_knn(self, data: np.ndarray, time_series_labels: list, neighbors: np.ndarray, distances: np.ndarray, k: int) -> np.ndarray:
-        all_new_nn = np.ones((data.shape[0],k))
-        all_new_nn_data = np.ones((data.shape[0], k))
+    def sequential_knn(self, data: np.ndarray, time_series_labels: list, neighbors: np.ndarray, distances: np.ndarray, k: int, k_reverse:int=0) -> np.ndarray:
+        all_new_nn = np.ones((data.shape[0],k+k_reverse))
+        all_new_nn_data = np.ones((data.shape[0], k+k_reverse))
         time_series_set = sorted(list(set(time_series_labels))) #values sorted in ascending order
         print(f"{datetime.now()}\tTime series ordered set{time_series_set}")
         time_series_labels = np.asarray(time_series_labels)
@@ -1947,25 +1659,28 @@ class VIA:
             tj_data= data[tj_loc,:]
             ti_data = data[ti_loc, :]
             tj_knn = self.construct_knn(tj_data)
-            #ti_knn = self.construct_knn(ti_data)
-            #print('tj_data', tj_data[0,:])
-            #print('ti_data', ti_data[0, :])
-            #print('ti_loc', ti_loc)
+            ti_knn = self.construct_knn(ti_data)
+
             #print('tj_loc', tj_loc)
+            #k_original = k
+            #if ti==4: k=40
+            #else: k = k_original
             ti_query_nn, d_ij = tj_knn.knn_query(ti_data, k =k) #find the cells in tj that are closest to those in ti
-            #tj_query_nn, d_ji = ti_knn.knn_query(tj_data, k=k)
+            tj_query_nn, d_ji = ti_knn.knn_query(tj_data, k=k_reverse)
             #print('ti_nn',ti_query_nn[0,:])
             for xx_i, xx in enumerate(ti_loc):
-                all_new_nn[xx,:] = tj_loc[ti_query_nn[xx_i]] #need to convert the ti_query_nn indices back to the indices of tj_loc in full data
-                all_new_nn_data[xx,:] =  d_ij[xx_i]
-            '''
+                all_new_nn[xx,0:k] = tj_loc[ti_query_nn[xx_i]] #need to convert the ti_query_nn indices back to the indices of tj_loc in full data
+                all_new_nn_data[xx,0:k] =  d_ij[xx_i]
+
             for xx_i, xx in enumerate(tj_loc):
-                all_new_nn[xx,:] = ti_loc[tj_query_nn[xx_i]] #need to convert the ti_query_nn indices back to the indices of tj_loc in full data
-                all_new_nn_data[xx,:] =  d_ji[xx_i]
-            '''
-        #print('shape neighbors', neighbors.shape, 'all_new_nn shape', all_new_nn.shape)
+                all_new_nn[xx,k:] = ti_loc[tj_query_nn[xx_i]] #need to convert the ti_query_nn indices back to the indices of tj_loc in full data
+                all_new_nn_data[xx,k:] =  d_ji[xx_i]
+
+        print('shape neighbors', neighbors.shape, 'all_new_nn shape', all_new_nn.shape)
+
         augmented_nn = np.concatenate((neighbors, all_new_nn), axis=1).astype('int')
         augmented_nn_data = np.concatenate((distances, all_new_nn_data), axis=1)
+        print('shape augmented neighbors', augmented_nn.shape)
         #augmented_nn_data = np.ones_like(augmented_nn)
         return augmented_nn, augmented_nn_data
 
@@ -1984,9 +1699,10 @@ class VIA:
         -------
         Initialized instance of hnswlib.Index to be used over given data
         """
-        if self.knn > 100:
-            print(colored(f'Passed number of neighbors exceeds max value. Setting number of neighbors too 100'))
-        k = min(100, self.knn + 1)
+        #if self.knn > 100:
+            #print(colored(f'Passed number of neighbors exceeds max value. Setting number of neighbors to 100'))
+        #k = min(100, self.knn + 1)
+        k=self.knn +1 #since first knn is itself
 
         nsamples, dim = data.shape
         ef_const, M = 200, 30
@@ -2046,6 +1762,10 @@ class VIA:
         #print('norm2', np.linalg.norm(self.data[0,:]-self.data[neigh01,:]))
         if time_series:
             msk = np.full_like(distances, True, dtype=np.bool_)
+            print('all edges', np.sum(msk))
+            # Remove self-loops
+            msk &= (neighbors != np.arange(neighbors.shape[0])[:, np.newaxis])
+            print('non-self edges', np.sum(msk))
             '''
             #doing local pruning and then adding back the augmented edges does not work so well because when the edge weights are scaled and inverted,
             # the sequentially added edges appear very weak and noisy compared to the fairly strong edges that remain after the local pruning from the inital round of knngraph. If you retain all edges from initial graph construction,
@@ -2076,7 +1796,7 @@ class VIA:
                     if abs(time_series_labels[n_i] - t_row)>t_diff_mean*t_diff_step:
                         count= count+1
                         if np.sum(msk[row[0]])>4: msk[row[0],e_i]=False # we want to ensure that each cell has at least 5 nn
-
+            print('links within tdiff',np.sum(msk))
 
         elif auto_ and not self.keep_all_local_dist:
             #print('elif condition')
@@ -2088,7 +1808,8 @@ class VIA:
         else:
             #print('elsecondition')
             msk = np.full_like(distances, True, dtype=np.bool_)
-
+            # Remove self-loops
+            msk &= (neighbors != np.arange(neighbors.shape[0])[:, np.newaxis])
         # Inverting the distances outputs values in range [0-1]. This also causes many ``good'' neighbors ending up
         # having a weight near zero (misleading as non-neighbors have a weight of zero). Therefore we scale by the
         # mean distance. The inversted weights without min_max_scaling are used for the community detection graph
@@ -2096,13 +1817,16 @@ class VIA:
             rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
             cols = neighbors[msk]
             weights = distances[msk]
-            weights.fill(1)
+            weights.fill(1) #CHECK THIS
             #weights = logistic_function(weights)
 
         elif (weights_as_inv_dist==True) & (min_max_scale==False):
+
             #print('apply msk', np.sum(msk), msk.size)
             weights = (np.mean(distances[msk]) ** 2) / (distances[msk] + distance_factor) #larger weight is a stronger edge
+
             #weights = 1 / (distances[msk] + distance_factor)
+            #weights = 2*np.exp(-distances[msk])
             rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
             cols = neighbors[msk]
         elif min_max_scale==True: #the jaccard similarity does not consider edge weights, we will use these min-max scaled weights to make a composite weight together with Jaccard to retain the distance based info
@@ -2117,7 +1841,14 @@ class VIA:
             rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
             cols = neighbors[msk]
 
-        return csr_matrix((weights, (rows, cols)), shape=(len(neighbors), len(neighbors)), dtype=np.float64)
+        #result = scipy.sparse.coo_matrix( (weights, (rows, cols)), shape=(len(neighbors), len(neighbors)) )
+        result =csr_matrix((weights, (rows, cols)), shape=(len(neighbors), len(neighbors)), dtype=np.float64)
+        #result.eliminate_zeros()
+        #transpose = result.transpose()
+
+        #prod_matrix = result.multiply(transpose)
+        #result = result + transpose# - prod_matrix
+        return result
 
     def func_mode(self, ll):
         # return MODE of list
@@ -2634,28 +2365,40 @@ class VIA:
                 plt.show()
                 '''
 
-                n_augmented, d_augmented = self.sequential_knn(self.data, self.time_series_labels, neighbors, distances, k=self.knn_sequential)
+                n_augmented, d_augmented = self.sequential_knn(self.data, self.time_series_labels, neighbors, distances, k=self.knn_sequential, k_reverse=self.knn_sequential_reverse)
 
 
                 adjacency_augmented = self.make_csrmatrix_noselfloop(n_augmented, d_augmented, time_series=self.time_series, time_series_labels = self.time_series_labels, t_diff_step=self.t_diff_step)  # this function has local pruning which removes neighbors that are more than t_dif apart. Since the same type of local pruning wrt t_dif is applied pre-clustergraph, we only need to call this function once in the case of time_series data
                 #adjacency_augmented.data.fill(1)
 
                 '''
-                embedding = run_umap_hnsw(self.data, adjacency_augmented, n_epochs=100, min_dist=0.1, spread=1, distance_metric = 'cosine')
-                plt.scatter(embedding[:, 0], embedding[:, 1], c=self.true_label, cmap='viridis', s=2, alpha=0.3)
-                title = 'cosine augmented' + 'k_kseq_pc' + str(self.knn) + '_' + str(
+                embedding = run_umap_hnsw(self.data, adjacency_augmented, n_epochs=100, min_dist=0.5, spread=1, distance_metric = 'euclidean')
+                plt.scatter(embedding[:, 0], embedding[:, 1], c=self.time_series_labels, cmap='viridis', s=2, alpha=0.3)
+                title = 'euc' + 'k_kseq_pc' + str(self.knn) + '_' + str(
                     self.knn_sequential) + '_' + str(self.data.shape[1])
                 plt.title(title)
                 plt.show()
 
-                
 
-                embedding = run_umap_hnsw(self.data, adjacency_augmented, n_epochs=100, min_dist=0.1, spread=1,
-                                          distance_metric='euclidean')
-                plt.scatter(embedding[:, 0], embedding[:, 1], c=self.true_label, cmap='rainbow', s=2, alpha=0.3)
+
+                color_dict={}
+                for index, value in enumerate(set(self.true_label)):
+                    color_dict[value] = index
+                print('color dict', color_dict)
+
+                palette = cm.get_cmap('rainbow', len(color_dict.keys()))
+                cmap_ = palette(range(len(color_dict.keys())))
+
+                fig, ax = plt.subplots()
+
+                for key in color_dict:
+                    loc_key = np.where(np.asarray(self.true_label) == key)[0]
+                    ax.scatter(embedding[loc_key,0],embedding[loc_key,1], color=cmap_[color_dict[key]], label = key, s=3, alpha=0.3)
+                #plt.scatter(embedding[:, 0], embedding[:, 1], c=[int(i) for i in self.true_label],  s=2, alpha=0.3)
                 title = 'euclidean augmented' + 'k_kseq_pc' + str(self.knn) + '_' + str(
                     self.knn_sequential) + '_' + str(self.data.shape[1])
                 plt.title(title)
+                plt.legend(fontsize=6, frameon=False)
                 plt.show()
                 '''
                 #adjacency_augmented_clus = self.make_csrmatrix_noselfloop(neighbors, distances,   time_series=self.time_series,  time_series_labels=self.time_series_labels, t_diff_step=0.5)  # this function has loca
@@ -2664,7 +2407,7 @@ class VIA:
                 #adjacency.data.fill(1)
                 adjacency = self.make_csrmatrix_noselfloop(neighbors, distances) #not augmented or tiff'ed
             else:
-                adjacency =    self.make_csrmatrix_noselfloop(neighbors, distances) #this function has local pruning based on edge distances
+                adjacency = self.make_csrmatrix_noselfloop(neighbors, distances) #this function has local pruning based on edge distances
 
 
         else:
@@ -2888,6 +2631,44 @@ class VIA:
         #the edgeweights of the bundle-edges is determined by the distance based metrics and jaccard similarities and not by the pseudotimes
         #for the transition matrix used in the markov pseudotime and differentiation probability computations, the edges will be further biased by the hittings times and markov pseudotimes
         layout = g_layout.layout_fruchterman_reingold(weights='weight')
+        '''
+        min_dist = 0.1#0.5 (for cao proto)
+        embedding = run_umap_hnsw(self.data, adjacency_augmented.copy(), n_epochs=100, min_dist=min_dist, spread=1,
+                                  distance_metric='euclidean', init_pos='via', cluster_membership=self.labels,layout=layout.coords) #layout=layout.coords,
+        title = 'euc' + 'k_kseq_pc' + str(self.knn) + '_' + str(
+            self.knn_sequential) + '_' + str(self.data.shape[1])+'init_via_mindis'+str(min_dist)
+        df_U=pd.DataFrame(embedding)
+        df_U.to_csv('/home/shobi/Trajectory/Datasets/WagnerZebrafish/2000hvg/umap_viainit_' + title + 'mindist'+str(min_dist)+'June17_v7.csv')
+        #df_U.to_csv('/home/shobi/Trajectory/Datasets/Cao_ProtoVert/umap_viainit_'+title+'mindist'+str(min_dist)+'June17_v5.csv')
+        plt.scatter(embedding[:, 0], embedding[:, 1], c=self.time_series_labels, cmap='rainbow', s=2, alpha=0.3)
+
+        plt.title(title)
+        plt.show()
+        
+        color_dict = {}
+        for index, value in enumerate(set(self.true_label)):
+            color_dict[value] = index
+        print('color dict', color_dict)
+
+        palette = cm.get_cmap('rainbow', len(color_dict.keys()))
+        cmap_ = palette(range(len(color_dict.keys())))
+
+        fig, ax = plt.subplots()
+
+        for key in color_dict:
+            loc_key = np.where(np.asarray(self.true_label) == key)[0]
+            ax.scatter(embedding[loc_key, 0], embedding[loc_key, 1], color=cmap_[color_dict[key]], label=key, s=3,
+                       alpha=0.3)
+            x_mean = embedding[loc_key, 0].mean()
+            y_mean = embedding[loc_key, 1].mean()
+            ax.text(x_mean, y_mean, key, style ='italic',        fontsize = 10, color ="black")
+        # plt.scatter(embedding[:, 0], embedding[:, 1], c=[int(i) for i in self.true_label],  s=2, alpha=0.3)
+        title = 'euclidean augmented' + 'k_kseq_pc' + str(self.knn) + '_' + str(
+            self.knn_sequential) + '_' + str(self.data.shape[1])
+        plt.title(title)
+        plt.legend(fontsize=6, frameon=False)
+        plt.show()
+        '''
         if self.edgebundle_pruning_twice ==False:
             #print('creating bundle with single round of global pruning at a level of', self.edgebundle_pruning)
             self.hammer_bundle =make_edgebundle(layout,g_layout)
@@ -3342,6 +3123,8 @@ class VIA:
         self.graph_node_pos = layout.coords
 
 
+
+
         #print('To draw viagraph edges without bundling and plot piechart composition of cell types: use self.draw_piechart_graph_nobundle()')
         #self.draw_piechart_graph_nobundle()
         #print('drawing with bundle piechart... Use self.draw_piechart_graph() to reproduce this plot')
@@ -3491,7 +3274,8 @@ class VIA:
 
         patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
         labels = list(set(self.true_label))
-        plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon = False)
+        #plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon = False)
+        plt.legend(patches, labels, loc='best', fontsize=6, frameon=False)
 
         ti = 'Cluster Composition. K=' + str(self.knn) + '. ncomp = ' + str(self.ncomp) +'knnseq_'+str(self.knn_sequential) # "+ is_sub
         ax.set_title(ti)
@@ -3793,6 +3577,7 @@ class VIA:
 
     def run_VIA(self):
         print(f'{datetime.now()}\tRunning VIA over input data of {self.data.shape[0]} (samples) x {self.data.shape[1]} (features)')
+        print(f'{datetime.now()}\tKnngraph has {self.knn} neighbors')
 
         self.knn_struct = self.construct_knn(self.data)
         st = time.time()

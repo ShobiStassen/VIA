@@ -11,8 +11,139 @@ import pandas as pd
 import numpy as np
 from numpy import ndarray
 from scipy.sparse import issparse, spmatrix
-
+import hnswlib
 import time
+import matplotlib
+import igraph as ig
+import matplotlib.pyplot as plt
+
+def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
+    #ci_list first finds location in unsampled PCA space of the location of the super-cluster or sub-terminal-cluster and root
+    # Returns location (index) of cell nearest to the ci_list in the downsampled space
+    #print("dict of terminal state pairs, Super: sub: ", p1.dict_terminal_super_sub_pairs)
+    p0_labels = np.asarray(p0.labels)
+    p1_labels = np.asarray(p1.labels)
+    p1_sc_markov_pt = p1.single_cell_pt_markov
+    ci_list = []
+    for ci in range(len(list(set(p0.labels)))):
+        if ci in p1.revised_super_terminal_clusters:  # p0.terminal_clusters:
+            loc_i = np.where(p1_labels == p1.dict_terminal_super_sub_pairs[ci])[0]
+            # loc_i = np.where(p0_labels == ci)[0]
+            # val_pt = [p1.single_cell_pt_markov[i] for i in loc_i]
+            val_pt = [p1_sc_markov_pt[i] for i in loc_i]
+            th_pt = np.percentile(val_pt, 0)  # 80
+            loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
+            temp = np.mean(p0.data[loc_i], axis=0)
+            labelsq, distances = p0.knn_struct.knn_query(temp, k=1)
+            ci_list.append(labelsq[0][0])
+
+        elif (ci in p0.root) & (len(p0.root) == 1):
+            loc_root = np.where(np.asarray(p0.root) == ci)[0][0]
+
+            p1_root_label = p1.root[loc_root]
+            loc_i = np.where(np.asarray(p1_labels) == p1_root_label)[0]
+
+            # loc_i = np.where(p0.labels == ci)[0]
+            val_pt = [p1_sc_markov_pt[i] for i in loc_i]
+            th_pt = np.percentile(val_pt, 20)  # 50
+            loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] <= th_pt]
+            temp = np.mean(p0.data[loc_i], axis=0)
+            labelsq, distances = p0.knn_struct.knn_query(temp, k=1)
+            ci_list.append(labelsq[0][0])
+        else:
+            loc_i = np.where(p0_labels == ci)[0]
+            temp = np.mean(p0.data[loc_i], axis=0)
+            labelsq, distances = p0.knn_struct.knn_query(temp, k=1)
+            ci_list.append(labelsq[0][0])
+
+        X_ds = p0.data[idx]
+        p_ds = hnswlib.Index(space='l2', dim=p0.data.shape[1])
+        p_ds.init_index(max_elements=X_ds.shape[0], ef_construction=200, M=16)
+        p_ds.add_items(X_ds)
+        p_ds.set_ef(50)
+
+        new_superclust_index_ds = {}
+        for en_item, item in enumerate(ci_list):
+            labelsq, distances = p_ds.knn_query(p0.data[item, :], k=1)
+            # new_superclust_index_ds.append(labelsq[0][0])
+            new_superclust_index_ds.update({en_item: labelsq[0][0]})
+    # print('new_superclust_index_ds',new_superclust_index_ds)
+    return new_superclust_index_ds
+
+def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name='plasma', scatter_size=None):
+    '''
+    This is a helper function called by draw_sc_lineage_probability
+
+    :param ax:
+    :param fig:
+    :param embedding:
+    :param prob:
+    :param ti:
+    :param cmap_name:
+    :param scatter_size:
+    :return:
+    '''
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    prob = np.sqrt(prob)  # scale values to improve visualization of colors
+    cmap = matplotlib.cm.get_cmap(cmap_name)
+    norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
+    if scatter_size is None:
+        size_point = 10 if embedding.shape[0] > 10000 else 30
+    else: size_point = scatter_size
+    # changing the alpha transparency parameter for plotting points
+    im =ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=0.01, cmap=cmap_name,    edgecolors = 'none')
+    ax.set_title('Lineage: ' + str(ti))
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
+
+    c = cmap(norm(prob)).reshape(-1, 4)
+    loc_c = np.where(prob <= 0.3)[0]
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none',alpha=0.2, cmap=cmap_name)
+    c[loc_c, 3] = 0.2
+    loc_c = np.where((prob > 0.3) & (prob <= 0.5))[0]
+    c[loc_c, 3] = 0.5
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.5, cmap=cmap_name)
+    loc_c = np.where((prob > 0.5) & (prob <= 0.7))[0]
+    c[loc_c, 3] = 0.8
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name)
+    loc_c = np.where((prob > 0.7))[0]
+    c[loc_c, 3] = 0.8
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name)
+
+
+def make_knn_embeddedspace(embedding):
+    # knn struct built in the embedded space to be used for drawing the lineage trajectories onto the 2D plot
+    knn = hnswlib.Index(space='l2', dim=embedding.shape[1])
+    knn.init_index(max_elements=embedding.shape[0], ef_construction=200, M=16)
+    knn.add_items(embedding)
+    knn.set_ef(50)
+    return knn
+
+
+
+
+def get_loc_terminal_states(via0, X_input):
+    '''
+
+    we need the location of terminal states from first iteration (Via0) to pass onto the second iterations of Via (Via1)
+    this will allow identification of the terminal-cluster in fine-grained Via1 that best captures the terminal state from coarse Via0
+
+    :param via0: coarse grained iteration of VIA
+    :param X_input: via0.data. the data matrix (PCs) on which the TI is inferred
+    :return:
+    '''
+
+    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster in PCA space
+    for tsi in via0.terminal_clusters:
+        loc_i = np.where(np.asarray(via0.labels) == tsi)[0]
+        val_pt = [via0.single_cell_pt_markov[i] for i in loc_i]
+        th_pt = np.percentile(val_pt, 50)  # 50
+        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
+        temp = np.mean(X_input[loc_i], axis=0)
+        labelsq, distances = via0.knn_struct.knn_query(temp, k=1)
+        tsi_list.append(labelsq[0][0])
+    return tsi_list
 
 from datashader.bundling import connect_edges, hammer_bundle
 def sigmoid_func(X):
@@ -250,10 +381,10 @@ def get_projected_distances(loadings, gene_matrix, velocity_matrix, edgelist, cu
     weights = 0.5 + (weights - np.min(weights)) * (2 - 0.5) / (np.max(weights) - np.min(weights))
     weights = 1 / weights
     return weights
+
 def stationary_probability_naive(A_velo):
     '''
     Find the stationary probability of the cluster-graph transition matrix
-
     :param A_velo: transition matrix of cluster graph based on velocity (cluster level)
     :return: stationary probability of each cluster
     '''
@@ -271,7 +402,6 @@ def stationary_probability_naive(A_velo):
 def stationary_probability_(A_velo):
     '''
     Find the stationary probability of the cluster-graph transition matrix
-
     :param A_velo: transition matrix of cluster graph based on velocity (cluster level)
     :return: stationary probability of each cluster
     '''
@@ -314,29 +444,54 @@ def stationary_probability_(A_velo):
 
 def velocity_root(stationary_probability, A_velo):
     '''
-    use the stationary probability combined with cluster-graph vertex properties to identify a likely candidate for the root cluster
-
+    #use the stationary probability combined with cluster-graph vertex properties to identify a likely candidate for the root cluster
     :param stationary_probability:
     :param A_velo:
     :return:
     '''
 
 
-def run_umap_hnsw( X_input, graph, n_components=2, alpha: float = 1.0, negative_sample_rate: int = 5,
-                  gamma: float = 1.0, spread=1.0, min_dist=0.1, init_pos='spectral', random_state=1, n_epochs=0, distance_metric: str = 'euclidean' ):
-
+def run_umap_hnsw(  X_input , graph, n_components=2, alpha: float = 1.0, negative_sample_rate: int = 5,
+                  gamma: float = 1.0, spread=1.0, min_dist=0.1, init_pos='spectral', random_state=0, n_epochs=0, distance_metric: str = 'euclidean', layout:list = [], cluster_membership:str = []):
+    ''''
+    :param init_pos: (default) 'spectral', 'via'
+    :param
+    :param layout via0.graph_node_pos
+    :param cluster_membership = v0.labels
     '''
-    Computing umap on sc-Viagraph
-
-    '''
+    #X_input = via0.data
+    n_cells = X_input.shape[0]
+    #graph = graph+graph.T
+    #graph = via0.csr_full_graph
+    print('Computing umap on sc-Viagraph')
     from umap.umap_ import find_ab_params, simplicial_set_embedding
     #graph is a csr matrix
     #weight all edges as 1 in order to prevent umap from pruning weaker edges away
+    layout_array = np.zeros(shape=(n_cells,2))
+
+    if init_pos=='via':
+        #list of lists [[x,y], [], []]
+        for i in range(n_cells):
+            layout_array[i,0]=layout[cluster_membership[i]][0]
+            layout_array[i, 1] = layout[cluster_membership[i]][1]
+        init_pos = layout_array
+        print('using via to initialize embedding')
 
     a, b = find_ab_params(spread, min_dist)
     #print('a,b, spread, dist', a, b, spread, min_dist)
     t0 = time.time()
-    graph.data.fill(1)
+    m = graph.data.max()
+    graph.data = np.clip(graph.data, np.percentile(graph.data, 10),
+                                 np.percentile(graph.data, 90))
+    #graph.data = 1 + graph.data/m
+    #graph.data.fill(1)
+    print('average graph.data', round(np.mean(graph.data),4), round(np.max(graph.data),2))
+    #graph.data = graph.data + np.mean(graph.data)
+
+    #transpose =graph.transpose()
+
+    # prod_matrix = result.multiply(transpose)
+    #graph = graph + transpose  # - prod_matrix
     X_umap = simplicial_set_embedding(data=X_input, graph=graph, n_components=n_components, initial_alpha=alpha,
                                       a=a, b=b, n_epochs=n_epochs, metric_kwds={}, gamma=gamma, metric=distance_metric,
                                       negative_sample_rate=negative_sample_rate, init=init_pos,
@@ -349,7 +504,6 @@ def velocity_transition(A,V,G, slope =4):
     '''
     Reweighting the cluster level transition matrix based on the cosine similarities of velocity vectors
     relative to the change in gene expression from the ith cell to its neighbors in knn_gene graph (at cluster level)
-
     :param A: Adjacency of clustergraph
     :param V: velocity matrix, cluster average
     :param G: Gene expression matrix, cluster average
@@ -391,8 +545,6 @@ def velocity_transition(A,V,G, slope =4):
 
 def sc_CSM(A, V, G):
     '''
-    single cell level cosine similarity between velocity vectors of neighboring cells
-
     :param A: single-cell csr knn graph with neighbors. v0.self.full_csr_matrix
     :param V: cell x velocity matrix (dim: n_samples x n_genes)
     :param G: cell x genes matrix (dim: n_samples x n_genes)
