@@ -14,7 +14,9 @@ import os
 import sys
 #sys.path.insert(0, os.path.abspath('.'))
 #sys.path.insert(0, os.path.abspath('..VIA'))
-sys.path.insert(0, os.path.abspath('../../VIA'))
+#sys.path.insert(0, os.path.abspath('../../VIA'))
+sys.path.insert(0, os.path.abspath('..'))
+sys.path.append('../VIA/')
 #sys.path.insert(0, os.path.abspath('..VIA'))
 #root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 #sys.path.insert(0, root_dir)
