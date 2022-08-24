@@ -253,6 +253,7 @@ def get_projected_distances(loadings, gene_matrix, velocity_matrix, edgelist, cu
 def stationary_probability_naive(A_velo):
     '''
     Find the stationary probability of the cluster-graph transition matrix
+
     :param A_velo: transition matrix of cluster graph based on velocity (cluster level)
     :return: stationary probability of each cluster
     '''
@@ -270,6 +271,7 @@ def stationary_probability_naive(A_velo):
 def stationary_probability_(A_velo):
     '''
     Find the stationary probability of the cluster-graph transition matrix
+
     :param A_velo: transition matrix of cluster graph based on velocity (cluster level)
     :return: stationary probability of each cluster
     '''
@@ -312,7 +314,8 @@ def stationary_probability_(A_velo):
 
 def velocity_root(stationary_probability, A_velo):
     '''
-    #use the stationary probability combined with cluster-graph vertex properties to identify a likely candidate for the root cluster
+    use the stationary probability combined with cluster-graph vertex properties to identify a likely candidate for the root cluster
+
     :param stationary_probability:
     :param A_velo:
     :return:
@@ -322,7 +325,10 @@ def velocity_root(stationary_probability, A_velo):
 def run_umap_hnsw( X_input, graph, n_components=2, alpha: float = 1.0, negative_sample_rate: int = 5,
                   gamma: float = 1.0, spread=1.0, min_dist=0.1, init_pos='spectral', random_state=1, n_epochs=0, distance_metric: str = 'euclidean' ):
 
-    print('Computing umap on sc-Viagraph')
+    '''
+    Computing umap on sc-Viagraph
+
+    '''
     from umap.umap_ import find_ab_params, simplicial_set_embedding
     #graph is a csr matrix
     #weight all edges as 1 in order to prevent umap from pruning weaker edges away
@@ -343,6 +349,7 @@ def velocity_transition(A,V,G, slope =4):
     '''
     Reweighting the cluster level transition matrix based on the cosine similarities of velocity vectors
     relative to the change in gene expression from the ith cell to its neighbors in knn_gene graph (at cluster level)
+
     :param A: Adjacency of clustergraph
     :param V: velocity matrix, cluster average
     :param G: Gene expression matrix, cluster average
@@ -384,6 +391,8 @@ def velocity_transition(A,V,G, slope =4):
 
 def sc_CSM(A, V, G):
     '''
+    single cell level cosine similarity between velocity vectors of neighboring cells
+
     :param A: single-cell csr knn graph with neighbors. v0.self.full_csr_matrix
     :param V: cell x velocity matrix (dim: n_samples x n_genes)
     :param G: cell x genes matrix (dim: n_samples x n_genes)
