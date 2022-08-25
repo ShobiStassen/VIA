@@ -19,7 +19,7 @@ import pygam as pg
 from termcolor import colored
 from collections import Counter
 
-from plotting_via import * #from pyVIA.plotting_via import *
+from pyVIA.plotting_via import * #from plotting_via import * 
 from pyVIA.utils_via import *
 from sklearn.preprocessing import normalize
 import math
