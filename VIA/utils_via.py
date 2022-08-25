@@ -451,53 +451,7 @@ def velocity_root(stationary_probability, A_velo):
     '''
 
 
-def run_umap_hnsw(  X_input , graph, n_components=2, alpha: float = 1.0, negative_sample_rate: int = 5,
-                  gamma: float = 1.0, spread=1.0, min_dist=0.1, init_pos='spectral', random_state=0, n_epochs=0, distance_metric: str = 'euclidean', layout:list = [], cluster_membership:str = []):
-    ''''
-    :param init_pos: (default) 'spectral', 'via'
-    :param
-    :param layout via0.graph_node_pos
-    :param cluster_membership = v0.labels
-    '''
-    #X_input = via0.data
-    n_cells = X_input.shape[0]
-    #graph = graph+graph.T
-    #graph = via0.csr_full_graph
-    print('Computing umap on sc-Viagraph')
-    from umap.umap_ import find_ab_params, simplicial_set_embedding
-    #graph is a csr matrix
-    #weight all edges as 1 in order to prevent umap from pruning weaker edges away
-    layout_array = np.zeros(shape=(n_cells,2))
 
-    if init_pos=='via':
-        #list of lists [[x,y], [], []]
-        for i in range(n_cells):
-            layout_array[i,0]=layout[cluster_membership[i]][0]
-            layout_array[i, 1] = layout[cluster_membership[i]][1]
-        init_pos = layout_array
-        print('using via to initialize embedding')
-
-    a, b = find_ab_params(spread, min_dist)
-    #print('a,b, spread, dist', a, b, spread, min_dist)
-    t0 = time.time()
-    m = graph.data.max()
-    graph.data = np.clip(graph.data, np.percentile(graph.data, 10),
-                                 np.percentile(graph.data, 90))
-    #graph.data = 1 + graph.data/m
-    #graph.data.fill(1)
-    print('average graph.data', round(np.mean(graph.data),4), round(np.max(graph.data),2))
-    #graph.data = graph.data + np.mean(graph.data)
-
-    #transpose =graph.transpose()
-
-    # prod_matrix = result.multiply(transpose)
-    #graph = graph + transpose  # - prod_matrix
-    X_umap = simplicial_set_embedding(data=X_input, graph=graph, n_components=n_components, initial_alpha=alpha,
-                                      a=a, b=b, n_epochs=n_epochs, metric_kwds={}, gamma=gamma, metric=distance_metric,
-                                      negative_sample_rate=negative_sample_rate, init=init_pos,
-                                      random_state=np.random.RandomState(random_state),
-                                      verbose=1)
-    return X_umap
 
 
 def velocity_transition(A,V,G, slope =4):
