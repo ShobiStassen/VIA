@@ -5,7 +5,7 @@ pyvia api (under construction)
 -------------------------------
 
 .. autoclass:: VIA.core.VIA
-   :members: knngraph_visual, __init__
+   :members: 
    :inherited-members:
    :exclude-members: 
 

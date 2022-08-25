@@ -81,7 +81,7 @@ Parameters and Attributes
      - (optional, default = None). Only required when using RNA velocity to guide direction. Matrix from scVelo with RNA velocities from: *adata.layers['velocity']*
 
    * - velo_weight
-     - (optional, default = 0.5) If the visualized cluster graph edges seem too busy, they can be further condensed by a second iteration of edge bundling by setting this to True.
+     - (optional, default = 0.5) #float between 0,1. the weight assigned to directionality and connectivity derived from scRNA-velocity 
 
    * - pca_loadings
      - (optional, default = None) The loadings of the pcs used to project the cells when adjusting the gene-space using velocity: *adata.varm['PCs']*
