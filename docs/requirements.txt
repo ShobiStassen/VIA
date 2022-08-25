@@ -2,8 +2,9 @@
 
 # Defining the exact version will make sure things don't break
 #sphinx==4.0.2
-sphinx==5.0.1
+sphinx==5.1.1
 sphinxemoji==0.2.0
 myst-parser==0.18.0
 nbsphinx==0.8.9
+sphinx-autodoc-typehints==1.19.2
 pyVIA
