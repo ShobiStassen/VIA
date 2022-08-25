@@ -9,8 +9,8 @@ from sklearn.metrics.pairwise import euclidean_distances
 import umap
 import phate
 import seaborn as sns
-from pyVIA.core import * #pyVIA.core import * core_working import*
-
+#from core_working import *#pyVIA.core import * #pyVIA.core import * core_working import*
+from pyVIA.core import *
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
     import scvelo as scv
     dict_abb = {'Basophils': 'BASO1', 'CD4+ Effector Memory': 'TCEL7', 'Colony Forming Unit-Granulocytes': 'GRAN1',
@@ -572,7 +572,7 @@ def main_Toy_comparisons(ncomps=10, knn=30, random_seed=42, dataset='Toy3', root
     v1.get_gene_expression(gene_exp=df_genes, marker_genes=['Gene0', 'Gene1', 'Gene2'])
 
 
-    draw_sc_lineage_probability(via_coarse=v0, via_fine=v1, embedding=embedding, idx=idx)
+    draw_sc_lineage_probability(via_coarse=v0, via_fine=v1, embedding=embedding)
 
     plt.show()
 
@@ -628,8 +628,8 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
              random_seed=random_seed, piegraph_arrow_head_width=0.2,
              piegraph_edgeweight_scalingfactor=1.0)  # *.4 root=2,
     v0.run_VIA()
-
-    animated_streamplot(v0, embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1, saveto='/home/shobi/Trajectory/Datasets/Toy3/test.gif' )
+    draw_piechart_graph(v0, edge_color='green')
+    plt.show()
     via_streamplot(v0, embedding)
     plt.show()
     super_labels = v0.labels
@@ -656,13 +656,17 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
 
 
     draw_trajectory_gams(v0,v1, embedding)
+    plt.show()
 
     df_genes = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
-    v1.get_gene_expression(gene_exp=df_genes, marker_genes=['Gene0','Gene1','Gene2'])
+
+    get_gene_expression(v0, gene_exp=df_genes, marker_genes=['Gene0', 'Gene1', 'Gene2'])
     plt.show()
     draw_sc_lineage_probability(via_coarse = v0, via_fine=v1, embedding=embedding)
     plt.show()
 
+    animated_streamplot(v0, embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1,
+                        saveto='/home/shobi/Trajectory/Datasets/Toy3/test.gif')
 
 def main_Bcell(ncomps=50, knn=20, random_seed=0, cluster_graph_pruning_std=.15,path='/home/shobi/Trajectory/Datasets/Bcell/'):
     print('Input params: ncomp, knn, random seed', ncomps, knn, random_seed)
@@ -1051,8 +1055,8 @@ def main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, cluster_graph_pruning_st
 
     Y_phate = pd.read_csv(foldername + 'EB_phate_embedding.csv')
     Y_phate = Y_phate.values
-    # phate_operator = phate.PHATE(n_jobs=-1)
-    # Y_phate = phate_operator.fit_transform(adata.X)  # before scaling. as done in PHATE
+    phate_operator = phate.PHATE(n_jobs=-1)
+    Y_phate = phate_operator.fit_transform(adata.X)  # before scaling. as done in PHATE
 
     scale = False  # scaling mostly improves the cluster-graph heatmap of genes vs clusters. doesnt sway VIA performance
     if scale == True:  # we scale before VIA. scaling not needed for PHATE
@@ -1320,6 +1324,68 @@ def main_EB(ncomps=30, knn=20, v0_random_seed=24):
 
     plt.show()
 
+    marker_genes = ['CD44', 'GATA4', 'PDGFRa', 'EpCAM']
+    df_genes = pd.DataFrame(adata[:, marker_genes].X)
+    df_genes.columns = marker_genes
+    v0.get_gene_expression(gene_exp=df_genes)
+    plt.show()
+def main_mESC_timeseries(knn=40, cluster_graph_pruning_std = 0.15, random_seed = 0, knn_sequential=15,jac_std_global=0.5):
+    root = [0.0]
+
+    U= pd.read_csv('/home/shobi/Trajectory/Datasets/mESC/mESC_7000perDay_noscaling_meso_timeseries_umap_knn40_knnseq15_locallypruned.csv')
+    U = U.values[:,1:]
+    plt.scatter(U[:, 0], U[:,1], s=4, alpha=0.7)
+    plt.show()
+    data = pd.read_csv('/home/shobi/Trajectory/Datasets/mESC/mESC_7000perDay_noscaling_meso.csv')
+
+    marker_meso = ['Sca-1', 'CD41', 'Nestin', 'Desmin', 'CD24', 'FoxA2', 'Oct4', 'CD45', 'Ki67', 'Vimentin',
+                         'Cdx2', 'Nanog', 'pStat3-705', 'Sox2', 'Flk-1', 'Tuj1', 'H3K9ac', 'Lin28', 'PDGFRa', 'EpCAM',
+                         'CD44', 'GATA4', 'Klf4', 'CCR9', 'p53', 'SSEA1', 'bCatenin', 'IdU']
+    true_labels_numeric= data['day'].tolist()
+    print('set true_labels', set(true_labels_numeric))
+    data = data[marker_meso] #using the subset of markers in the original paper
+
+    scale_arcsinh = 5
+    raw = data.values
+    raw = raw.astype(np.float)
+    raw = raw / scale_arcsinh
+    raw = np.arcsinh(raw)
+
+    adata = sc.AnnData(raw)
+    adata.var_names = data.columns
+    adata.obs['day_str'] = [str(i) for i in true_labels_numeric]
+    print(f"anndata shape {adata.shape}")
+    print(f"jac std global {jac_std_global}")
+    v0 = VIA(adata.X, true_labels_numeric, jac_std_global=jac_std_global, dist_std_local=1, knn=knn,
+             cluster_graph_pruning_std=cluster_graph_pruning_std,
+             too_big_factor=0.3, resolution_parameter=2,
+             root_user=root, dataset='group', random_seed=random_seed,
+             is_coarse=True, preserve_disconnected=False, pseudotime_threshold_TS=40, x_lazy=0.99,
+             alpha_teleport=0.99, time_series=True, time_series_labels=true_labels_numeric, edgebundle_pruning=cluster_graph_pruning_std, edgebundle_pruning_twice=False, knn_sequential=knn_sequential, t_diff_step=2)
+
+    v0.run_VIA()
+    via_streamplot(v0, embedding=U[:, 0:2], scatter_size=50, scatter_alpha=0.2, marker_edgewidth=0.01,
+                   density_stream=1, density_grid=0.5, smooth_transition=1, smooth_grid=0.3, use_sequentially_augmented=True)
+    plt.show()
+    marker_genes = ['CD44', 'GATA4', 'PDGFRa', 'EpCAM']
+    df_genes = pd.DataFrame(adata[:, marker_genes].X)
+    df_genes.columns = marker_genes
+    v0.get_gene_expression(gene_exp=df_genes)
+    plt.show()
+    '''
+    U = run_umap_hnsw(X_input=v0.data, graph=v0.csr_full_graph, n_components=2, spread=1.0, min_dist=0.3,
+                      init_pos='spectral', random_state=1, n_epochs=100)
+
+    U_df = pd.DataFrame(U[:, 0:2])
+    U_df.to_csv('/home/shobi/Trajectory/Datasets/mESC/mESC_7000perDay_noscaling_meso_timeseries_umap.csv')
+    '''
+    plt.scatter(U[:, 0], U[:, 1], c=v0.time_series_labels, cmap='jet', s=4, alpha=0.7)
+    plt.show()
+    draw_trajectory_gams(via_coarse=v0, via_fine=v0, embedding=U, draw_all_curves=False)
+    plt.show()
+
+
+
 
 def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palantir_func=False):
     import random
@@ -1356,13 +1422,15 @@ def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palan
         idx_sub = np.random.choice(a=np.arange(0, sub.shape[0]), size=min(n_sub, sub.shape[0]), replace=False,
                                    p=None)  # len(true_label)
         sub = sub.values[idx_sub, :]
-        print('size of sub', sub.shape)
+        print('size of subpopulation',i,'day', sub.shape)
         sub = pd.DataFrame(sub, columns=data.columns)
         data_sub = pd.concat([data_sub, sub], axis=0, ignore_index=True, sort=True)
 
     true_label = data_sub['day']
 
     true_type = data_sub['type']
+    #data_sub = data_sub.drop([ 'Unnamed: 0'], axis=1)
+    #data_sub.to_csv('/home/shobi/Trajectory/Datasets/mESC/mESC_7000perDay_noscaling_meso.csv')
     data = data_sub.drop(['day', 'Unnamed: 0', 'type'], axis=1)
     # print('after subbing', data.head)
     cols = ['Sca-1', 'CD41', 'Nestin', 'Desmin',
@@ -1437,8 +1505,7 @@ def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palan
     # U = umap.UMAP().fit_transform(udata)
     # U_df = pd.DataFrame(U, columns=['x', 'y'])
     # U_df.to_csv('/home/shobi/Trajectory/Datasets/mESC/umap_89782cells_meso.csv')
-    idx = np.arange(0, adata.shape[
-        0])  # np.random.choice(a=np.arange(0, adata.shape[0]), size=adata.shape[0], replace=False, p=None)  # len(true_label)
+    idx = np.arange(0, adata.shape[  0])  # np.random.choice(a=np.arange(0, adata.shape[0]), size=adata.shape[0], replace=False, p=None)  # len(true_label)
     # idx=np.arange(0, len(true_label_int))
     U = pd.read_csv(        '/home/shobi/Trajectory/Datasets/mESC/umap_89782cells_meso.csv')  # umap_89782cells_7000each_Randseed20_meso.csv')
     # U = pd.read_csv('/home/shobi/Trajectory/Datasets/mESC/phate_89782cells_mESC.csv')
@@ -1545,16 +1612,35 @@ def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palan
     #df_ = pd.DataFrame(true_label_int, columns=['days'])
     #    df_.to_csv('/home/shobi/Trajectory/Datasets/mESC/annots_days.csv')
 
-
-
+    time_series_labels = np.asarray(true_label_int)
+    print('time series labels',time_series_labels.shape, time_series_labels[3])
     print('check root is in annots', root[0] in true_label_str)
     v0 = VIA(adata.X, true_label_str, jac_std_global=0.3, dist_std_local=1, knn=knn,
              cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=v0_too_big, resolution_parameter=2,
              root_user=root, dataset='mESC', random_seed=v0_random_seed,
-             visual_cluster_graph_pruning=1, max_visual_outgoing_edges=3,is_coarse=True, preserve_disconnected=False, pseudotime_threshold_TS=40, x_lazy=0.99,
-             alpha_teleport=0.99)  # *.4 root=1,
+             is_coarse=True, preserve_disconnected=False, pseudotime_threshold_TS=40, x_lazy=0.99,
+             alpha_teleport=0.99, time_series=True, time_series_labels=true_label_int, edgebundle_pruning=cluster_graph_pruning_std, edgebundle_pruning_twice=False) # visual_cluster_graph_pruning=1, max_visual_outgoing_edges=3,
     v0.run_VIA()
+
+    draw_trajectory_gams(via_coarse=v0, via_fine=v0, embedding=U)
+    plt.show()
+    via_streamplot(v0, embedding=U[:, 0:2], scatter_size=50, scatter_alpha=0.2, marker_edgewidth=0.01,
+                      density_stream=1, density_grid=0.5, smooth_transition=1, smooth_grid=0.3)
+    plt.show()
+
+
+    U = run_umap_hnsw(X_input=v0.data, graph=v0.csr_full_graph, n_components=2, spread=1.0, min_dist=0.1,
+                           init_pos='spectral', random_state=1, n_epochs=100)
+    plt.scatter(U[:, 0], U[:, 1], c=v0.time_series_labels,cmap='jet', s=4, alpha=0.7)
+    plt.show()
+
+    draw_trajectory_gams(via_coarse=v0, via_fine=v0, embedding=U)
+    plt.show()
+    via_streamplot(v0, embedding=U[:, 0:2], scatter_size=50, scatter_alpha=0.2, marker_edgewidth=0.01,
+                   density_stream=1, density_grid=0.5, smooth_transition=1, smooth_grid=0.3)
+    plt.show()
+
     df_pt = v0.single_cell_pt_markov
     f, (ax1, ax2,) = plt.subplots(1, 2, sharey=True)
     s_genes = ''
@@ -2681,7 +2767,7 @@ def main1():
 
 
 def main():
-    dataset = 'faced'  #
+    dataset = 'Toy'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
         main_Human(ncomps=80, knn=30, v0_random_seed=4,
@@ -2694,7 +2780,9 @@ def main():
 
     elif dataset == 'mESC':
         # main_mESC(knn=20, v0_random_seed=9, run_palantir_func=False) works well  # knn=20 and randomseed =8 is good
-        main_mESC(knn=40, v0_random_seed=20, run_palantir_func=False)
+        #main_mESC(knn=40, v0_random_seed=20, run_palantir_func=False) very good too
+        main_mESC_timeseries(knn=40)
+
     elif dataset == 'EB':
         # main_EB(ncomps=30, knn=20, v0_random_seed=24)
         main_EB_clean(ncomps=30, knn=20, v0_random_seed=24)

@@ -18,13 +18,38 @@ import multiprocessing
 import pygam as pg
 from termcolor import colored
 from collections import Counter
-
-from pyVIA.plotting_via import * #from plotting_via import * 
+from typing import Optional, Union
+from pyVIA.plotting_via import *
 from pyVIA.utils_via import *
 from sklearn.preprocessing import normalize
 import math
 ###work in progress core
 
+
+
+
+
+def _get_loc_terminal_states(via0, X_input: ndarray):
+    '''
+
+    we need the location of terminal states from first iteration (Via0) to pass onto the second iterations of Via (Via1)
+    this will allow identification of the terminal-cluster in fine-grained Via1 that best captures the terminal state from coarse Via0
+
+    :param via0: coarse grained iteration of object class VIA
+    :param X_input: via0.data. the data matrix (PCs) on which the TI is inferred
+    :return:
+    '''
+
+    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster in PCA space
+    for tsi in via0.terminal_clusters:
+        loc_i = np.where(np.asarray(via0.labels) == tsi)[0]
+        val_pt = [via0.single_cell_pt_markov[i] for i in loc_i]
+        th_pt = np.percentile(val_pt, 50)  # 50
+        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
+        temp = np.mean(X_input[loc_i], axis=0)
+        labelsq, distances = via0.knn_struct.knn_query(temp, k=1)
+        tsi_list.append(labelsq[0][0])
+    return tsi_list
 def prob_reaching_terminal_state1(terminal_state,  A, root,  n_simulations, q,
                                   cumstateChangeHist, cumstateChangeHist_all, seed):
     # this function is defined outside the VIA class to enable smooth parallel processing in Windows
@@ -107,143 +132,7 @@ def simulate_markov_sub(A, num_sim, hitting_array, q, root):
     q.append(hitting_array)
 
 
-def getbb(sc, ax):
-    """
-    Function to return a list of bounding boxes in data coordinates for a scatter plot.
-    Adapted from https://stackoverflow.com/questions/55005272/
-    """
-    ax.figure.canvas.draw()  # need to draw before the transforms are set.
-    transform = sc.get_transform()
-    transOffset = sc.get_offset_transform()
-    offsets = sc._offsets
-    paths = sc.get_paths()
-    transforms = sc.get_transforms()
 
-    if not transform.is_affine:
-        paths = [transform.transform_path_non_affine(p) for p in paths]
-        transform = transform.get_affine()
-    if not transOffset.is_affine:
-        offsets = transOffset.transform_non_affine(offsets)
-        transOffset = transOffset.get_affine()
-
-    if isinstance(offsets, np.ma.MaskedArray):
-        offsets = offsets.filled(np.nan)
-
-    bboxes = []
-
-    if len(paths) and len(offsets):
-        if len(paths) < len(offsets):
-            # for usual scatters you have one path, but several offsets
-            paths = [paths[0]] * len(offsets)
-        if len(transforms) < len(offsets):
-            # often you may have a single scatter size, but several offsets
-            transforms = [transforms[0]] * len(offsets)
-
-        for p, o, t in zip(paths, offsets, transforms):
-            result = get_path_collection_extents(
-                transform.frozen(), [p], [t], [o], transOffset.frozen()
-            )
-            # bboxes.append(result.inverse_transformed(ax.transData))
-            bboxes.append(result.transformed(ax.transData.inverted()))
-    return bboxes
-
-
-
-
-
-def draw_sc_lineage_probability_solo(via_coarse, via_fine, embedding, idx=None, cmap_name='plasma', dpi=150):
-    # embedding is the full or downsampled 2D representation of the full dataset.
-    # idx is the list of indices of the full dataset for which the embedding is available. if the dataset is very large the the user only has the visual embedding for a subsample of the data, then these idx can be carried forward
-    # idx is the selected indices of the downsampled samples used in the visualization
-    # G is the igraph knn (low K) used for shortest path in high dim space. no idx needed as it's made on full sample
-    # knn_hnsw is the knn made in the embedded space used for query to find the nearest point in the downsampled embedding
-    #   that corresponds to the single cells in the full graph
-    if idx is None: idx = np.arange(0, via_coarse.nsamples)
-    G = via_coarse.full_graph_shortpath
-    knn_hnsw = make_knn_embeddedspace(embedding)
-    y_root = []
-    x_root = []
-    root1_list = []
-    p1_sc_bp = via_fine.single_cell_bp[idx, :]
-    p1_labels = np.asarray(via_fine.labels)[idx]
-    p1_cc = via_fine.connected_comp_labels
-    p1_sc_pt_markov = list(np.asarray(via_fine.single_cell_pt_markov)[idx])
-    X_data = via_fine.data
-
-    X_ds = X_data[idx, :]
-    p_ds = hnswlib.Index(space='l2', dim=X_ds.shape[1])
-    p_ds.init_index(max_elements=X_ds.shape[0], ef_construction=200, M=16)
-    p_ds.add_items(X_ds)
-    p_ds.set_ef(50)
-    num_cluster = len(set(via_fine.labels))
-    G_orange = ig.Graph(n=num_cluster, edges=via_fine.edgelist_maxout, edge_attrs={'weight':via_fine.edgeweights_maxout})
-    for ii, r_i in enumerate(via_fine.root):
-        loc_i = np.where(p1_labels == via_fine.root[ii])[0]
-        x = [embedding[xi, 0] for xi in loc_i]
-        y = [embedding[yi, 1] for yi in loc_i]
-
-        labels_root, distances_root = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]), k=1)
-        x_root.append(embedding[labels_root, 0][0])
-        y_root.append(embedding[labels_root, 1][0])
-
-        labelsroot1, distances1 = via_fine.knn_struct.knn_query(X_ds[labels_root[0][0], :], k=1)
-        root1_list.append(labelsroot1[0][0])
-        for fst_i in via_fine.terminal_clusters:
-            path_orange = G_orange.get_shortest_paths(via_fine.root[ii], to=fst_i)[0]
-            #if the roots is in the same component as the terminal cluster, then print the path to output
-            if len(path_orange)>0:
-                print(colored( f"{datetime.now()}\tCluster path on clustergraph starting from Root Cluster {via_fine.root[ii]} to Terminal Cluster {fst_i} : follows {path_orange} ", "blue"))
-
-
-    # single-cell branch probability evolution probability
-    for i, ti in enumerate(via_fine.terminal_clusters):
-        fig, ax = plt.subplots(dpi=dpi)
-        plot_sc_pb(ax, fig, embedding, p1_sc_bp[:, i], ti=ti, cmap_name=cmap_name)
-
-        loc_i = np.where(p1_labels == ti)[0]
-        val_pt = [p1_sc_pt_markov[i] for i in loc_i]
-        th_pt = np.percentile(val_pt, 50)  # 50
-        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-        x = [embedding[xi, 0] for xi in
-             loc_i]  # location of sc nearest to average location of terminal clus in the EMBEDDED space
-        y = [embedding[yi, 1] for yi in loc_i]
-        labels, distances = knn_hnsw.knn_query(np.array([np.mean(x), np.mean(y)]),
-                                               k=1)  # knn_hnsw is knn of embedded space
-        x_sc = embedding[labels[0], 0]  # terminal sc location in the embedded space
-        y_sc = embedding[labels[0], 1]
-        start_time = time.time()
-
-        labelsq1, distances1 =via_fine.knn_struct.knn_query(X_ds[labels[0][0], :],
-                                                       k=1)  # find the nearest neighbor in the PCA-space full graph
-
-        path = G.get_shortest_paths(root1_list[p1_cc[ti]], to=labelsq1[0][0])  # weights='weight')
-        # G is the knn of all sc points
-
-        path_idx = []  # find the single-cell which is nearest to the average-location of a terminal cluster
-        # get the nearest-neighbor in this downsampled PCA-space graph. These will make the new path-way points
-        path = path[0]
-
-        # clusters of path
-        cluster_path = []
-        for cell_ in path:
-            cluster_path.append(via_fine.labels[cell_])
-
-        # print(colored('cluster_path', 'green'), colored('terminal state: ', 'blue'), ti, cluster_path)
-        revised_cluster_path = []
-        revised_sc_path = []
-        for enum_i, clus in enumerate(cluster_path):
-            num_instances_clus = cluster_path.count(clus)
-            if (clus == cluster_path[0]) | (clus == cluster_path[-1]):
-                revised_cluster_path.append(clus)
-                revised_sc_path.append(path[enum_i])
-            else:
-                if num_instances_clus > 1:  # typically intermediate stages spend a few transitions at the sc level within a cluster
-                    if clus not in revised_cluster_path: revised_cluster_path.append(clus)  # cluster
-                    revised_sc_path.append(path[enum_i])  # index of single cell
-        print(f"{datetime.now()}\tCluster level path on sc-knnGraph from Root Cluster {via_fine.root[p1_cc[ti]]} to Terminal Cluster {ti} along path: {revised_cluster_path}")
-
-        fig.patch.set_visible(False)
-        ax.axis('off')
 
 
 def get_biased_weights(edges, weights, pt, round=1):
@@ -436,34 +325,56 @@ def recompute_weights(graph: ig.Graph, label_counts: Counter):
     return csr_matrix((weights, graph.nonzero()), shape=graph.shape)
 
 
-class VIA():
+class VIA:
     '''
 
-    :param data:
-    :param true_label:
-    :param anndata:
-    :param dist_std_local:
-    :param jac_std_global:
-    :param keep_all_local_dist:
-    :param too_big_factor:
-    :param resolution_parameter:
-    :param partition_type:
-    :param small_pop:
-    :param jac_weighted_edges:
-    :param knn:
-    :param n_iter_leiden:
-    :param random_seed:
-    :param num_threads:
-    :param distance:
-    :param time_smallpop:
-    :param super_cluster_labels:
-    :param super_node_degree_list:
-    :param super_terminal_cells:
-    :param x_lazy:
-    :param alpha_teleport:
-    :param root_user:
-    :param preserve_disconnected:
-    :param dataset:
+    A class to represent the VIA analysis
+
+    Attributes
+    ----------
+
+    data: ndarray
+        input matrix of size n_cells x n_dims. Expects the PCs or features that will be used in the TI computation. Can be e.g. adata.obsm['X_pca][:,0:20]
+    true_label:list
+    dist_std_local:
+    jac_std_global: Union[float, str]=0.15
+        (optional, default = 0.15, can also set as 'median') global level graph pruning for PARC clustering stage. Number of standard deviations below the network’s mean-jaccard-weighted edges. 0.1-1 provide reasonable pruning.
+        higher value means less pruning (more edges retained). e.g. a value of 0.15 means all edges that are above mean(edgeweight)-0.15*std(edge-weights) are retained.
+        We find both 0.15 and ‘median’ to yield good results/starting point and resulting in pruning away ~ 50-60% edges
+    keep_all_local_dist: Union(str, bool)='auto'
+        default value of 'auto' means that for smaller datasets local-pruning is done prior to clustering, but for large datasets local pruning is set to False for speed.
+    too_big_factor: float
+        (optional, default=0.3). Forces clusters > 0.3*n_cells to be re-clustered
+    resolution_parameter: float
+    partition_type:
+    small_pop:
+    jac_weighted_edges:
+    knn:
+    n_iter_leiden:int
+    random_seed:
+    num_threads:
+    distance:str
+        (default 'l2') Euclidean distance 'l2' by default; other options 'ip' and 'cosine' for graph construction and similarity
+    time_smallpop:
+    super_cluster_labels:
+    super_node_degree_list:
+    super_terminal_cells:
+    x_lazy:float
+        (default =0.95)
+    alpha_teleport: float
+        (default = 0.99)
+    root_user: list[str], list[int], None
+        (default is None) When the root_user is set as None, then if the RNA velocity matrix is available, a root will be automatically computed
+        if the root_user is None and not velocity matrix is provided, then an arbitrary root is selected
+        if the root_user is ['celltype_earlystage'] where the str corresponds to an item in true_label, then a suitable starting point will be selected corresponding to this group
+        if the root_user is [678], where 678 is the index of the cell chosen as a start cell, then this will be the designated starting cell.
+        It is possible to give a list of root indices and groups. [120, 699] or ['traj1_earlystage', 'traj2_earlystage'] when there are more than one trajectories
+    preserve_disconnected: bool
+        (default = True) If you believe there may be disconnected trajectories then set this to False
+    dataset: str
+        Can be set to 'group' or '' (default). this refers to the type of root label (group level root or single cell index) you are going to provide.
+        if your true_label has a sensible group of cells for a root then you can set dataset to 'group' and make the root parameter ['labelname_root_cell_type']
+        if your root corresponds to one particular cell then set dataset = '' (default)
     :param super_terminal_clusters:
     :param is_coarse:
     :param csr_full_graph:
@@ -471,13 +382,20 @@ class VIA():
     :param ig_full_graph:
     :param full_neighbor_array:
     :param full_distance_array:
-    :param embedding:
+    :param embedding: Optional[ndarray]
+        (optional, default = None) embedding (e.g. precomputed tsne, umap, phate, via-umap) for plotting data. Size n_cells x 2
+
     :param df_annot:
     :param preserve_disconnected_after_pruning:
     :param secondary_annotations:
     :param pseudotime_threshold_TS:
-    :param cluster_graph_pruning_std:
+    :param cluster_graph_pruning_std: float
+        (optional, default =0.15) Often set to the same value as the PARC clustering level of jac_std_global.Reasomable range [0.1,1]
+        To retain more connectivity in the clustergraph underlying the trajectory computations, increase the value
     :param visual_cluster_graph_pruning:
+        (optional, default = 0.15) This only comes into play if the user deliberately chooses not to use the default edge-bundling method of visualizating edges (draw_piechart_graph()) and instead calls draw_piechart_graph_nobundle().
+        It is often set to the same value as the PARC clustering level of jac_std_global. This does not impact computation of terminal states, pseudotime or lineage likelihoods.
+        It controls the number of edges plotted for visual effect
     :param neighboring_terminal_states_threshold:
     :param num_mcmc_simulations:
     :param piegraph_arrow_head_width:
@@ -486,7 +404,8 @@ class VIA():
     :param via_coarse:
     :param velocity_matrix:
     :param gene_matrix:
-    :param velo_weight:
+    :param velo_weight: float
+        (optional, default = 0.5) #float between 0,1. the weight assigned to directionality and connectivity derived from scRNA-velocity
     :param edgebundle_pruning:
     :param A_velo:
     :param CSM:
@@ -500,19 +419,17 @@ class VIA():
     :param single_cell_transition_matrix:
     '''
 
-    def __init__(self, data, true_label=None, anndata=None, dist_std_local=2, jac_std_global='median',
-                 keep_all_local_dist='auto',
-                 too_big_factor=0.4, resolution_parameter=1.0, partition_type="ModularityVP", small_pop=10,
-                 jac_weighted_edges=True, knn=30, n_iter_leiden=5, random_seed=42,
+    def __init__(self, data:ndarray, true_label=None, dist_std_local:float=2, jac_std_global='median',
+                 keep_all_local_dist='auto', too_big_factor:float=0.4, resolution_parameter:float=1.0, partition_type:str="ModularityVP", small_pop:int=10,
+                 jac_weighted_edges:bool=True, knn:int=30, n_iter_leiden:int=5, random_seed:int=42,
                  num_threads=-1, distance='l2', time_smallpop=15,
-                 super_cluster_labels=False,
-                 super_node_degree_list=False, super_terminal_cells=False, x_lazy=0.95, alpha_teleport=0.99,
-                 root_user=None, preserve_disconnected=True, dataset="humanCD34", super_terminal_clusters=[],
+                 super_cluster_labels=False,                 super_node_degree_list=False, super_terminal_cells=False, x_lazy=0.95, alpha_teleport=0.99,
+                 root_user=None, preserve_disconnected:bool=True, dataset:str='', super_terminal_clusters:list=[],
                  is_coarse=True, csr_full_graph='', csr_array_locally_pruned='', ig_full_graph='',
                  full_neighbor_array='', full_distance_array='', embedding=None, df_annot=None,
-                 preserve_disconnected_after_pruning=False,
+                 preserve_disconnected_after_pruning:bool=False,
                  secondary_annotations=None, pseudotime_threshold_TS=30, cluster_graph_pruning_std=0.15,
-                 visual_cluster_graph_pruning=0.15, neighboring_terminal_states_threshold=3, num_mcmc_simulations=1300,
+                 visual_cluster_graph_pruning:float=0.15, neighboring_terminal_states_threshold=3, num_mcmc_simulations=1300,
                  piegraph_arrow_head_width=0.1,
                  piegraph_edgeweight_scalingfactor=1.5, max_visual_outgoing_edges=2, via_coarse=None, velocity_matrix=None, gene_matrix=None, velo_weight=0.5, edgebundle_pruning=None, A_velo = None, CSM = None, edgebundle_pruning_twice=False, pca_loadings = None, time_series=False, time_series_labels=None, knn_sequential = 10, knn_sequential_reverse = 0,t_diff_step = 1,single_cell_transition_matrix = None):
 
@@ -523,7 +440,7 @@ class VIA():
             self.true_label = true_label
         else: self.true_label = [1] * self.nsamples
         if velocity_matrix is None: velo_weight = 0
-        self.velo_weight = velo_weight
+        self.velo_weight = velo_weight #float between 0,1. the weight assigned to directionality and connectivity derived from scRNA-velocity
         if edgebundle_pruning is None: edgebundle_pruning = cluster_graph_pruning_std
         self.edgebundle_pruning = edgebundle_pruning
 
@@ -534,7 +451,7 @@ class VIA():
         self.edgelist_unique = None
 
         # higher dist_std_local means more edges are kept
-        # highter jac_std_global means more edges are kept
+        # higher jac_std_global means more edges are kept
         if keep_all_local_dist == 'auto':
             # If large dataset skip local pruning to increase speed
             keep_all_local_dist = data.shape[0] > 50000
@@ -542,7 +459,6 @@ class VIA():
         if resolution_parameter != 1:
             partition_type = "RBVP"  # Reichardt and Bornholdt’s Potts model. Note that this is the same as ModularityVertexPartition when setting 𝛾 = 1 and normalising by 2m
 
-        self.anndata = anndata
         self.dist_std_local = dist_std_local
         self.jac_std_global = jac_std_global  ##0.15 is also a recommended value performing empirically similar to 'median'
         self.keep_all_local_dist = keep_all_local_dist
@@ -578,7 +494,7 @@ class VIA():
             self.ig_full_graph = via_coarse.ig_full_graph
             self.csr_array_locally_pruned = via_coarse.csr_array_locally_pruned
             self.csr_full_graph = via_coarse.csr_full_graph
-            self.super_terminal_cells = get_loc_terminal_states(via0=via_coarse, X_input=data)
+            self.super_terminal_cells = _get_loc_terminal_states(via0=via_coarse, X_input=data)
 
         self.x_lazy = x_lazy  # 1-x = probability of staying in same node
         self.alpha_teleport = alpha_teleport  # 1-alpha is probability of jumping
@@ -618,7 +534,7 @@ class VIA():
             self.knn_struct.set_ef(k_umap + 1)
             neighbor_array, distance_array = self.knn_struct.knn_query(self.data, k=k_umap)
         else:
-            knn_struct_umap = self.construct_knn(data_visual)
+            knn_struct_umap = self._construct_knn(data_visual)
             knn_struct_umap.set_ef(k_umap + 1)
             neighbor_array, distance_array = knn_struct_umap.knn_query(data_visual, k=k_umap)
         row_list = []
@@ -1122,7 +1038,7 @@ class VIA():
         T = T.multiply(csr_matrix(1.0 / np.abs(T).sum(1)))  # rows sum to one
         return T
 
-    def velocity_embedding(self, X_emb, smooth_transition, b,use_sequentially_augmented=False ):
+    def _velocity_embedding(self, X_emb, smooth_transition, b,use_sequentially_augmented=False ):
         '''
 
         :param X_emb:
@@ -1177,8 +1093,8 @@ class VIA():
             ti_loc = np.where(time_series_labels == ti)[0]
             tj_data= data[tj_loc,:]
             ti_data = data[ti_loc, :]
-            tj_knn = self.construct_knn(tj_data)
-            ti_knn = self.construct_knn(ti_data)
+            tj_knn = self._construct_knn(tj_data)
+            ti_knn = self._construct_knn(ti_data)
 
             #print('tj_loc', tj_loc)
             #k_original = k
@@ -1205,7 +1121,7 @@ class VIA():
         #augmented_nn_data = np.ones_like(augmented_nn)
         return augmented_nn, augmented_nn_data
 
-    def construct_knn(self, data: np.ndarray, too_big: bool = False) -> hnswlib.Index:
+    def _construct_knn(self, data: np.ndarray, too_big: bool = False) -> hnswlib.Index:
         """
         Construct K-NN graph for given data
 
@@ -1240,7 +1156,7 @@ class VIA():
         p.set_ef(k)
         return p
 
-    def make_csrmatrix_noselfloop(self, neighbors: np.ndarray, distances: np.ndarray,
+    def _make_csrmatrix_noselfloop(self, neighbors: np.ndarray, distances: np.ndarray,
                                   auto_: bool = True, distance_factor=.01, weights_as_inv_dist = True, min_max_scale=False, time_series=False, time_series_labels=None, t_diff_step=2) -> csr_matrix:
         """
         Create sparse matrix from weighted knn graph. Default does local pruning
@@ -1442,13 +1358,13 @@ class VIA():
     def run_toobig_subPARC(self, X_data, jac_std_toobig=1,
                            jac_weighted_edges=True):
         n_elements = X_data.shape[0]
-        hnsw = self.construct_knn(X_data, too_big=True)
+        hnsw = self._construct_knn(X_data, too_big=True)
         if self.knn >= 0.8 * n_elements:
             k = int(0.5 * n_elements)
         else:
             k = self.knn
         neighbor_array, distance_array = hnsw.knn_query(X_data, k=k)
-        csr_array = self.make_csrmatrix_noselfloop(neighbor_array, distance_array)
+        csr_array = self._make_csrmatrix_noselfloop(neighbor_array, distance_array)
         sources, targets = csr_array.nonzero()
         mask = np.zeros(len(sources), dtype=bool)
         mask |= (csr_array.data > (
@@ -1666,7 +1582,7 @@ class VIA():
         while (n_components_original == 1 and n_comp > 1) or \
                 (n_components_original > 1 and k0 <= 5 and n_comp > n_components_original):
             neighbors, distances = self.knn_struct.knn_query(data, k=k0)
-            csr_array = self.make_csrmatrix_noselfloop(neighbors, distances, auto_=False)
+            csr_array = self._make_csrmatrix_noselfloop(neighbors, distances, auto_=False)
             n_comp, comp_labels = connected_components(csr_array, return_labels=True)
             if first:
                 first = False
@@ -1795,7 +1711,7 @@ class VIA():
                 n_augmented, d_augmented = self.sequential_knn(self.data, self.time_series_labels, neighbors, distances, k=self.knn_sequential, k_reverse=self.knn_sequential_reverse)
 
 
-                adjacency_augmented = self.make_csrmatrix_noselfloop(n_augmented, d_augmented, time_series=self.time_series, time_series_labels = self.time_series_labels, t_diff_step=self.t_diff_step)  # this function has local pruning which removes neighbors that are more than t_dif apart. Since the same type of local pruning wrt t_dif is applied pre-clustergraph, we only need to call this function once in the case of time_series data
+                adjacency_augmented = self._make_csrmatrix_noselfloop(n_augmented, d_augmented, time_series=self.time_series, time_series_labels = self.time_series_labels, t_diff_step=self.t_diff_step)  # this function has local pruning which removes neighbors that are more than t_dif apart. Since the same type of local pruning wrt t_dif is applied pre-clustergraph, we only need to call this function once in the case of time_series data
                 #adjacency_augmented.data.fill(1)
 
                 '''
@@ -1828,13 +1744,13 @@ class VIA():
                 plt.legend(fontsize=6, frameon=False)
                 plt.show()
                 '''
-                #adjacency_augmented_clus = self.make_csrmatrix_noselfloop(neighbors, distances,   time_series=self.time_series,  time_series_labels=self.time_series_labels, t_diff_step=0.5)  # this function has loca
+                #adjacency_augmented_clus = self._make_csrmatrix_noselfloop(neighbors, distances,   time_series=self.time_series,  time_series_labels=self.time_series_labels, t_diff_step=0.5)  # this function has loca
 
                 #adjacency =adjacency_augmented_clus
                 #adjacency.data.fill(1)
-                adjacency = self.make_csrmatrix_noselfloop(neighbors, distances) #not augmented or tiff'ed
+                adjacency = self._make_csrmatrix_noselfloop(neighbors, distances) #not augmented or tiff'ed
             else:
-                adjacency = self.make_csrmatrix_noselfloop(neighbors, distances) #this function has local pruning based on edge distances
+                adjacency = self._make_csrmatrix_noselfloop(neighbors, distances) #this function has local pruning based on edge distances
 
 
         else:
@@ -1861,7 +1777,7 @@ class VIA():
 
         if self.is_coarse:
             # Construct full graph with no pruning - used for cluster graph edges, not listed in any order of proximity
-            #csr_full_graph = self.make_csrmatrix_noselfloop(neighbors, distances, auto_=False, distance_factor=0.05),
+            #csr_full_graph = self._make_csrmatrix_noselfloop(neighbors, distances, auto_=False, distance_factor=0.05),
 
 
             if (self.time_series is not None) and (self.time_series_labels is not None):
@@ -1870,7 +1786,7 @@ class VIA():
 
 
             # when no time-series data is available, in this iteration of weighting the edges we do not locally prune based on edge-weights becasue we intend to use all neighborhood info towards the edges in the clustergraph and ensuring the clustergraph is connected
-            else: csr_full_graph = self.make_csrmatrix_noselfloop(neighbors, distances, auto_=False, min_max_scale=False, time_series=self.time_series, time_series_labels = self.time_series_labels) #no local pruning: auto_ set to false #min_max_scale=True
+            else: csr_full_graph = self._make_csrmatrix_noselfloop(neighbors, distances, auto_=False, min_max_scale=False, time_series=self.time_series, time_series_labels = self.time_series_labels) #no local pruning: auto_ set to false #min_max_scale=True
             n_original_comp, n_original_comp_labels = connected_components(csr_full_graph, directed=False)
             print(f"{datetime.now()}\tNumber of connected components used for clustergraph  is { n_original_comp}")
 
@@ -2798,7 +2714,7 @@ class VIA():
 
         node_pos = np.asarray(node_pos)
         if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'viridis_r'
-        graph_node_label = self.graph_node_label
+
         if type_data == 'pt':
             pt = self.scaled_hitting_times  # these are the final MCMC refined pt then slightly scaled at cluster level
             title_ax1 = "Pseudotime"
@@ -3006,7 +2922,7 @@ class VIA():
         print(f'{datetime.now()}\tRunning VIA over input data of {self.data.shape[0]} (samples) x {self.data.shape[1]} (features)')
         print(f'{datetime.now()}\tKnngraph has {self.knn} neighbors')
 
-        self.knn_struct = self.construct_knn(self.data)
+        self.knn_struct = self._construct_knn(self.data)
         st = time.time()
         self.run_subPARC()
         run_time = time.time() - st

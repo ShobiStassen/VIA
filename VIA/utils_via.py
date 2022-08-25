@@ -16,6 +16,47 @@ import time
 import matplotlib
 import igraph as ig
 import matplotlib.pyplot as plt
+from matplotlib.path import get_path_collection_extents
+
+def getbb(sc, ax):
+    """
+    Function to return a list of bounding boxes in data coordinates for a scatter plot.
+    Adapted from https://stackoverflow.com/questions/55005272/
+    """
+    ax.figure.canvas.draw()  # need to draw before the transforms are set.
+    transform = sc.get_transform()
+    transOffset = sc.get_offset_transform()
+    offsets = sc._offsets
+    paths = sc.get_paths()
+    transforms = sc.get_transforms()
+
+    if not transform.is_affine:
+        paths = [transform.transform_path_non_affine(p) for p in paths]
+        transform = transform.get_affine()
+    if not transOffset.is_affine:
+        offsets = transOffset.transform_non_affine(offsets)
+        transOffset = transOffset.get_affine()
+
+    if isinstance(offsets, np.ma.MaskedArray):
+        offsets = offsets.filled(np.nan)
+
+    bboxes = []
+
+    if len(paths) and len(offsets):
+        if len(paths) < len(offsets):
+            # for usual scatters you have one path, but several offsets
+            paths = [paths[0]] * len(offsets)
+        if len(transforms) < len(offsets):
+            # often you may have a single scatter size, but several offsets
+            transforms = [transforms[0]] * len(offsets)
+
+        for p, o, t in zip(paths, offsets, transforms):
+            result = get_path_collection_extents(
+                transform.frozen(), [p], [t], [o], transOffset.frozen()
+            )
+            # bboxes.append(result.inverse_transformed(ax.transData))
+            bboxes.append(result.transformed(ax.transData.inverted()))
+    return bboxes
 
 def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
     #ci_list first finds location in unsampled PCA space of the location of the super-cluster or sub-terminal-cluster and root
@@ -112,38 +153,7 @@ def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name='plasma', scatter_size=No
     ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name)
 
 
-def make_knn_embeddedspace(embedding):
-    # knn struct built in the embedded space to be used for drawing the lineage trajectories onto the 2D plot
-    knn = hnswlib.Index(space='l2', dim=embedding.shape[1])
-    knn.init_index(max_elements=embedding.shape[0], ef_construction=200, M=16)
-    knn.add_items(embedding)
-    knn.set_ef(50)
-    return knn
 
-
-
-
-def get_loc_terminal_states(via0, X_input):
-    '''
-
-    we need the location of terminal states from first iteration (Via0) to pass onto the second iterations of Via (Via1)
-    this will allow identification of the terminal-cluster in fine-grained Via1 that best captures the terminal state from coarse Via0
-
-    :param via0: coarse grained iteration of VIA
-    :param X_input: via0.data. the data matrix (PCs) on which the TI is inferred
-    :return:
-    '''
-
-    tsi_list = []  # find the single-cell which is nearest to the average-location of a terminal cluster in PCA space
-    for tsi in via0.terminal_clusters:
-        loc_i = np.where(np.asarray(via0.labels) == tsi)[0]
-        val_pt = [via0.single_cell_pt_markov[i] for i in loc_i]
-        th_pt = np.percentile(val_pt, 50)  # 50
-        loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-        temp = np.mean(X_input[loc_i], axis=0)
-        labelsq, distances = via0.knn_struct.knn_query(temp, k=1)
-        tsi_list.append(labelsq[0][0])
-    return tsi_list
 
 from datashader.bundling import connect_edges, hammer_bundle
 def sigmoid_func(X):
