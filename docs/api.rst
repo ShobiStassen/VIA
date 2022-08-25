@@ -19,10 +19,3 @@ Plotting
     :show-inheritance:
 
 
-Utils
---------
-
-.. automodule:: VIA.utils_via
-    :members:
-    :inherited-members:
-    :show-inheritance:
