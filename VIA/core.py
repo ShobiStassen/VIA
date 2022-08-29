@@ -19,7 +19,7 @@ import pygam as pg
 from termcolor import colored
 from collections import Counter
 from typing import Optional, Union
-from pyVIA.plotting_via import *
+from pyVIA.plotting_via import * 
 from pyVIA.utils_via import *
 from sklearn.preprocessing import normalize
 import math
@@ -330,41 +330,58 @@ class VIA:
 
     A class to represent the VIA analysis
 
-    Attributes
+    Parameters
     ----------
 
     data: ndarray
         input matrix of size n_cells x n_dims. Expects the PCs or features that will be used in the TI computation. Can be e.g. adata.obsm['X_pca][:,0:20]
     true_label:list
-    dist_std_local:
-    jac_std_global: Union[float, str]=0.15
+        list of str/int that correspond to the ground truth or reference annotations. Can also be None when no labels are available
+    dist_std_local:float
+        default = 2
+        local level of pruning for PARC graph clustering stage. Range (0.1,3) higher numbers mean more edge retention
+    jac_std_global: float
         (optional, default = 0.15, can also set as 'median') global level graph pruning for PARC clustering stage. Number of standard deviations below the network’s mean-jaccard-weighted edges. 0.1-1 provide reasonable pruning.
         higher value means less pruning (more edges retained). e.g. a value of 0.15 means all edges that are above mean(edgeweight)-0.15*std(edge-weights) are retained.
         We find both 0.15 and ‘median’ to yield good results/starting point and resulting in pruning away ~ 50-60% edges
-    keep_all_local_dist: Union(str, bool)='auto'
+    keep_all_local_dist: bool, str
         default value of 'auto' means that for smaller datasets local-pruning is done prior to clustering, but for large datasets local pruning is set to False for speed.
+        can also set to be bool of True or False
     too_big_factor: float
-        (optional, default=0.3). Forces clusters > 0.3*n_cells to be re-clustered
+        (optional, default=0.4). Forces clusters > 0.4*n_cells to be re-clustered
     resolution_parameter: float
-    partition_type:
-    small_pop:
-    jac_weighted_edges:
-    knn:
+    partition_type:str
+        (default "ModularityVP") Options
+    small_pop: int
+         (default 10) Via attempts to merge Clusters with a population < 10 cells with larger clusters.
+    jac_weighted_edges:bool
+        (default = True) Use weighted edges in the PARC clustering step
+    knn: int
+        (optional, default = 30) number of K-Nearest Neighbors for HNSWlib KNN graph. Larger knn means more graph connectivity. Lower knn means more loosely connected clusters/cells
     n_iter_leiden:int
-    random_seed:
+    random_seed: int
+        Random seed to pass to clustering
     num_threads:
     distance:str
         (default 'l2') Euclidean distance 'l2' by default; other options 'ip' and 'cosine' for graph construction and similarity
+    visual_cluster_graph_pruning: float
+        (optional, default = 0.15) This only comes into play if the user deliberately chooses not to use the default edge-bundling method of visualizating edges (draw_piechart_graph()) and instead calls draw_piechart_graph_nobundle().
+        It is often set to the same value as the PARC clustering level of jac_std_global. This does not impact computation of terminal states, pseudotime or lineage likelihoods.
+        It controls the number of edges plotted for visual effect
+    cluster_graph_pruning_std: float
+        (optional, default =0.15) Pruning level of the cluster graph. Often set to the same value as the PARC clustering level of jac_std_global.Reasonable range [0.1,1]
+        To retain more connectivity in the clustergraph underlying the trajectory computations, increase the value
     time_smallpop:
     super_cluster_labels:
     super_node_degree_list:
     super_terminal_cells:
     x_lazy:float
-        (default =0.95)
+        (default =0.95) 1-x = probability of staying in same node (lazy). Values between 0.9-0.99 are reasonable
     alpha_teleport: float
-        (default = 0.99)
-    root_user: list[str], list[int], None
-        (default is None) When the root_user is set as None, then if the RNA velocity matrix is available, a root will be automatically computed
+        (default = 0.99) 1-alpha is probability of jumping. Values between 0.95-0.99 are reasonable unless prior knowledge of teleportation
+    root_user: list, None
+        can be a list of strings, a list of int or None
+        (default is None) When the root_user is set as None and an RNA velocity matrix is available, a root will be automatically computed
         if the root_user is None and not velocity matrix is provided, then an arbitrary root is selected
         if the root_user is ['celltype_earlystage'] where the str corresponds to an item in true_label, then a suitable starting point will be selected corresponding to this group
         if the root_user is [678], where 678 is the index of the cell chosen as a start cell, then this will be the designated starting cell.
@@ -375,48 +392,89 @@ class VIA:
         Can be set to 'group' or '' (default). this refers to the type of root label (group level root or single cell index) you are going to provide.
         if your true_label has a sensible group of cells for a root then you can set dataset to 'group' and make the root parameter ['labelname_root_cell_type']
         if your root corresponds to one particular cell then set dataset = '' (default)
-    :param super_terminal_clusters:
-    :param is_coarse:
-    :param csr_full_graph:
-    :param csr_array_locally_pruned:
-    :param ig_full_graph:
-    :param full_neighbor_array:
-    :param full_distance_array:
-    :param embedding: Optional[ndarray]
+    embedding: ndarray
         (optional, default = None) embedding (e.g. precomputed tsne, umap, phate, via-umap) for plotting data. Size n_cells x 2
+        If an embedding is provided when running VIA, then a scatterplot colored by pseudotime, highlighting terminal fates
+    velo_weight: float
+        (optional, default = 0.5) #float between [0,1]. the weight assigned to directionality and connectivity derived from scRNA-velocity
+    neighboring_terminal_states_threshold:int
+        (default = 3). Candidates for terminal states that are neighbors of each other may be removed from the list if they have this number of more of terminal states as neighbors
+    knn_sequential:int
+        (default =10) number of knn in the adjacent time-point for time-series data (t_i and t_i+1)
+    knn_sequential_reverse: int
+        (default = 0) number of knn enforced from current to previous time point
+    t_diff_step: int
+        (default =1) Number of permitted temporal intervals between connected nodes. If time data is labeled as [0,25,50,75,100,..]
+        then t_diff_step=1 corresponds to '25' and only edges within t_diff_steps are retained
+    is_coarse:bool
+        (default = True) If running VIA in two iterations where you wish to link the second fine-grained iteration with the initial iteration, then you set to False
+    via_coarse: VIA
+        (default = None) If instantiating a second iteration of VIA that needs to be linked to a previous iteration (e.g. via0), then set via_coarse to the previous via0 object
+    df_annot: DataFrame
+        (default None) used for the Mouse Organ data
+    preserve_disconnected_after_pruning:bool
+        (default = True) If you believe there are disconnected trajectories then set this to False and test your hypothesis
+    A_velo: ndarray
+        Cluster Graph Transition matrix based on rna velocity [n_clus x n_clus]
+    velocity_matrix: matrix
+            (default None) matrix of size [n_samples x n_genes]. this is the velocity matrix computed by scVelo (or similar package) and stored in adata.layers['velocity']. The genes used for computing velocity should correspond to those useing in gene_matrix
+            Requires gene_matrix to be provided too.
+    gene_matrix: matrix
+            (default None) Only used if Velocity_matrix is available. matrix of size [n_samples x n_genes]. We recommend using a subset like HVGs rather than full set of genes. (need to densify input if taking from adata = adata.X.todense())
+    time_series:bool
+        (default False) if the data has time-series labels then set to True
+    time_series_labels:list
+        (default None) list of integer values of temporal annoataions corresponding to e.g. hours (post fert), days, or sequential ordering
+    pca_loadings: array
+        (default None) the loadings of the pcs used to project the cells (to projected euclidean location based on velocity). n_cells x n_pcs
+    secondary_annotations: None
+        (default None)
+    edgebundle_pruning:float
+        (default=None) will by default be set to the same as the cluster_graph_pruning_std and influences the visualized level of pruning of edges.
+        Typical values can be between [0,1] with higher numbers retaining more edges
+    edgebundle_pruning_twice:bool
+        default: False. When True, the edgebundling is applied to a further visually pruned (visual_cluster_graph_pruning) and can sometimes simplify the visualization. it does not impact the pseudotime and lineage computations
+     piegraph_arrow_head_width: float
+        (default = 0.1) size of arrow heads in via cluster graph
+    piegraph_edgeweight_scalingfactor:
+        (defaulf = 1.5) scaling factor for edge thickness in via cluster graph
+    max_visual_outgoing_edges: int
+        (default =2) Rarely comes into play. Only used if the user later chooses to plot the via-graph without edgebunding using draw_piechart_graph_nobundle()
+        Only allows max_visual_outgoing_edges to come out of any given node.
 
-    :param df_annot:
-    :param preserve_disconnected_after_pruning:
-    :param secondary_annotations:
-    :param pseudotime_threshold_TS:
-    :param cluster_graph_pruning_std: float
-        (optional, default =0.15) Often set to the same value as the PARC clustering level of jac_std_global.Reasomable range [0.1,1]
-        To retain more connectivity in the clustergraph underlying the trajectory computations, increase the value
-    :param visual_cluster_graph_pruning:
-        (optional, default = 0.15) This only comes into play if the user deliberately chooses not to use the default edge-bundling method of visualizating edges (draw_piechart_graph()) and instead calls draw_piechart_graph_nobundle().
-        It is often set to the same value as the PARC clustering level of jac_std_global. This does not impact computation of terminal states, pseudotime or lineage likelihoods.
-        It controls the number of edges plotted for visual effect
-    :param neighboring_terminal_states_threshold:
-    :param num_mcmc_simulations:
-    :param piegraph_arrow_head_width:
-    :param piegraph_edgeweight_scalingfactor:
-    :param max_visual_outgoing_edges:
-    :param via_coarse:
-    :param velocity_matrix:
-    :param gene_matrix:
-    :param velo_weight: float
-        (optional, default = 0.5) #float between 0,1. the weight assigned to directionality and connectivity derived from scRNA-velocity
-    :param edgebundle_pruning:
-    :param A_velo:
-    :param CSM:
-    :param edgebundle_pruning_twice:
-    :param pca_loadings:
-    :param time_series:
-    :param time_series_labels:
-    :param knn_sequential:
-    :param knn_sequential_reverse:
-    :param t_diff_step:
-    :param single_cell_transition_matrix:
+    edgebundle_pruning:float
+        (default=None) will by default be set to the same as the cluster_graph_pruning_std and influences the visualized level of pruning of edges.
+        Typical values can be between [0,1] with higher numbers retaining more edges
+
+    edgebundle_pruning_twice:bool
+        default: False. When True, the edgebundling is applied to a further visually pruned (visual_cluster_graph_pruning) and can sometimes simplify the visualization. it does not impact the pseudotime and lineage computations
+    pseudotime_threshold_TS: int
+        (default = 30) corresponds to the criteria for a state to be considered a candidate terminal cell fate to be 30% or later of the computed psuedotime range
+    num_mcmc_simulations:int
+        (default = 1300) number of random walk simulations conducted
+
+
+    Attributes
+    ------------
+    labels: list
+        length n_samples of cluster labels
+    single_cell_pt_markov: list
+        length n_samples of pseudotime
+    single_cell_bp: ndarray
+        [n_lineages x n_samples] array of single cell branching probabilities towards each lineage.
+        Each column corresponds to a terminal state, in the order presented by the terminal_clusters attribute
+    terminal_clusters: list
+        list of clusters that are cell fates/ unique lineages
+    CSM: ndarray
+        [n_cluster x n_clusters] array of cosine similarity used to weight the cluster graph transition matrix by velocity
+    single_cell_transition_matrix: ndarray
+        [n_samples x n_samples]
+    super_terminal_clusters:list
+        (default None) list of terminal clusters from a coarser via run
+        :param csr_full_graph:
+    csr_array_locally_pruned: csr matrix
+    ig_full_graph:
+    full_neighbor_array:
     '''
 
     def __init__(self, data:ndarray, true_label=None, dist_std_local:float=2, jac_std_global='median',
