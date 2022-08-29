@@ -11,6 +11,7 @@ import phate
 import seaborn as sns
 #from core_working import *#pyVIA.core import * #pyVIA.core import * core_working import*
 from pyVIA.core import *
+import pyVIA.datasets_via as datasets
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
     import scvelo as scv
     dict_abb = {'Basophils': 'BASO1', 'CD4+ Effector Memory': 'TCEL7', 'Colony Forming Unit-Granulocytes': 'GRAN1',
@@ -592,8 +593,8 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
         print('inside toy4')
         df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv", delimiter=",")
         df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids_with_truetime.csv", delimiter=",")
-        root_user, dataset =  [136,4], ''
-        #root_user, dataset = ['T1_M1', 'T2_M1'],'toy' #alternative root setting
+        #root_user, dataset =  [136,4], ''
+        root_user, dataset = ['T1_M1', 'T2_M1'],'group' #alternative root setting
         paga_root = 'T1_M1'
 
     df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
@@ -604,6 +605,8 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     true_label = df_ids['group_id'].tolist()
     #true_time = df_ids['true_time']
     adata_counts = sc.AnnData(df_counts, obs=df_ids)
+    if dataset == "Toy3": adata_counts = datasets.toy_multifurcating()
+    if datasets =='Toy4': adata_counts = datasets.toy_disconnected()
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
     # true_label =['a' for i in true_label] #testing dummy true_label
     adata_counts.uns['iroot'] = np.flatnonzero(adata_counts.obs['group_id'] == paga_root)[0]  # 'T1_M1'#'M1'
@@ -2792,8 +2795,8 @@ def main():
         # main_scATAC_zscores(knn=30, ncomps =10) #knn=20, ncomps = 30)
     elif dataset == 'Toy':
         #main_Toy_comparisons(ncomps=10, knn=30, random_seed=2, dataset='Toy3',  foldername="/home/shobi/Trajectory/Datasets/Toy3/")
-        main_Toy(ncomps=10, knn=30, random_seed=2, dataset='Toy4',foldername="/home/shobi/Trajectory/Datasets/Toy4/")  # pc10/knn30/rs2 for Toy4
-        #main_Toy(ncomps=20, knn=30, random_seed=2, dataset='Toy3',     foldername="/home/shobi/Trajectory/Datasets/Toy3/")
+        #main_Toy(ncomps=10, knn=30, random_seed=2, dataset='Toy4',foldername="/home/shobi/Trajectory/Datasets/Toy4/")  # pc10/knn30/rs2 for Toy4
+        main_Toy(ncomps=20, knn=30, random_seed=2, dataset='Toy3',     foldername="/home/shobi/Trajectory/Datasets/Toy3/")
         # main_Toy_comparisons(ncomps=10, knn=10, random_seed=2, dataset='ToyMultiM11',              foldername="/home/shobi/Trajectory/Datasets/ToyMultifurcating_M11/")
         # main_Toy_comparisons(ncomps=10, knn=20, random_seed=2, dataset='Toy3',                             foldername="/home/shobi/Trajectory/Datasets/Toy3/")
     elif dataset == 'wrapper':

@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import pygam as pg
 from typing import Optional, Union
-from pyVIA.utils_via import *
+from utils_via import *
 
 
 def _make_knn_embeddedspace(embedding):
