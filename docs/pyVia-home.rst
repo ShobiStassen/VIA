@@ -7,14 +7,14 @@ pyVIA
 Please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`_ for more details. 
 
 
-**VIA visualizes on Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
+**VIA visualizes Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
 
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" width="600px" align="center" </a>
 
 
-**Fine-grained vector field without using RNA-velocity**
+**Multifurcating wind maps without RNA velocity**
 
 .. raw:: html
 
