@@ -7,7 +7,7 @@ Please refer to our  **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** 
      <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" alt="Trulli" width="100%" >
 </p>
 <p align="center">
-     <img src="https://drive.google.com/file/d/1eR9ViuEoG6ZjdY8xExOxt4vC1BVU4sMu/view?usp=sharing" alt="Trulli" width="100%" >
+     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" alt="Trulli" width="100%" >
 </p>
 
 
