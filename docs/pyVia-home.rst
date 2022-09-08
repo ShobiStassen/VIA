@@ -7,13 +7,18 @@ pyVIA
 Please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`_ for more details. 
 
 
+**VIA visualizes on Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
+.. raw:: html
 
-|:eight_spoked_asterisk:| **Fine-grained vector field without using RNA-velocity**
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" width="600px" align="center" </a>
+
+
+**Fine-grained vector field without using RNA-velocity**
 
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" width="600px" align="center" </a>
-
+  
 Examples and Visualization
 --------------------------
 There are several `Jupyter Notebooks <https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks>`_ here and on the github page with step-by-step code for real and simulated datasets. |:eight_spoked_asterisk:| **The NB for multifurcating data shows a step-by-step usage tutorial.** 
