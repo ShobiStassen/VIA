@@ -8,6 +8,7 @@ Please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`
 
 
 **VIA visualizes on Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
+
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" width="600px" align="center" </a>
