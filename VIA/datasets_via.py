@@ -5,6 +5,13 @@ import gdown
 import os
 from scipy.io import loadmat
 
+"HELLO to main"
+"SHOBI SAYS HELLO"
+"Hello again"
+"Hi after Kathy meeting"
+
+"simultaneous changes by Shobi"
+"Minato says hi"
 
 def toy_multifurcating(foldername="./"):
     """Load Toy_Multifurcating data as AnnData object
@@ -46,7 +53,7 @@ def toy_multifurcating(foldername="./"):
     adata = sc.AnnData(df_counts, obs=true_label)
     return adata
 
-def toy_disconnected(foldername="Datasets/"):
+def toy_disconnected(foldername="./"):
     """Load Toy_Disconnected data as AnnData object
 
     To access obs (label) as list, use AnnData.obs['group_id'].values.tolist()
@@ -135,11 +142,12 @@ def scRNA_hematopoiesis(foldername="./"):
     # tsnem = ad.obsm['tsne']
     true_label = nover_labels
     # create AnnData object
-    adata = sc.AnnData(ad.X)
-    adata.obs['label'] = true_label
-    adata.obs_names = ad.obs_names
-    adata.var_names = ad.var_names
-    return adata
+    ad.obs['label'] = [i for i in nover_labels]
+    #adata = sc.AnnData(ad.X)
+    #adata.obs['label'] = true_label
+    #adata.obs_names = ad.obs_names
+    #adata.var_names = ad.var_names
+    return ad
 
 
 def scATAC_hematopoiesis(foldername="./"):
@@ -186,7 +194,7 @@ def scATAC_hematopoiesis(foldername="./"):
     return adata
 
 
-def cell_cycle(foldername="Datasets/"):
+def cell_cycle(foldername="./"):
     """Load cell cycle data as AnnData object
 
     Args:

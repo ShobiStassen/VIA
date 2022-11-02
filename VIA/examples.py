@@ -8,10 +8,20 @@ import matplotlib.pyplot as plt
 from sklearn.metrics.pairwise import euclidean_distances
 import umap
 import phate
+
+import os.path
+
+
+print(os.path.abspath(phate.__file__))
 import seaborn as sns
 #from core_working import *#pyVIA.core import * #pyVIA.core import * core_working import*
 from pyVIA.core import *
 import pyVIA.datasets_via as datasets
+import matplotlib as mpl
+
+
+
+sc.settings.set_figure_params(dpi=120, facecolor='black') #or whichever facecolor e.g. black, 'white'
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
     import scvelo as scv
     dict_abb = {'Basophils': 'BASO1', 'CD4+ Effector Memory': 'TCEL7', 'Colony Forming Unit-Granulocytes': 'GRAN1',
@@ -135,6 +145,9 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     print('save nover')
     for i in list(set(nover_labels)):
         print('Cell type', i, 'has ', nover_labels.count(i), 'cells')
+
+
+    '''
     parc53_labels = pd.read_csv('/home/shobi/Trajectory/Datasets/HumanCD34/Nover_Cor_Parc53_set1.csv')[
         'x'].values.tolist()
 
@@ -145,9 +158,9 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
         parc_dict_nover[i] = dict_abb[c]
     parclabels_all = [parc_dict_nover[ll] for ll in parclabels_all]
     # print('all', len(parclabels_all))
-
+    '''
     ad = sc.read(
-        '/home/shobi/Trajectory/Datasets/HumanCD34/human_cd34_bm_rep1.h5ad')
+        '/home/shobi/Trajectory/Datasets/HumanCD34/human_cd34_bm_rep1.h5ad') #https://drive.google.com/file/d/1ZSZbMeTQQPfPBGcnfUNDNL4om98UiNcO/view
     # 5780 cells x 14651 genes Human Replicate 1. Male african american, 38 years
     print('h5ad  ad size', ad)
     colors = pd.Series(ad.uns['cluster_colors'])
@@ -188,10 +201,16 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     adata_counts.obs_names = ad.obs_names
     adata_counts.var_names = ad.var_names
 
-
+    adata_counts.obs['clusters']= ad.obs['clusters']
     # adata_counts_raw = adata_preprocess(adata_counts_raw, n_top_genes=500, log=True) # when using HVG and no PCA
     # sc.tl.pca(adata_counts_raw,svd_solver='arpack', n_comps=ncomps)
+    adata_counts.obs['nover_labels'] =[i for i in nover_labels]
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
+
+    #sc.pp.neighbors(adata_counts, n_pcs=80, n_neighbors=30)
+    #sc.tl.umap(adata_counts, min_dist=0.8)
+    #sc.pl.embedding(adata_counts, basis='X_umap', color=['nover_labels', 'clusters'], size=10)
+
     marker = ['x', '+', (5, 0), '>', 'o', (5, 2)]
     import colorcet as cc
 
@@ -210,12 +229,74 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     print(time.ctime())
 
     print(time.ctime())
-    v0 = VIA(Xin, true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
+    v0 = VIA(Xin, true_label, jac_std_global=0.15, dist_std_local=1, knn=30,
              too_big_factor=0.3,
              root_user=root_user, dataset='', preserve_disconnected=True, random_seed=v0_random_seed,
               is_coarse=True, pseudotime_threshold_TS=10,
-             neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1, edgebundle_pruning_twice=True)  # *.4 root=1,
+             neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1, edgebundle_pruning_twice=True)#, embedding=tsnem)#embedding=adata_counts.obsm['X_umap'])  # *.4 root=1,
     v0.run_VIA()
+    ax, ax1 = draw_piechart_graph(via0=v0)
+    ax1.set_title('pseudotime')
+    ax.set_title('reference cell types')
+    plt.show()
+    v0.embedding = tsnem
+    plot_edge_bundle(via_object=v0)
+    via_streamplot(v0, v0.embedding, scatter_size=15, scatter_alpha=0.5, title='pt-aug via-umap', density_stream = 2)
+    plt.show()
+
+
+    animated_streamplot(v0, v0.embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1,
+                        saveto='/home/shobi/Trajectory/Datasets/human_stream_test.gif', facecolor_='white', )
+
+    print(f"{datetime.now()}\tAnimate milestone hammer with white bg")
+    animate_edge_bundle(via_object=v0, hammerbundle_dict=v0.hammerbundle_milestone_dict,
+                        time_series_labels=v0.time_series_labels,
+                        linewidth_bundle=2, cmap='rainbow', facecolor='white',
+                        extra_title_text='test animation', alpha_scatter=0.1, size_scatter=10,
+                        saveto='/home/shobi/Trajectory/Datasets/human_edgebundle_test.gif')
+
+    print('changing the level of visual pruning on the clustergraph and replotting')
+    make_edgebundle_viagraph(via_object=v0, edgebundle_pruning=1)
+    plot_edgebundle_viagraph(via_object=v0, plot_clusters=True, title='solo viagraph with bundling')
+    plt.show()
+
+
+    print(f"{datetime.now()}\tPlot CD34 milestone hammer external with different params ")
+    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=0.5, decay=0.7, initial_bandwidth=0.02, milestone_labels=v0.labels)
+
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=1.5, alpha_bundle_factor=2,
+                     cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
+                     extra_title_text='external edgebundle plot', headwidth_bundle=0.3, scale_scatter_size_pop=True)
+
+
+    print(f"{datetime.now()}\tPlot CD34 milestone hammer external")
+    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=0.5, decay=0.7, initial_bandwidth=0.05)
+
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=1.5, alpha_bundle_factor=2,
+                     cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
+                     extra_title_text='external edgebundle plot', headwidth_bundle=0.3)
+
+    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=0.5, decay=0.7, initial_bandwidth=0.05, n_milestones=300)
+
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=1.5, alpha_bundle_factor=2,
+                     cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
+                     extra_title_text='initial bw'+str(0.05), headwidth_bundle=0.3)
+
+
+    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=0.5, decay=0.7,
+                                                            initial_bandwidth=0.02, n_milestones=300)
+
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=1.5, alpha_bundle_factor=2,
+                     cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
+                     extra_title_text='initial bw'+str(0.02), headwidth_bundle=0.3)
+
+    plt.show()
+
+
 
     #MAKE JSON for interactive graph
     # #v0.make_JSON(filename='scRNA_Hema_temp_Feb2022.js')
@@ -253,15 +334,19 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
                       'CSF1R': 'CSF1R (cDC Up. Up then Down in pDC)', 'IL3RA': 'CD123 (pDC)', 'IRF4': 'IRF4 (pDC)',
                       'ITGAX': 'ITGAX (cDCs)', 'CSF2RA': 'CSF2RA (cDC)'}
 
-    v0.get_gene_expression(gene_exp=df_magic, cmap='rainbow', marker_genes=marker_genes)
+
+
+
+    get_gene_expression(via0=v0, gene_exp=df_magic, cmap='rainbow', marker_genes=marker_genes)
     plt.show()
-    v0.draw_piechart_graph(type_data='gene', gene_exp=df_magic_cluster['GATA1'].values, title='GATA1', cmap='coolwarm')
+    draw_piechart_graph(via0=v0, type_data='gene', gene_exp=df_magic_cluster['GATA1'].values, title='GATA1', cmap='coolwarm')
     plt.show()
 
     draw_sc_lineage_probability(v0,v0, tsnem)
     plt.show()
-    via_streamplot(v0, tsnem, scatter_size=50)
+    via_streamplot(v0, tsnem, scatter_size=50, title='original tsne')
     plt.show()
+
 
     draw_trajectory_gams(v0,v0, tsnem, draw_all_curves=False)
     plt.show()
@@ -300,7 +385,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     draw_sc_lineage_probability(v0, v1, embedding=tsnem)
     plt.show()
 
-    v1.get_gene_expression(df_magic, marker_genes=marker_genes)
+    get_gene_expression(via0=v1, gene_exp=df_magic, marker_genes=marker_genes)
     plt.show()
 
     #JSON interactive graphs
@@ -614,27 +699,118 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     if dataset == 'Toy4':
         jac_std_global = 0.15  # 1
     else:
-        jac_std_global = 0.15
+        jac_std_global = 0.05#0.15#0.15
     import umap
 
     embedding = umap.UMAP(min_dist=0.5).fit_transform(adata_counts.obsm['X_pca'][:, 0:10])  # 50
 
+
     # embedding = adata_counts.obsm['X_pca'][:, 0:2]
     # plt.scatter(embedding[:,0],embedding[:,1])
     # plt.show()
+    do_phate = False
+    if do_phate == True:
+        phate_op = phate.PHATE(n_pca=None)
+        embedding = phate_op.fit_transform(adata_counts.obsm['X_pca'][:, 0:ncomps])
+        plt.scatter(embedding[:, 0], embedding[:, 1], c=[int(i[-1]) for i in true_label], cmap='rainbow', s=2)
+        plt.show()
+        plt.scatter(embedding[:, 0], embedding[:, 1], c=[int(i[-1]) for i in true_label], cmap='rainbow', s=2)
+        plt.show()
+    X_pca= adata_counts.obsm['X_pca'][:, 0:ncomps]
     print('root user', root_user)
-    v0 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=jac_std_global, dist_std_local=1,
+    v0 = VIA(X_pca, true_label, jac_std_global=jac_std_global, dist_std_local=1,
              knn=knn,
              cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset=dataset,
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              random_seed=random_seed, piegraph_arrow_head_width=0.2,
-             piegraph_edgeweight_scalingfactor=1.0)  # *.4 root=2,
+             piegraph_edgeweight_scalingfactor=1.0, embedding=embedding)  # *.4 root=2,
     v0.run_VIA()
-    draw_piechart_graph(v0, edge_color='green')
+    print('draw piechart graph')
+    draw_piechart_graph(via0=v0)
     plt.show()
-    via_streamplot(v0, embedding)
+    plot_edgebundle_viagraph(via_object=v0, plot_clusters=True, title='viagraph with bundling', fontsize=10)
     plt.show()
+
+    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1, initial_bandwidth=0.02, decay=0.7)
+
+
+    print(f"{datetime.now()}\tPlot milestone hammer external")
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=1.5, alpha_bundle_factor=2,
+                     cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
+                     extra_title_text='edgebundle plot', headwidth_bundle=0.15)
+
+
+    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1,
+                                                            initial_bandwidth=0.02, decay=0.7, n_milestones=300)
+    print(f"{datetime.now()}\tPlot milestone hammer external")
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=1.5, alpha_bundle_factor=2,
+                     cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
+                     extra_title_text='edgebundle plot', headwidth_bundle=0.15)
+
+
+    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1,
+                                                            initial_bandwidth=0.05, decay=0.7, n_milestones=300)
+    print(f"{datetime.now()}\tPlot milestone hammer external")
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=1.5, alpha_bundle_factor=2,
+                     cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
+                     extra_title_text='edgebundle plot', headwidth_bundle=0.15)
+
+    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1,
+                                                            initial_bandwidth=0.05, decay=0.7, n_milestones=50)
+    print(f"{datetime.now()}\tPlot milestone hammer external")
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=1.5, alpha_bundle_factor=2,
+                     cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
+                     extra_title_text='edgebundle plot', headwidth_bundle=0.15)
+
+    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1,
+                                                            initial_bandwidth=0.02, decay=0.7, n_milestones=50)
+    print(f"{datetime.now()}\tPlot milestone hammer external")
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=1.5, alpha_bundle_factor=2,
+                     cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
+                     extra_title_text='edgebundle plot', headwidth_bundle=0.15)
+
+
+    plt.show()
+
+
+    print(f"{datetime.now()}\tAnimate milestone hammer with white bg")
+    animate_edge_bundle(via_object=v0, hammerbundle_dict=v0.hammerbundle_milestone_dict,
+                        time_series_labels=v0.time_series_labels,
+                        linewidth_bundle=2, cmap='rainbow', facecolor='white',
+                        extra_title_text='test animation', alpha_scatter=0.1, size_scatter=10,
+                        saveto='/home/shobi/Trajectory/Datasets/testing_oct26.gif')
+    make_edgebundle_viagraph(via_object=v0, edgebundle_pruning=1)
+    plot_edgebundle_viagraph(via_object=v0, plot_clusters=True, title='viagraph with bundling', fontsize=10)
+    plt.show()
+    #embedding = run_umap_hnsw(X_input=adata_counts.obsm['X_pca'][:, 0:10], graph=(v0.csr_full_graph), n_components=2, spread=1.0, min_dist=0.5,           init_pos='spectral', random_state=1, n_epochs=100)
+    #mbedding = via_mds(graph = v0.csr_full_graph)
+
+
+
+
+    #knn_struct =construct_knn_utils(X_pca[idx_sub,:])
+    #embedding = mds_milestone_knn_new( X_pca=X_pca,viagraph_full=v0.csr_full_graph, k=10, n_milestones=500)
+
+    #embedding = via.run_umap_hnsw(X_input=v0.data, graph=row_stoch, n_components=2, spread=spread, min_dist=min_dist,   init_pos='spectral', random_state=random_seed_umap, n_epochs=50)
+
+    #embedding = sgd_mds(via_graph=v0.csr_full_graph,X_pca=adata_counts.obsm['X_pca'][:, 0:ncomps], t_diff_op = 3, ndims= 2, random_seed=random_seed)
+
+
+    via_streamplot(v0, embedding, scatter_size=20)#embedding
+    plt.show()
+    print('making animated stream plot. This may take a few minutes when the streamline count is high')
+    animated_streamplot(v0, embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1,
+                        saveto='/home/shobi/Trajectory/Datasets/Toy3/test_framerates.gif', facecolor_='white', )
+    print('changing edge color on viagraphs')
+    draw_piechart_graph(v0, edge_color='gray')
+    plt.show()
+
     super_labels = v0.labels
     print('super labels', type(super_labels))
     df_ids['pt'] = v0.single_cell_pt_markov
@@ -665,11 +841,9 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
 
     get_gene_expression(v0, gene_exp=df_genes, marker_genes=['Gene0', 'Gene1', 'Gene2'])
     plt.show()
-    draw_sc_lineage_probability(via_coarse = v0, via_fine=v1, embedding=embedding)
+    draw_sc_lineage_probability(via_object = v0, via_fine=v1, embedding=embedding)
     plt.show()
 
-    animated_streamplot(v0, embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1,
-                        saveto='/home/shobi/Trajectory/Datasets/Toy3/test.gif')
 
 def main_Bcell(ncomps=50, knn=20, random_seed=0, cluster_graph_pruning_std=.15,path='/home/shobi/Trajectory/Datasets/Bcell/'):
     print('Input params: ncomp, knn, random seed', ncomps, knn, random_seed)
@@ -910,7 +1084,7 @@ def main_Bcell(ncomps=50, knn=20, random_seed=0, cluster_graph_pruning_std=.15,p
 
     super_labels = v0.labels
 
-    tsi_list = get_loc_terminal_states(via0=v0, X_input=adata_counts.obsm['X_pca'][:, 0:ncomps])
+    #tsi_list = get_loc_terminal_states(via0=v0, X_input=adata_counts.obsm['X_pca'][:, 0:ncomps])
     v1 = VIA(adata_counts.obsm['X_pca'][:, 0:ncomps], true_label, jac_std_global=0.15, dist_std_local=1, knn=knn,
              too_big_factor=0.05, is_coarse=False,
              cluster_graph_pruning_std=cluster_graph_pruning_std,
@@ -2770,7 +2944,7 @@ def main1():
 
 
 def main():
-    dataset = 'Toy'  #
+    dataset = 'Toy3'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
         main_Human(ncomps=80, knn=30, v0_random_seed=4,
@@ -2793,12 +2967,14 @@ def main():
     elif dataset == 'scATAC_Hema':
         main_scATAC_Hemato(knn=20)
         # main_scATAC_zscores(knn=30, ncomps =10) #knn=20, ncomps = 30)
-    elif dataset == 'Toy':
+    elif dataset == 'Toy3':
         #main_Toy_comparisons(ncomps=10, knn=30, random_seed=2, dataset='Toy3',  foldername="/home/shobi/Trajectory/Datasets/Toy3/")
-        #main_Toy(ncomps=10, knn=30, random_seed=2, dataset='Toy4',foldername="/home/shobi/Trajectory/Datasets/Toy4/")  # pc10/knn30/rs2 for Toy4
-        main_Toy(ncomps=20, knn=30, random_seed=2, dataset='Toy3',     foldername="/home/shobi/Trajectory/Datasets/Toy3/")
+
+        main_Toy(ncomps=20, knn=30, random_seed=2, dataset='Toy3',     foldername="/home/shobi/Trajectory/Datasets/Toy3/", cluster_graph_pruning_std=1)
         # main_Toy_comparisons(ncomps=10, knn=10, random_seed=2, dataset='ToyMultiM11',              foldername="/home/shobi/Trajectory/Datasets/ToyMultifurcating_M11/")
         # main_Toy_comparisons(ncomps=10, knn=20, random_seed=2, dataset='Toy3',                             foldername="/home/shobi/Trajectory/Datasets/Toy3/")
+    elif dataset=='Toy4':
+        main_Toy(ncomps=10, knn=30, random_seed=2, dataset='Toy4',foldername="/home/shobi/Trajectory/Datasets/Toy4/")  # pc10/knn30/rs2 for Toy4
     elif dataset == 'wrapper':
 
         # Read two files 1) the first file contains 200PCs of the Bcell filtered and normalized data for the first 5000 HVG.

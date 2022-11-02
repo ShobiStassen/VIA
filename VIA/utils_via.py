@@ -17,6 +17,502 @@ import matplotlib
 import igraph as ig
 import matplotlib.pyplot as plt
 from matplotlib.path import get_path_collection_extents
+import s_gd2
+from scipy.spatial.distance import pdist, squareform
+from sklearn.preprocessing import normalize
+import random
+from collections import Counter
+import scipy
+from scipy.sparse.csgraph import minimum_spanning_tree, connected_components
+from matplotlib.animation import FuncAnimation, writers
+
+def func_mode(ll):
+    # return MODE of list ll
+    # If multiple items are maximal, the function returns the first one encountered.
+    return max(set(ll), key=ll.count)
+
+def csr_mst(adjacency):
+    # return minimum spanning tree from adjacency matrix (csr)
+    Tcsr = adjacency.copy()
+    Tcsr.data *= -1
+    Tcsr.data -= np.min(Tcsr.data) - 1
+    Tcsr = minimum_spanning_tree(Tcsr)
+    return (Tcsr + Tcsr.T) * .5
+
+def connect_all_components(MSTcsr, cluster_graph_csr, adjacency):
+    # connect forest of MSTs (csr)
+    n, labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+    while n > 1:
+        sub_td = MSTcsr[labels == 0, :][:, labels != 0]
+
+        locxy = scipy.sparse.find(MSTcsr == np.min(sub_td.data))
+
+        for i in range(len(locxy[0])):
+            if (labels[locxy[0][i]] == 0) & (labels[locxy[1][i]] != 0):
+                x, y = locxy[0][i], locxy[1][i]
+
+        cluster_graph_csr[x, y] = adjacency[x, y]
+        n, labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+    return cluster_graph_csr
+
+def pruning_clustergraph(adjacency, global_pruning_std=1, max_outgoing=30, preserve_disconnected=True,
+                         preserve_disconnected_after_pruning=False, do_max_outgoing = True):
+    # neighbors in the adjacency matrix (neighbor-matrix) are not listed in in any order of proximity
+    # larger pruning_std factor means less pruning
+    # the mst is only used to reconnect components that become disconnect due to pruning
+    # print('global pruning std', global_pruning_std, 'max outoing', max_outgoing)
+    from scipy.sparse.csgraph import minimum_spanning_tree
+
+    Tcsr = csr_mst(adjacency)
+    initial_links_n = len(adjacency.data)
+
+    n_comp, comp_labels = connected_components(csgraph=adjacency, directed=False, return_labels=True)
+    print(f"{datetime.now()}\tGraph has {n_comp} connected components before pruning")
+
+
+    if do_max_outgoing==True:
+        adjacency = scipy.sparse.csr_matrix.todense(adjacency)
+        row_list = []
+        col_list = []
+        weight_list = []
+
+        rowi = 0
+
+        for i in range(adjacency.shape[0]):
+            row = np.asarray(adjacency[i, :]).flatten()
+            n_nonz = min(np.sum(row > 0), max_outgoing)
+
+            to_keep_index = np.argsort(row)[::-1][0:n_nonz]  # np.where(row>np.mean(row))[0]#
+            # print('to keep', to_keep_index)
+            updated_nn_weights = list(row[to_keep_index])
+            for ik in range(len(to_keep_index)):
+                row_list.append(rowi)
+                col_list.append(to_keep_index[ik])
+                dist = updated_nn_weights[ik]
+                weight_list.append(dist)
+            rowi = rowi + 1
+        final_links_n = len(weight_list)
+
+        cluster_graph_csr = csr_matrix((weight_list, (row_list, col_list)), shape=adjacency.shape)
+    else: cluster_graph_csr = adjacency.copy()
+    n_comp, comp_labels = connected_components(csgraph=adjacency, directed=False, return_labels=True)
+    print(f"{datetime.now()}\tGraph has {n_comp} connected components before pruning")
+
+    sources, targets = cluster_graph_csr.nonzero()
+    mask = np.zeros(len(sources), dtype=bool)
+
+    cluster_graph_csr.data = cluster_graph_csr.data / (np.std(cluster_graph_csr.data))  # normalize
+    threshold_global = np.mean(cluster_graph_csr.data) - global_pruning_std * np.std(cluster_graph_csr.data)
+    mask |= (cluster_graph_csr.data < threshold_global)  # smaller Jaccard weight means weaker edge
+
+    cluster_graph_csr.data[mask] = 0
+    cluster_graph_csr.eliminate_zeros()
+
+
+    prev_n_comp, prev_comp_labels = n_comp, comp_labels #before pruning
+    n_comp, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True) #n comp after pruning
+    n_comp_preserve = n_comp if preserve_disconnected_after_pruning else prev_n_comp
+
+    # preserve initial disconnected components
+    if preserve_disconnected and n_comp > prev_n_comp:
+        Td = Tcsr.todense()
+        Td[Td == 0] = 999.999
+        n_comp_ = n_comp
+        while n_comp_ > n_comp_preserve:
+            for i in range(n_comp_preserve):
+                loc_x = np.where(prev_comp_labels == i)[0]
+                len_i = len(set(comp_labels[loc_x]))
+
+                while len_i > 1:
+                    s = list(set(comp_labels[loc_x]))
+                    loc_notxx = np.intersect1d(loc_x, np.where((comp_labels != s[0]))[0])
+                    loc_xx = np.intersect1d(loc_x, np.where((comp_labels == s[0]))[0])
+                    sub_td = Td[loc_xx, :][:, loc_notxx]
+                    locxy = np.where(Td == np.min(sub_td))
+                    for i in range(len(locxy[0])):
+                        if comp_labels[locxy[0][i]] != comp_labels[locxy[1][i]]:
+                            x, y = locxy[0][i], locxy[1][i]
+
+                    cluster_graph_csr[x, y] = adjacency[x, y]
+                    n_comp_, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+                    loc_x = np.where(prev_comp_labels == i)[0]
+                    len_i = len(set(comp_labels[loc_x]))
+        print(f"{datetime.now()}\tGraph has {n_comp_} connected components after reconnecting")
+
+    elif not preserve_disconnected and n_comp > 1:
+        cluster_graph_csr = connect_all_components(Tcsr, cluster_graph_csr, adjacency)
+        n_comp, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+
+    edges = list(zip(*cluster_graph_csr.nonzero()))
+    weights = cluster_graph_csr.data / (np.std(cluster_graph_csr.data))
+
+    if do_max_outgoing==True: trimmed_n = (initial_links_n - final_links_n) * 100. / initial_links_n
+    trimmed_n_glob = (initial_links_n - len(weights)) * 100. / initial_links_n
+    if do_max_outgoing == True: print(f"{datetime.now()}\t{round(trimmed_n, 1)}% links trimmed from local pruning relative to start")
+    if global_pruning_std < 0.5:
+        print(f"{datetime.now()}\t{round(trimmed_n_glob, 1)}% links trimmed from global pruning relative to start")
+    return weights, edges, comp_labels
+
+def get_sparse_from_igraph(graph: ig.Graph, weight_attr=None):
+    '''
+
+    :param graph: igrapaph
+    :param weight_attr:
+    :return: csr matrix
+    '''
+    edges = graph.get_edgelist()
+    weights = graph.es[weight_attr] if weight_attr else [1] * len(edges)
+
+    if not graph.is_directed():
+        edges.extend([(v, u) for u, v in edges])
+        weights.extend(weights)
+
+    shape = graph.vcount()
+    shape = (shape, shape)
+    if len(edges) > 0:
+        return csr_matrix((weights, zip(*edges)), shape=shape)
+    return csr_matrix(shape)
+
+
+def recompute_weights(graph: ig.Graph, label_counts: Counter):
+
+    graph = get_sparse_from_igraph(graph, weight_attr='weight')
+
+    weights, scale_factor, w_min = [], 1., 0
+    for s, t, w in zip(*[*graph.nonzero(), graph.data]):
+        ns, nt = label_counts[s], label_counts[t]
+        nw = w * (ns + nt) / (1. * ns * nt)
+        weights.append(nw)
+
+    scale_factor = max(weights) - min(weights)
+    w_min = min(weights)
+    #if w_min > nw: w_min = nw
+    weights = [(w + w_min) / scale_factor for w in weights]
+
+    return csr_matrix((weights, graph.nonzero()), shape=graph.shape)
+
+def affinity_milestone_knn(data, knn_struct,k:int=10, time_series_labels:list=[], knn_seq:int = 5, t_difference:int=3)->csr_matrix:
+    '''
+    Receives as input "data" which is the subset of the original data provided to VIA on which to make a 'milestone'-KNN-graph and convert the distances to affinities
+    For datasets larger than 10,000 points it is advisable from a memory usage point of view to make a milestone knn  as the pairwise distance pdist computation used for mds
+    is a very large matrix
+    :param data: the subset of the original data on which to make a milestone-KNNgraph and convert the distances to affinity
+    :param knn_struct: the index of the knn-graph made of milestone (subset of original data) samples is provided to construct the milestone knngraph
+    :param k: number of k-neighbors. since the number of milestones is usually <10,000, we dont want a huge k number
+    :param time_series_labels: if using time-series data then the user can optionally guide the milestone knngraph with the sequential time labels
+    :param knn_seq: number of sequential neighbors in addition to the regular neighbors
+    :return:csr_matrix of the (optionally sequentially augmented) milestone knngraph where edge weights are affinities
+    '''
+
+    neighbor_array, distance_array = knn_struct.knn_query(data, k=k)
+
+    if len(time_series_labels)>=1:
+        t_diff_step=t_difference
+        n_augmented, d_augmented = sequential_knn(data, time_series_labels, neighbor_array,
+                                                                  distance_array, k_seq=knn_seq,
+                                                                  k_reverse=0,
+                                                                  num_threads=-1, distance='l2',
+                                                                )
+        neighbor_array = n_augmented
+        distance_array = d_augmented
+        print('shape neighbor array augmented ', neighbor_array.shape)
+
+
+
+
+        msk = np.full_like(distance_array, True, dtype=np.bool_)
+        #print('all edges', np.sum(msk))
+        # Remove self-loops
+        msk &= (neighbor_array != np.arange(neighbor_array.shape[0])[:, np.newaxis])
+        #print('non-self edges', np.sum(msk))
+
+        '''
+        #doing local pruning and then adding back the augmented edges does not work so well because when the edge weights are scaled and inverted,
+        # the sequentially added edges appear very weak and noisy compared to the fairly strong edges that remain after the local pruning from the inital round of knngraph. If you retain all edges from initial graph construction,
+        # then the average weight of edges is exaggeratedly higher than those edge weights from the sequentially added edges, and creates a better gradient of edge weights
+        # Local pruning based on neighbor being too far. msk where we want to keep neighbors
+        msk = distances <= (np.mean(distances, axis=1) + self.dist_std_local * np.std(distances, axis=1))[:,
+                           np.newaxis]
+        # Remove self-loops
+        msk &= (neighbors != np.arange(neighbors.shape[0])[:, np.newaxis])
+        last_n_columns = self.knn_sequential+1
+        msk[:,-last_n_columns:] = True # add back the edges belonging to knn-sequentially built part of the graph
+        '''
+        #remove edges between nodes that >t_diff_step far apart in time_series_labels
+        time_series_set_order = list(sorted(list(set(time_series_labels))))
+        t_diff_mean = np.mean(np.array([int(abs(y - x)) for x, y in zip(time_series_set_order [:-1], time_series_set_order [1:])]))
+        print(f"{datetime.now()}\tActual average allowable time difference between nodes is {round(t_diff_mean*t_diff_step,2)}")
+        time_series_labels = np.asarray(time_series_labels)
+        #print(colored(f"inside time_series msk"))
+
+        rr= 0
+        count = 0
+        for row in neighbor_array:
+            #if rr%20000==0: print(row, type(row), row[0])
+            rr +=1
+            t_row = time_series_labels[row[0]] #first neighbor is itself
+
+            for e_i, n_i in enumerate(row):
+                if abs(time_series_labels[n_i] - t_row)>t_diff_mean*t_diff_step:
+                    count= count+1
+                    if np.sum(msk[row[0]])>4: msk[row[0],e_i]=False # we want to ensure that each cell has at least 5 nn
+        print('number of non temporal neighbors removed', count)
+    else:
+        msk = np.full_like(distance_array, True, dtype=np.bool_)
+        # print('all edges', np.sum(msk))
+        # Remove self-loops
+        msk &= (neighbor_array != np.arange(neighbor_array.shape[0])[:, np.newaxis])
+
+    row_mean = np.mean(distance_array, axis=1)
+    row_var = np.var(distance_array, axis=1)
+    row_znormed_dist_array = (distance_array - row_mean[:, np.newaxis]) / row_var[:, np.newaxis]
+    row_znormed_dist_array = np.nan_to_num(row_znormed_dist_array, copy=True, nan=1, posinf=1, neginf=1)
+    row_znormed_dist_array[row_znormed_dist_array > 10] = 0
+    affinity_array = np.exp(-row_znormed_dist_array)
+    print(affinity_array.shape, 'affinity shape', affinity_array[0:5,:])
+    n_neighbors = neighbor_array.shape[1]
+    n_cells = neighbor_array.shape[0]
+
+
+    affinity_array = affinity_array[msk]
+    rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbor_array)])[msk]
+    cols = neighbor_array[msk]
+    result = csr_matrix((affinity_array, (rows, cols)), shape=(n_cells, n_cells), dtype=np.float64)
+    result = normalize(result, axis=1)
+    '''
+    row_list = []
+   
+    print('ncells and neighs', n_cells, n_neighbors)
+    row_list.extend(list(np.transpose(np.ones((n_neighbors, n_cells)) * range(0, n_cells)).flatten()))
+
+    col_list = neighbor_array.flatten().tolist()
+    list_affinity = affinity_array.flatten().tolist()
+    print('affinity list for milestone_knn_new', len(list_affinity), list_affinity[0:20])
+    csr_knn = csr_matrix((list_affinity, (row_list, col_list)), shape=(n_cells, n_cells))
+    csr_knn = normalize(csr_knn,axis=1)
+    return csr_knn
+    '''
+    return result
+
+
+def sgd_mds(via_graph: csr_matrix, X_pca, t_diff_op: int = 1, ndims: int = 2, random_seed = 0):
+    '''
+
+    :param via_graph: via_graph = v0.csr_full_graph #single cell knn graph representation based on hnsw
+    :param t_diff_op:
+    :param ndims:
+    :return:
+    '''
+    # outlier handling of graph edges
+    via_graph.data = np.clip(via_graph.data, np.percentile(via_graph.data, 10), np.percentile(via_graph.data, 90))
+    row_stoch = normalize(via_graph, norm='l1', axis=1)
+    row_stoch = row_stoch ** t_diff_op
+    #msk = row_stoch==0
+    from scipy.sparse.csgraph import connected_components
+    n_components, labels_cc = connected_components(csgraph=row_stoch, directed=False, return_labels=True)
+    if n_components>1: print('Please rerun with higher knn value. disconnected components exist')
+
+    temp_pca = csr_matrix(X_pca)
+
+    X_mds = row_stoch * temp_pca  # matrix multiplication to diffuse the pcs
+
+    print('doing pdist')
+    X_mds = squareform(pdist(X_mds.todense()))
+    print('shape of squareform', X_mds.shape)
+    #print(X_mds[0:10,:])
+    #print(X_mds[490:499,:])
+    #X_mds[msk.todense()]=np.amax(X_mds)
+    #X_mds = X_mds+X_mds.transpose() #has to be symmetric
+    #np.fill_diagonal(X_mds,0)
+    #X_mds = squareform(pdist(temp_pca.todense()))# testing when no viagraph diffusion
+
+
+    print(f'{datetime.now()}\tStarting MDS on milestone')
+
+    Y_classic = classic(X_mds, n_components=ndims, random_state=random_seed)
+
+    X_mds = sgd(X_mds, n_components=ndims, random_state=random_seed, init=Y_classic)
+
+    return X_mds
+
+
+
+
+def sgd(D, n_components=2, random_state=None, init=None):
+    """Metric MDS using stochastic gradient descent
+    Parameters
+    ----------
+    D : array-like, shape=[n_samples, n_samples]
+        pairwise distances
+    n_components : int, optional (default: 2)
+        number of dimensions in which to embed `D`
+    random_state : int or None, optional (default: None)
+        numpy random state
+    init : array-like or None
+        Initialization algorithm or state to use for MMDS
+    Returns
+    -------
+    Y : array-like, embedded data [n_sample, ndim]
+    """
+
+    N = D.shape[0]
+    D = squareform(D)
+    # Metric MDS from s_gd2
+    Y = s_gd2.mds_direct(N, D, init=init, random_seed=random_state)
+    return Y
+def classic(D, n_components=2, random_state=None):
+
+    """Fast CMDS using random SVD
+    Parameters
+    ----------
+    D : array-like, shape=[n_samples, n_samples]
+        pairwise distances
+    n_components : int, optional (default: 2)
+        number of dimensions in which to embed `D`
+    random_state : int, RandomState or None, optional (default: None)
+        numpy random state
+    Returns
+    -------
+    Y : array-like, embedded data [n_sample, ndim]
+    """
+    from sklearn.decomposition import PCA
+    D = D**2
+    D = D - D.mean(axis=0)[None, :]
+    D = D - D.mean(axis=1)[:, None]
+    pca = PCA( n_components=n_components, svd_solver="randomized", random_state=random_state)
+    Y = pca.fit_transform(D)
+    return Y
+
+
+def construct_knn_utils(data: np.ndarray, too_big: bool = False, distance='l2', num_threads: int = -1,
+                         knn: int = 20) -> hnswlib.Index:
+    """
+    Construct K-NN graph for given data. This is also featured within VIA class, but since we use it outside the class, we declare it in utils too
+    too_big: if constructing knn during an iteration of PARC that tries to break up very large clusters. typically False unless called within too_big SubPARC
+
+    Parameters
+    ----------
+    data: np.ndarray of shape (n_samples, n_features)
+        Data matrix over which to construct knn graph
+
+    too_big: bool, default = False
+
+    Returns
+    -------
+    Initialized instance of hnswlib.Index to be used over given data
+    """
+    # if self.knn > 100:
+    # print(colored(f'Passed number of neighbors exceeds max value. Setting number of neighbors to 100'))
+    # k = min(100, self.knn + 1)
+    k = knn + 1  # since first knn is itself
+
+    nsamples, dim = data.shape
+    ef_const, M = 200, 30
+    if not too_big:
+        if nsamples < 10000:
+            k = ef_const = min(nsamples - 10, 500)
+        if nsamples <= 50000 and dim > 30:
+            M = 48  # good for scRNA-seq where dimensionality is high
+
+    p = hnswlib.Index(space=distance, dim=dim)
+    p.set_num_threads(num_threads)
+    p.init_index(max_elements=nsamples, ef_construction=ef_const, M=M)
+    p.add_items(data)
+    p.set_ef(k)
+    return p
+
+def sequential_knn(data: np.ndarray, time_series_labels: list, neighbors: np.ndarray, distances: np.ndarray, k_seq: int,
+                   k_reverse: int = 0, distance: str = 'l2', num_threads: int = -1,
+                   too_big: bool = False) -> np.ndarray:
+    '''
+    Make the sequential knn graph connecting cells in adjacent time points and merge this sequential graph
+    together with the original KNN graph (distances, neighbors) made without any prior knowledge of the teim-series information
+
+    :param data: the data we want to make a sequential graph with
+    :param time_series_labels: numerical labels used to make the sequential graph
+    :param neighbors: array of n_samples (data.shape[0]) * n_knn in the original knn graph made without knowledge of the time-series sequences
+    :param distances: array n_samples x n_knn in the original knn graph graph made without any time-series info
+    :param k_seq: number of knn for sequential
+    :param k_reverse: number of sequential edges from time{i} to time{i-1}
+    :param knn: number of knn in the index constriction that we subsequently will query on
+    :return: 2 ndarrays augmented_nn, augmented_nn_data that contain the neighbor and distance values of the final sequential graph + original knn graph. the data is distances NOT affinity.
+    '''
+    all_new_nn = np.ones((data.shape[0], k_seq + k_reverse))
+    all_new_nn_data = np.ones((data.shape[0], k_seq + k_reverse))
+    time_series_set = sorted(list(set(time_series_labels)))  # values sorted in ascending order
+    print(f"{datetime.now()}\tTime series ordered set{time_series_set}")
+    time_series_labels = np.asarray(time_series_labels)
+
+    for counter, tj in enumerate(time_series_set[1:]):
+        ti = time_series_set[counter]
+        #print(f"ti {ti} and tj {tj}")
+        tj_loc = np.where(time_series_labels == tj)[0]
+        ti_loc = np.where(time_series_labels == ti)[0]
+        tj_data = data[tj_loc, :]
+        ti_data = data[ti_loc, :]
+
+
+
+        if k_seq>0:
+            tj_knn = _construct_knn(tj_data, knn=k_seq, distance=distance, num_threads=num_threads, too_big=too_big)
+            ti_query_nn, d_ij = tj_knn.knn_query(ti_data, k=k_seq)  # find the cells in tj that are closest to those in ti
+
+            for xx_i, xx in enumerate(ti_loc):
+                all_new_nn[xx, 0:k_seq] = tj_loc[ti_query_nn[xx_i]]  # need to convert the ti_query_nn indices back to the indices of tj_loc in full data
+                all_new_nn_data[xx, 0:k_seq] = d_ij[xx_i]
+
+        if k_reverse>0:
+            ti_knn = _construct_knn(ti_data, knn=k_reverse, distance=distance, num_threads=num_threads, too_big=too_big)
+            tj_query_nn, d_ji = ti_knn.knn_query(tj_data, k=k_reverse)
+            for xx_i, xx in enumerate(tj_loc):
+                all_new_nn[xx, k_seq:] = ti_loc[tj_query_nn[
+                    xx_i]]  # need to convert the tj_query_nn indices back to the indices of tj_loc in full data
+                all_new_nn_data[xx, k_seq:] = d_ji[xx_i]
+
+
+    print(f"{datetime.now()}\tShape neighbors {neighbors.shape} and sequential neighbors {all_new_nn.shape}")
+
+    augmented_nn = np.concatenate((neighbors, all_new_nn), axis=1).astype('int')
+    augmented_nn_data = np.concatenate((distances, all_new_nn_data), axis=1)
+    print(f"{datetime.now()}\tShape augmented neighbors {augmented_nn.shape}")
+
+    return augmented_nn, augmented_nn_data
+
+
+def _construct_knn(data: np.ndarray, knn: int, distance: str, num_threads: int, too_big: bool = False) -> hnswlib.Index:
+    """
+    Construct K-NN graph index for given data. This is not the knngraph in itself. that is made by querying this index
+
+    Parameters
+    ----------
+    data: np.ndarray of shape (n_samples, n_features)
+        Data matrix over which to construct knn graph
+
+    too_big: bool, default = False #in the subparc_toobig routine is set to True
+    knn: int self.knn +1
+    distance: str self.distance (type of metric) e.g. 'l2'
+    num_threads:int default =-1
+    Returns
+    -------
+    Initialized instance of hnswlib.Index to be used over given data
+    """
+
+    k = knn + 1  # since first knn is itself
+
+    nsamples, dim = data.shape
+    ef_const, M = 200, 30
+    if not too_big:
+        if nsamples < 10000:
+            k = ef_const = min(nsamples - 10, 500)
+        if nsamples <= 50000 and dim > 30:
+            M = 48  # good for scRNA-seq where dimensionality is high
+
+    p = hnswlib.Index(space=distance, dim=dim)
+    p.set_num_threads(num_threads)
+    p.init_index(max_elements=nsamples, ef_construction=ef_const, M=M)
+    p.add_items(data)
+    p.set_ef(k)
+    return p
 
 def getbb(sc, ax):
     """
@@ -59,6 +555,13 @@ def getbb(sc, ax):
     return bboxes
 
 def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
+    '''
+    #helper function for draw_trajectory_gams in order to find the PCA location of the terminal and intermediate clusters and roots
+    :param p0: coarse via object
+    :param p1: coarse or refined via object. can set to same as p0
+    :param idx: if using a subsampled PCA space for visualization. otherwise just range(0,n_samples)
+    :return:
+    '''
     #ci_list first finds location in unsampled PCA space of the location of the super-cluster or sub-terminal-cluster and root
     # Returns location (index) of cell nearest to the ci_list in the downsampled space
     #print("dict of terminal state pairs, Super: sub: ", p1.dict_terminal_super_sub_pairs)
@@ -111,9 +614,9 @@ def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
     # print('new_superclust_index_ds',new_superclust_index_ds)
     return new_superclust_index_ds
 
-def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name='plasma', scatter_size=None):
+def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_size=None):
     '''
-    This is a helper function called by draw_sc_lineage_probability
+    This is a helper function called by draw_sc_lineage_probability which plots the single-cell lineage probabilities
 
     :param ax:
     :param fig:
@@ -153,11 +656,14 @@ def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name='plasma', scatter_size=No
     ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name)
 
 
-
-
 from datashader.bundling import connect_edges, hammer_bundle
 def sigmoid_func(X):
     return 1 / (1 + np.exp(-X))
+
+
+def sigmoid_scalar(x, scale=1, shift=0):
+  return 1 / (1 + math.exp(-scale*(x-shift)))
+
 
 def logistic_function(X,par_slope=1):
     '''
@@ -187,11 +693,11 @@ def cosine_sim(A,B):
     #p2 = np.sqrt(np.sum(B ** 2), axis = 1))[np.newaxis, :]
     return num / (p1 * p2)
 
-def make_edgebundle(layout, graph,initial_bandwidth = 0.05, decay=0.9):
+def make_edgebundle_viagraph(layout=None, graph=None,initial_bandwidth = 0.05, decay=0.9,edgebundle_pruning=0.5, via_object=None):
     '''
     # Perform Edgebundling of edges in clustergraph to return a hammer bundle. hb.x and hb.y contain all the x and y coords of the points that make up the edge lines.
     # each new line segment is separated by a nan value
-    # https://datashader.org/_modules/datashader/bundling.html#hammer_bundle
+    # reference: https://datashader.org/_modules/datashader/bundling.html#hammer_bundle
     :param layout: force-directed layout coordinates of graph
     :param graph: igraph clustergraph
     :param initial_bandwidth: increasing bw increases merging of minor edges
@@ -199,99 +705,227 @@ def make_edgebundle(layout, graph,initial_bandwidth = 0.05, decay=0.9):
     :return: hb hammerbundle class with hb.x and hb.y containing the coords
     '''
 
+    if (layout is None) & (graph is None):
+        graph=via_object.cluster_graph_csr_not_pruned
+        edgeweights_layout, edges_layout, comp_labels_layout = pruning_clustergraph(graph,
+                                                                                    global_pruning_std=edgebundle_pruning,
+                                                                                    preserve_disconnected=True,
+                                                                                    preserve_disconnected_after_pruning=True, do_max_outgoing=False)
+
+        # layout = locallytrimmed_g.layout_fruchterman_reingold(weights='weight') #uses non-clipped weights but this can skew layout due to one or two outlier edges
+        layout_g = ig.Graph(edges_layout, edge_attrs={'weight': edgeweights_layout}).simplify(combine_edges='sum')
+        layout_g_csr = get_sparse_from_igraph(layout_g, weight_attr='weight')
+        weights_for_layout = np.asarray(layout_g_csr.data)
+        # clip weights to prevent distorted visual scale in layout
+        weights_for_layout = np.clip(weights_for_layout, np.percentile(weights_for_layout, 10),
+                                     np.percentile(weights_for_layout, 90))
+        weights_for_layout = list(weights_for_layout)
+        graph = ig.Graph(list(zip(*layout_g_csr.nonzero())), edge_attrs={'weight': weights_for_layout})
+        # the layout of the graph is determine by a pruned clustergraph and the directionality of edges will be based on the final markov pseudotimes
+        # the edgeweights of the bundle-edges is determined by the distance based metrics and jaccard similarities and not by the pseudotimes
+        # for the transition matrix used in the markov pseudotime and differentiation probability computations, the edges will be further biased by the hittings times and markov pseudotimes
+        layout = graph.layout_fruchterman_reingold(weights='weight')
+
+
+    print(f'{datetime.now()}\tMake via clustergraph edgebundle')
     data_node = [[node] + layout.coords[node] for node in range(graph.vcount())]
     nodes = pd.DataFrame(data_node, columns=['id', 'x', 'y'])
     nodes.set_index('id', inplace=True)
 
     edges = pd.DataFrame([e.tuple for e in graph.es], columns=['source', 'target'])
+
     edges['weight'] = graph.es['weight']
     hb = hammer_bundle(nodes, edges, weight='weight',initial_bandwidth = initial_bandwidth, decay=decay) #default bw=0.05, dec=0.7
+    print(f'{datetime.now()}\tHammer dims: Nodes shape: {nodes.shape} Edges shape: {edges.shape}')
     #fig, ax = plt.subplots(figsize=(8, 8))
     #ax.plot(hb.x, hb.y, 'y', zorder=1, linewidth=3)
-    # hb.plot(x="x", y="y", figsize=(9,9))
+    #hb.plot(x="x", y="y",figsize=(9,9))
     #plt.show()
+    if via_object is not None:
+        print(f'{datetime.now()}\tUpdating the hammerbundle and graph layout of via clustergraph')
+        via_object.hammerbundle_cluster = hb
+        via_object.graph_node_pos = layout.coords
     return hb
 
-def plot_edge_bundle(ax, hammer_bundle, layout,CSM, velocity_weight, pt, alpha_bundle=1, linewidth_bundle=2, edge_color='darkblue',headwidth_bundle=0.1, arrow_frequency=0.05):
+
+def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=None, sc_pt:list = None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, milestone_labels:list=[], sc_labels_numeric:list=None, weighted=True, global_visual_pruning=0.5):
+    '''
+    # Perform Edgebundling of edges in a milestone level to return a hammer bundle of milestone-level edges. This is more granular than the original parc-clusters but less granular than single-cell level and hence also less computationally expensive
+    # requires some type of embedding (n_samples x 2) to be available
+
+    :param embedding: embedding single cell. also looks nice when done on via_mds as more streamlined continuous diffused graph structure. Umap is a but "clustery"
+    :param graph: igraph single cell graph level
+    :param sc_graph: igraph graph set as the via attribute self.ig_full_graph (affinity graph)
+    :param initial_bandwidth: increasing bw increases merging of minor edges
+    :param decay: increasing decay increases merging of minor edges #https://datashader.org/user_guide/Networks.html
+    :param milestone_labels:list=[] single-cell level labels (clusters, groups, which function as milestone groupings of the single cells)
+    :param sc_labels_numeric:list=None (default) automatically selects the sequential numeric time-series values in
+    :return: dictionary containing keys: hb_dict['hammerbundle'] = hb hammerbundle class with hb.x and hb.y containing the coords
+                hb_dict['milestone_embedding'] dataframe with 'x' and 'y' columns for each milestone and hb_dict['edges'] dataframe with columns ['source','target'] milestone for each each and ['cluster_pop']
+
+    '''
+    if embedding is None:
+        if via_object is not None: embedding = via_object.embedding
+
+    if sc_graph is None:
+        if via_object is not None: sc_graph =via_object.ig_full_graph
+    if embedding is None: print(f'{datetime.now()}\tERROR: Please provide either an embedding (single cell level) or via_object with an embedding attribute!')
+    n_samples = embedding.shape[0]
+    if n_milestones is None: n_milestones = max(100, int(0.01*n_samples))
+    #milestone_indices = random.sample(range(n_samples), n_milestones)  # this is sampling without replacement
+    if len(milestone_labels)==0:
+        print(f'{datetime.now()}\tStart kmeans milestone')
+        from sklearn.cluster import KMeans
+        kmeans = KMeans(n_clusters=n_milestones, random_state=1).fit(embedding)
+        milestone_labels = kmeans.labels_.flatten().tolist()
+        print(f'{datetime.now()}\tEnd kmeans milestone')
+        #plt.scatter(embedding[:, 0], embedding[:, 1], c=milestone_labels, cmap='tab20', s=1, alpha=0.3)
+        #plt.show()
+    if sc_labels_numeric is None:
+        if via_object is not None:
+            sc_labels_numeric = via_object.time_series_labels
+        else: print('please provide either a list of numeric labels (single cell level) or via_object')
+    if sc_pt is None:
+        sc_pt =via_object.single_cell_pt_markov
+    '''
+    numeric_val_of_milestone = []
+    if len(sc_labels_numeric)>0:
+        for cluster_i in set(milestone_labels):
+            loc_cluster_i = np.where(np.asarray(milestone_labels)==cluster_i)[0]
+            majority_ = func_mode(list(np.asarray(sc_labels_numeric)[loc_cluster_i]))
+            numeric_val_of_milestone.append(majority_)
+    '''
+    vertex_milestone_graph = ig.VertexClustering(sc_graph, membership=milestone_labels).cluster_graph(combine_edges='sum')
+
+    print(f'{datetime.now()}\tRecompute weights')
+    vertex_milestone_graph = recompute_weights(vertex_milestone_graph, Counter(milestone_labels))
+    print(f'{datetime.now()}\tpruning milestone graph based on recomputed weights')
+    #was at 0.1 global_pruning for 2000+ milestones
+    edgeweights_pruned_milestoneclustergraph, edges_pruned_milestoneclustergraph, comp_labels = pruning_clustergraph(vertex_milestone_graph,
+                                                                                                   global_pruning_std=global_visual_pruning,
+                                                                                                   preserve_disconnected=True,
+                                                                                                   preserve_disconnected_after_pruning=False, do_max_outgoing=False)
+
+    print(f'{datetime.now()}\tregenerate igraph on pruned edges')
+    vertex_milestone_graph = ig.Graph(edges_pruned_milestoneclustergraph,
+                                edge_attrs={'weight': edgeweights_pruned_milestoneclustergraph}).simplify(combine_edges='sum')
+    vertex_milestone_csrgraph = get_sparse_from_igraph(vertex_milestone_graph, weight_attr='weight')
+
+    weights_for_layout = np.asarray(vertex_milestone_csrgraph.data)
+    # clip weights to prevent distorted visual scale
+    weights_for_layout = np.clip(weights_for_layout, np.percentile(weights_for_layout, 20),
+                                 np.percentile(weights_for_layout,
+                                               80))  # want to clip the weights used to get the layout
+    #print('weights for layout', (weights_for_layout))
+    #print('weights for layout std', np.std(weights_for_layout))
+
+    weights_for_layout = weights_for_layout/np.std(weights_for_layout)
+    #print('weights for layout post-std', weights_for_layout)
+    #print(f'{datetime.now()}\tregenerate igraph after clipping')
+    vertex_milestone_graph = ig.Graph(list(zip(*vertex_milestone_csrgraph.nonzero())), edge_attrs={'weight': list(weights_for_layout)})
+
+    #layout = vertex_milestone_graph.layout_fruchterman_reingold()
+    #embedding = np.asarray(layout.coords)
+
+    print(f'{datetime.now()}\tmake node dataframe')
+    data_node = [node for node in range(embedding.shape[0])]
+    nodes = pd.DataFrame(data_node, columns=['id'])
+    nodes.set_index('id', inplace=True)
+    nodes['x'] = embedding[:, 0]
+    nodes['y'] = embedding[:, 1]
+    nodes['pt'] = sc_pt
+    if sc_labels_numeric is not None:
+        print(f'{datetime.now()}\tSetting numeric label as time_series_labels or other sequential metadata for coloring edges')
+        nodes['numeric label'] = sc_labels_numeric
+    else:
+        print(f'{datetime.now()}\tSetting numeric label as single cell pseudotime for coloring edges')
+        nodes['numeric label'] = sc_pt
+
+    nodes['kmeans'] = milestone_labels
+    group_pop = []
+    for i in sorted(set(milestone_labels)):
+        group_pop.append(milestone_labels.count(i))
+
+
+    nodes_mean = nodes.groupby('kmeans').mean()
+    nodes_mean['cluster population'] = group_pop
+
+    edges = pd.DataFrame([e.tuple for e in vertex_milestone_graph.es], columns=['source', 'target'])
+
+    edges['weight0'] = vertex_milestone_graph.es['weight']
+    edges = edges[edges['source'] != edges['target']]
+
+
+    # seems to work better when allowing the bundling to occur on unweighted representation and later using length of segments to color code significance
+    if weighted ==True: edges['weight'] = edges['weight0']#1  # [1/i for i in edges['weight0']]np.where((edges['source_cluster'] != edges['target_cluster']) , 1,0.1)#[1/i for i in edges['weight0']]#
+    else: edges['weight'] = 1
+    print(f'{datetime.now()}\tHammer bundling')
+
+
+    hb = hammer_bundle(nodes_mean, edges, weight='weight', initial_bandwidth=initial_bandwidth,
+                       decay=decay)  # default bw=0.05, dec=0.7
+    # hb.x and hb.y contain all the x and y coords of the points that make up the edge lines.
+    # each new line segment is separated by a nan value
+    # https://datashader.org/_modules/datashader/bundling.html#hammer_bundle
+    #nodes_mean contains the averaged 'x' and 'y' milestone locations based on the embedding
+    hb_dict = {}
+    hb_dict['hammerbundle'] = hb
+    hb_dict['milestone_embedding'] = nodes_mean
+    hb_dict['edges'] = edges[['source','target']]
+    return hb_dict
+
+def make_edgebundle_sc(embedding, sc_graph, initial_bandwidth = 0.05, decay=0.70, sc_clusterlabel:list=[]):
     '''
 
-    :param ax: axis to plot on
-    :param hammer_bundle: hammerbundle object with coordinates of all the edges to draw
-    :param layout: coords of cluster nodes
-    :param CSM: cosine similarity matrix. cosine similarity between the RNA velocity between neighbors and the change in gene expression between these neighbors. Only used when available
-    :param velocity_weight: percentage weightage given to the RNA velocity based transition matrix
-    :param pt: cluster-level pseudotime
-    :param alpha_bundle: alpha when drawing lines
-    :param linewidth_bundle: linewidth of bundled lines
-    :param edge_color:
-    :param headwidth_bundle: headwidth of arrows used in bundled edges
-    :param arrow_frequency: min dist between arrows (bundled edges otherwise have overcrowding of arrows)
-    :return: axis with bundled edges plotted
+     initial_bandwidth = 0.30, decay=0.90,
+    # Perform Edgebundling of edges in clustergraph to return a hammer bundle of single-cell level edges. hb.x and hb.y contain all the x and y coords of the points that make up the edge lines.
+    # each new line segment is separated by a nan value
+    # https://datashader.org/_modules/datashader/bundling.html#hammer_bundle
+    :param embedding: embedding single cell. looks nicer when done on via_mds as more streamlined continuous diffused graph structure. Umap is a but "clustery"
+    :param graph: igraph cluster graph level
+    :param sc_graph: igraph set as the via attribute self.ig_full_graph
+    :param initial_bandwidth: increasing bw increases merging of minor edges
+    :param decay: increasing decay increases merging of minor edges #https://datashader.org/user_guide/Networks.html
+    :return: hb hammerbundle class with hb.x and hb.y containing the coords
     '''
+    print(f"{datetime.now()}\tComputing Edgebundling at single-cell level")
+    data_node = [node for node in range(embedding.shape[0])]
+    nodes = pd.DataFrame(data_node, columns=['id'])
+    nodes.set_index('id', inplace=True)
+    nodes['x'] = embedding[:,0]
+    nodes['y'] = embedding[:, 1]
 
-    x_ = [l[0] for l in layout ]
-    y_ =  [l[1] for l in layout ]
-    #min_x, max_x = min(x_), max(x_)
-    #min_y, max_y = min(y_), max(y_)
-    delta_x =  max(x_)- min(x_)
+    edges = pd.DataFrame([e.tuple for e in sc_graph.es], columns=['source', 'target'])
+    print(edges)
+    edges['weight0'] = sc_graph.es['weight']
 
-    delta_y = max(y_)- min(y_)
+    print(edges['source'].max())
+    edges['source_cluster'] = [sc_clusterlabel[i] for i in edges['source']]
+    edges['target_cluster'] = [sc_clusterlabel[i] for i in edges['target']]
+    #seems to work better when allowing the bundling to occur on unweighted representation and later using length of segments to color code significance
+    edges['weight'] = 1 #[1/i for i in edges['weight0']]np.where((edges['source_cluster'] != edges['target_cluster']) , 1,0.1)#[1/i for i in edges['weight0']]#
 
-    layout = np.asarray(layout)
-    # make a knn so we can find which clustergraph nodes the segments start and end at
+    # remove rows by filtering
+    edges = edges[edges['source'] != edges['target']]
+    #edges = edges[edges['source_cluster'] != edges['target_cluster']]
 
-    neigh = NearestNeighbors(n_neighbors=1)
-    neigh.fit(layout)
-    # get each segment. these are separated by nans.
-    hbnp = hammer_bundle.to_numpy()
-    splits = (np.isnan(hbnp[:, 0])).nonzero()[0] #location of each nan values
-    edgelist_segments = []
-    start = 0
-    segments = []
-    arrow_coords=[]
-    for stop in splits:
-        seg = hbnp[start:stop, :]
-        segments.append(seg)
-        start = stop
-
-    n = 1  # every nth segment is plotted
-    step = 1
-    for seg in segments[::n]:
-        do_arrow=True
-        seg_weight = max(0.3, math.log(1+seg[-1,2]))
-        #print('seg weight', seg_weight)
-        seg = seg[:,0:2].reshape(-1,2)
-        seg_p = seg[~np.isnan(seg)].reshape((-1, 2))
-
-        start=neigh.kneighbors(seg_p[0, :].reshape(1, -1), return_distance=False)[0][0]
-        end = neigh.kneighbors(seg_p[-1, :].reshape(1, -1), return_distance=False)[0][0]
-        #print('start,end',[start, end])
-
-        if ([start, end] in edgelist_segments)|([end,start] in edgelist_segments):
-            do_arrow = False
-        edgelist_segments.append([start,end])
-
-        direction_ = infer_direction_piegraph(start_node=start, end_node=end, CSM=CSM, velocity_weight=velocity_weight, pt=pt)
-
-        direction = -1 if direction_ <0 else 1
+    edges.drop('target_cluster', inplace=True, axis=1)
+    edges.drop('source_cluster', inplace=True, axis=1)
 
 
-        ax.plot(seg_p[:, 0], seg_p[:, 1],linewidth=linewidth_bundle*seg_weight, alpha=alpha_bundle, color=edge_color )
-        mid_point = math.floor(seg_p.shape[0] / 2)
-        if len(arrow_coords)>0: #dont draw arrows in overlapping segments
-            for v1 in arrow_coords:
-                dist_ = dist_points(v1,v2=[seg_p[mid_point, 0], seg_p[mid_point, 1]])
-                #print('dist between points', dist_)
-                if dist_< arrow_frequency*delta_x: do_arrow=False
-                if dist_< arrow_frequency*delta_y: do_arrow=False
+    hb = hammer_bundle(nodes, edges, weight = 'weight', initial_bandwidth = initial_bandwidth, decay=decay) #default bw=0.05, dec=0.7
 
-        if do_arrow==True:
-            ax.arrow(seg_p[mid_point, 0], seg_p[mid_point, 1],
-                 seg_p[mid_point + (direction * step), 0] - seg_p[mid_point, 0],
-                 seg_p[mid_point + (direction * step), 1] - seg_p[mid_point, 1],
-                 lw=0, length_includes_head=False, head_width=headwidth_bundle, color=edge_color,shape='full', alpha= 0.6, zorder=5)
-            arrow_coords.append([seg_p[mid_point, 0], seg_p[mid_point, 1]])
-    return ax
+    #fig, ax = plt.subplots(figsize=(8, 8))
+    #ax.plot(hb.x, hb.y, 'y', zorder=1, linewidth=3)
+    #hb.plot(x="x", y="y",  figsize=(9,9))
+    #title = 'initial bw:' + str(initial_bandwidth)
+    #plt.title(title)
+    #plt.show()
+    hb_dict={}
+    hb_dict['hammerbundle'] = hb
+    hb_dict['milestone_embedding'] = embedding
+    hb_dict['edges'] = edges[['source', 'target']]
+    return hb_dict
 
 def dist_points(v1, v2):
     #euclidean distance between two points (x,y) (x1,y1)
@@ -340,7 +974,7 @@ def get_projected_distances(loadings, gene_matrix, velocity_matrix, edgelist, cu
     :param velocity_matrix: single-cell velocity from sc-Velo/veloctyo
     :param edgelist: list of tuples of graph (start, end)
     :param current_pc: PCs of the current gene space
-    :return:
+    :return: ndarray
     '''
     #loadings = adata.varm['PCs']
     #print('loadings shape', loadings.shape)
@@ -413,7 +1047,7 @@ def stationary_probability_(A_velo):
     '''
     Find the stationary probability of the cluster-graph transition matrix
     :param A_velo: transition matrix of cluster graph based on velocity (cluster level)
-    :return: stationary probability of each cluster
+    :return: array [n_clusters x 1] with stationary probability of each cluster, list of top 3 root candidates corresponding to cluster labels
     '''
 
     n = A_velo.shape[0]
@@ -452,16 +1086,6 @@ def stationary_probability_(A_velo):
 
     return pi, velo_root_top3
 
-def velocity_root(stationary_probability, A_velo):
-    '''
-    #use the stationary probability combined with cluster-graph vertex properties to identify a likely candidate for the root cluster
-    :param stationary_probability:
-    :param A_velo:
-    :return:
-    '''
-
-
-
 
 
 def velocity_transition(A,V,G, slope =4):
@@ -471,7 +1095,7 @@ def velocity_transition(A,V,G, slope =4):
     :param A: Adjacency of clustergraph
     :param V: velocity matrix, cluster average
     :param G: Gene expression matrix, cluster average
-    :return A_vel: reweighted transition matrix of cluster graph
+    :return A_velo: reweighted transition matrix of cluster graph [n_clusxn_clus], array of cosine similarities between clusters [n_clus x n_clus], list of top3 roots
     '''
     #from scipy.spatial import distance
     CSM = np.zeros_like(A)
@@ -509,10 +1133,10 @@ def velocity_transition(A,V,G, slope =4):
 
 def sc_CSM(A, V, G):
     '''
-    :param A: single-cell csr knn graph with neighbors. v0.self.full_csr_matrix
+    :param A: single-cell csr knn graph with neighbors. [n_samples x knn] v0.self.full_csr_matrix
     :param V: cell x velocity matrix (dim: n_samples x n_genes)
     :param G: cell x genes matrix (dim: n_samples x n_genes)
-    :return:
+    :return: single cell level cosine similarity between cells and neighbors of size [n_cells x knn]
     '''
     CSM = np.zeros_like(A)
     find_A = find(A)
