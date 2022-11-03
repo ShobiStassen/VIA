@@ -7,6 +7,7 @@ Please refer to our  **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** 
 <p align="center">
      <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" alt="Trulli" width="100%" >
 </p>
+
 #### :eight_spoked_asterisk: windmaps of multifurcating simulated data
 <p align="center">
      <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" alt="Trulli" width="100%" >
