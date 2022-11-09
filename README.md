@@ -1,7 +1,7 @@
 # VIA 
 ### For the most updated tutorials please visit **[Readthedocs](https://pyvia.readthedocs.io/en/latest/)**
 VIA is a single-cell Trajectory Inference method that offers topology construction, pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. VIA combines lazy-teleporting random walks and Monte-Carlo Markov Chain simulations to overcome common challenges such as 1) accurate terminal state and lineage inference, 2) ability to capture combination of cyclic, disconnected and tree-like structures, 3) scalability in feature and sample space. 4) Generalizability to multi-omic analysis. In addition to transcriptomic data, VIA works on scATAC-seq, flow and imaging cytometry data. 
-Please refer to our  **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** for the latest tutorials and **[videos](https://www.youtube.com/embed/zsG6GjLYDDA)** or our **[paper](https://www.nature.com/articles/s41467-021-25773-3)** for more details. [![DOI](https://zenodo.org/badge/212254929.svg)](https://zenodo.org/badge/latestdoi/212254929). 
+Please refer to our  **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** for the latest tutorials and **[videos](https://pyvia.readthedocs.io/en/latest/Tutorial%20Video.html)** or our **[paper](https://www.nature.com/articles/s41467-021-25773-3)** for more details. [![DOI](https://zenodo.org/badge/212254929.svg)](https://zenodo.org/badge/latestdoi/212254929). 
 
 #### :eight_spoked_asterisk: windmaps of mouse gastrulation
 <p align="center">
@@ -28,7 +28,7 @@ Installations and tutorials available on **[readthedocs](https://pyvia.readthedo
 
 
 ## Jupyter Notebook Tutorials
-Please visit our **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** for the latest tutorials and **[videos](https://www.youtube.com/embed/zsG6GjLYDDA)** on usage and installation
+Please visit our **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** for the latest tutorials and **[videos](https://pyvia.readthedocs.io/en/latest/Tutorial%20Video.html)** on usage and installation
 notebook       | details         | dataset  | reference 
 ---------------| ---------------| ---------| ----------
 [*Multifurcation: Starter Tutorial*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb) | 4-leaf simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | [DynToy](https://github.com/dynverse/dyntoy)
