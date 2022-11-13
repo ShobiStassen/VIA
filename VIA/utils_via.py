@@ -269,7 +269,7 @@ def affinity_milestone_knn(data, knn_struct,k:int=10, time_series_labels:list=[]
     row_znormed_dist_array = np.nan_to_num(row_znormed_dist_array, copy=True, nan=1, posinf=1, neginf=1)
     row_znormed_dist_array[row_znormed_dist_array > 10] = 0
     affinity_array = np.exp(-row_znormed_dist_array)
-    print(affinity_array.shape, 'affinity shape', affinity_array[0:5,:])
+
     n_neighbors = neighbor_array.shape[1]
     n_cells = neighbor_array.shape[0]
 
@@ -748,7 +748,7 @@ def make_edgebundle_viagraph(layout=None, graph=None,initial_bandwidth = 0.05, d
     return hb
 
 
-def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=None, sc_pt:list = None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, milestone_labels:list=[], sc_labels_numeric:list=None, weighted=True, global_visual_pruning=0.5):
+def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=None, sc_pt:list = None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, milestone_labels:list=[], sc_labels_numeric:list=None, weighted:bool=True, global_visual_pruning:float=0.5):
     '''
     # Perform Edgebundling of edges in a milestone level to return a hammer bundle of milestone-level edges. This is more granular than the original parc-clusters but less granular than single-cell level and hence also less computationally expensive
     # requires some type of embedding (n_samples x 2) to be available
@@ -761,7 +761,7 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
     :param milestone_labels:list=[] single-cell level labels (clusters, groups, which function as milestone groupings of the single cells)
     :param sc_labels_numeric:list=None (default) automatically selects the sequential numeric time-series values in
     :return: dictionary containing keys: hb_dict['hammerbundle'] = hb hammerbundle class with hb.x and hb.y containing the coords
-                hb_dict['milestone_embedding'] dataframe with 'x' and 'y' columns for each milestone and hb_dict['edges'] dataframe with columns ['source','target'] milestone for each each and ['cluster_pop']
+                hb_dict['milestone_embedding'] dataframe with 'x' and 'y' columns for each milestone and hb_dict['edges'] dataframe with columns ['source','target'] milestone for each each and ['cluster_pop'], hb_dict['sc_milestone_labels'] is a list of milestone label for each single cell
 
     '''
     if embedding is None:
@@ -774,11 +774,11 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
     if n_milestones is None: n_milestones = max(100, int(0.01*n_samples))
     #milestone_indices = random.sample(range(n_samples), n_milestones)  # this is sampling without replacement
     if len(milestone_labels)==0:
-        print(f'{datetime.now()}\tStart kmeans milestone')
+        print(f'{datetime.now()}\tStart finding milestones')
         from sklearn.cluster import KMeans
         kmeans = KMeans(n_clusters=n_milestones, random_state=1).fit(embedding)
         milestone_labels = kmeans.labels_.flatten().tolist()
-        print(f'{datetime.now()}\tEnd kmeans milestone')
+        print(f'{datetime.now()}\tEnd milestones')
         #plt.scatter(embedding[:, 0], embedding[:, 1], c=milestone_labels, cmap='tab20', s=1, alpha=0.3)
         #plt.show()
     if sc_labels_numeric is None:
@@ -872,6 +872,7 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
     hb_dict['hammerbundle'] = hb
     hb_dict['milestone_embedding'] = nodes_mean
     hb_dict['edges'] = edges[['source','target']]
+    hb_dict['sc_milestone_labels'] = milestone_labels
     return hb_dict
 
 def make_edgebundle_sc(embedding, sc_graph, initial_bandwidth = 0.05, decay=0.70, sc_clusterlabel:list=[]):
