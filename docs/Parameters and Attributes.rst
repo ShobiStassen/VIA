@@ -135,7 +135,26 @@ Parameters and Attributes
      - csr_array_locally_pruned = v0.csr_array_locally_pruned. CSR matrix of the locally pruned KNN graph
  
 
+**Parameter Effects on VIA cluster-level trajectory graph**
+------------------------------------------------------------------------------------------
+**knn & too_big_factor effects colored by cell type and pseudotime**
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/knn_vs_big.gif?raw=true" width="600px" align="center" </a>
+  
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/pt_jac_vs_cluster.png?raw=true" width="600px" align="center" </a>
 
 
+**jac_std_cluster & cluster_graph_pruning_std effects**
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. raw:: html
 
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/jac_vs_cluster.gif?raw=true" width="600px" align="center" </a>
+  
+.. raw:: html
 
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/pt_jac_vs_cluster.gif?raw=true" width="600px" align="center" </a>
+  
