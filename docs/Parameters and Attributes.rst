@@ -145,7 +145,7 @@ Parameters and Attributes
   
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/pt_jac_vs_cluster.png?raw=true" width="600px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/pt_knn_vs_big.png?raw=true" width="600px" align="center" </a>
 
 
 **jac_std_cluster & cluster_graph_pruning_std effects**
