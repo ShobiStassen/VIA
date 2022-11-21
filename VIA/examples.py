@@ -14,8 +14,9 @@ import os.path
 
 print(os.path.abspath(phate.__file__))
 import seaborn as sns
-#from core_working import *#pyVIA.core import * #pyVIA.core import * core_working import*
+#from core_working_github import *#pyVIA.core import * #pyVIA.core import * core_working import*
 from pyVIA.core import *
+#from core_working import *
 import pyVIA.datasets_via as datasets
 import matplotlib as mpl
 
@@ -163,6 +164,8 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
         '/home/shobi/Trajectory/Datasets/HumanCD34/human_cd34_bm_rep1.h5ad') #https://drive.google.com/file/d/1ZSZbMeTQQPfPBGcnfUNDNL4om98UiNcO/view
     # 5780 cells x 14651 genes Human Replicate 1. Male african american, 38 years
     print('h5ad  ad size', ad)
+    print('mpo raw')
+    print(ad[:, 'MPO'].X.flatten().tolist())
     colors = pd.Series(ad.uns['cluster_colors'])
     colors['10'] = '#0b128f'
     ct_colors = pd.Series(ad.uns['ct_colors'])
@@ -233,19 +236,51 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
              too_big_factor=0.3,
              root_user=root_user, dataset='', preserve_disconnected=True, random_seed=v0_random_seed,
               is_coarse=True, pseudotime_threshold_TS=10,
-             neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1, edgebundle_pruning_twice=True)#, embedding=tsnem)#embedding=adata_counts.obsm['X_umap'])  # *.4 root=1,
+             neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1, edgebundle_pruning_twice=True, embedding=tsnem )# do_compute_embedding=True, embedding_type='via-mds')#,#embedding=adata_counts.obsm['X_umap'])  # *.4 root=1,
+    #user_defined_terminal_group=['pDC','MONO1','MEGA1']
     v0.run_VIA()
-    ax, ax1 = draw_piechart_graph(via0=v0)
+    f, ax, ax1 = draw_piechart_graph(via0=v0)
     ax1.set_title('pseudotime')
     ax.set_title('reference cell types')
     plt.show()
     v0.embedding = tsnem
-    plot_edge_bundle(via_object=v0)
-    via_streamplot(v0, v0.embedding, scatter_size=15, scatter_alpha=0.5, title='pt-aug via-umap', density_stream = 2)
+
+    #start magic
+    adata_counts_raw = sc.AnnData(ad.raw.X) #raw counts
+    adata_counts_raw.var_names = [i for i in ad.var_names]
+
+    df_ = pd.DataFrame(adata_counts_raw.X.todense())
+    print('shape adata raw df', df_.shape)
+    df_.columns = [i for i in adata_counts_raw.var_names]
+
+
+    print('start magic')
+    gene_list_magic = ['IL3RA', 'IRF8', 'GATA1', 'GATA2', 'ITGA2B', 'MPO', 'CD79B', 'SPI1', 'CD34', 'CSF1R', 'ITGAX']
+    df_magic = v0.do_impute(df_, magic_steps=3, gene_list=gene_list_magic)
+    df_magic_cluster = df_magic.copy()
+    df_magic_cluster['parc'] = v0.labels
+    df_magic_cluster = df_magic_cluster.groupby('parc', as_index=True).mean()
+    print('end magic', df_magic.shape)
+    #ad[:,'CD34'].X.flatten().tolist()
+    draw_sc_lineage_probability(v0, embedding = tsnem)
+    plt.show()
+    draw_sc_lineage_probability(v0, embedding=tsnem, marker_lineages=[2,4,6,9])
+    plt.show()
+
+    plot_scatter(embedding=tsnem, labels=df_magic['MPO'].tolist(), categorical=False, title='MPO') #CHECK THIS
+    plt.show()
+    plot_edge_bundle(via_object=v0, sc_labels_expression=df_magic['MPO'].tolist(), n_milestones=100, extra_title_text='MPO')
+    plt.show()
+
+    via_streamplot(v0, embedding=tsnem, scatter_size=50, title='original tsne')
     plt.show()
 
 
-    animated_streamplot(v0, v0.embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1,
+    draw_trajectory_gams(v0, embedding=tsnem, draw_all_curves=False)
+    plt.show()
+
+
+    animated_streamplot(v0, embedding=v0.embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1,
                         saveto='/home/shobi/Trajectory/Datasets/human_stream_test.gif', facecolor_='white', )
 
     print(f"{datetime.now()}\tAnimate milestone hammer with white bg")
@@ -311,21 +346,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     # df_selected_genes.to_csv("/home/shobi/Trajectory/Datasets/HumanCD34/selected_genes.csv")
     #df_ = pd.DataFrame(ad.X)
     #df_.columns = [i for i in ad.var_names]
-    adata_counts_raw = sc.AnnData(ad.raw.X) #raw counts
-    adata_counts_raw.var_names = [i for i in ad.var_names]
 
-    df_ = pd.DataFrame(adata_counts_raw.X.todense())
-    print('shape adata raw df', df_.shape)
-    df_.columns = [i for i in adata_counts_raw.var_names]
-
-
-    print('start magic')
-    gene_list_magic = ['IL3RA', 'IRF8', 'GATA1', 'GATA2', 'ITGA2B', 'MPO', 'CD79B', 'SPI1', 'CD34', 'CSF1R', 'ITGAX']
-    df_magic = v0.do_impute(df_, magic_steps=3, gene_list=gene_list_magic)
-    df_magic_cluster = df_magic.copy()
-    df_magic_cluster['parc'] = v0.labels
-    df_magic_cluster = df_magic_cluster.groupby('parc', as_index=True).mean()
-    print('end magic', df_magic.shape)
 
     marker_genes = ['ITGA2B', 'IL3RA', 'IRF8', 'MPO', 'CSF1R', 'GATA2', 'CD79B', 'CD34', 'GATA1']
     # DC markers https://www.cell.com/pb-assets/products/nucleus/nucleus-phagocytes/rnd-systems-dendritic-cells-br.pdf
@@ -342,14 +363,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     draw_piechart_graph(via0=v0, type_data='gene', gene_exp=df_magic_cluster['GATA1'].values, title='GATA1', cmap='coolwarm')
     plt.show()
 
-    draw_sc_lineage_probability(v0,v0, tsnem)
-    plt.show()
-    via_streamplot(v0, tsnem, scatter_size=50, title='original tsne')
-    plt.show()
 
-
-    draw_trajectory_gams(v0,v0, tsnem, draw_all_curves=False)
-    plt.show()
 
 
     ad.obs['via0_label'] = [str(i) for i in super_labels]
@@ -724,22 +738,47 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
              too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset=dataset,
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              random_seed=random_seed, piegraph_arrow_head_width=0.2,
-             piegraph_edgeweight_scalingfactor=1.0, embedding=embedding)  # *.4 root=2,
+             piegraph_edgeweight_scalingfactor=1.0, embedding_type='via-mds', do_compute_embedding=True, resolution_parameter=1, user_defined_terminal_group=['M6','M8','M2','M7'])  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6']
     v0.run_VIA()
+    draw_sc_lineage_probability(v0)
+    plt.show()
+    draw_sc_lineage_probability(v0, marker_lineages=[5,10])
+    plt.show()
     print('draw piechart graph')
     draw_piechart_graph(via0=v0)
     plt.show()
+    draw_trajectory_gams(v0, embedding=embedding)
+    plt.show()
+
     plot_edgebundle_viagraph(via_object=v0, plot_clusters=True, title='viagraph with bundling', fontsize=10)
     plt.show()
 
     hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1, initial_bandwidth=0.02, decay=0.7)
 
-
+    print('hammer bundle dict', hammerbundle_milestone_dict.keys())
     print(f"{datetime.now()}\tPlot milestone hammer external")
+    #edges can be colored by time-series numeric labels, pseudotime, or gene expression. If not specificed then time-series is chosen if available, otherwise falls back to pseudotime. to use gene expression the sc_labels_expression is provided as a list
     plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
                      linewidth_bundle=1.5, alpha_bundle_factor=2,
-                     cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
-                     extra_title_text='edgebundle plot', headwidth_bundle=0.15)
+                     cmap='plasma_r', facecolor='white', size_scatter=15, alpha_scatter=0.2,
+                     extra_title_text='edgebundle plot showing gene0 expression', headwidth_bundle=0.15, sc_labels_expression = adata_counts.obsm['X_pca'][:, 0].tolist())
+
+    plt.show()
+
+
+
+    df_genes = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
+
+    get_gene_expression(v0, gene_exp=df_genes, marker_genes=['Gene0', 'Gene1', 'Gene2'])
+    plt.show()
+    draw_sc_lineage_probability(v0,  embedding=embedding)
+    plt.show()
+
+    print('making animated stream plot. This may take a few minutes when the streamline count is high')
+    animated_streamplot(v0, embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1,
+                        saveto='/home/shobi/Trajectory/Datasets/Toy3/test_framerates.gif', facecolor_='white',
+                        cmap_stream='Blues')
+    plt.show()
 
 
     hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1,
@@ -778,7 +817,8 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
 
     plt.show()
 
-
+    via_streamplot(v0, embedding, scatter_size=20)  # embedding
+    plt.show()
     print(f"{datetime.now()}\tAnimate milestone hammer with white bg")
     animate_edge_bundle(via_object=v0, hammerbundle_dict=v0.hammerbundle_milestone_dict,
                         time_series_labels=v0.time_series_labels,
@@ -802,11 +842,8 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     #embedding = sgd_mds(via_graph=v0.csr_full_graph,X_pca=adata_counts.obsm['X_pca'][:, 0:ncomps], t_diff_op = 3, ndims= 2, random_seed=random_seed)
 
 
-    via_streamplot(v0, embedding, scatter_size=20)#embedding
-    plt.show()
-    print('making animated stream plot. This may take a few minutes when the streamline count is high')
-    animated_streamplot(v0, embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1,
-                        saveto='/home/shobi/Trajectory/Datasets/Toy3/test_framerates.gif', facecolor_='white', )
+
+
     print('changing edge color on viagraphs')
     draw_piechart_graph(v0, edge_color='gray')
     plt.show()
@@ -2944,7 +2981,7 @@ def main1():
 
 
 def main():
-    dataset = 'Toy3'  #
+    dataset = 'Human'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
         main_Human(ncomps=80, knn=30, v0_random_seed=4,

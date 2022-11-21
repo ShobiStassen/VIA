@@ -316,9 +316,9 @@ def sgd_mds(via_graph: csr_matrix, X_pca, t_diff_op: int = 1, ndims: int = 2, ra
 
     X_mds = row_stoch * temp_pca  # matrix multiplication to diffuse the pcs
 
-    print('doing pdist')
+
     X_mds = squareform(pdist(X_mds.todense()))
-    print('shape of squareform', X_mds.shape)
+
     #print(X_mds[0:10,:])
     #print(X_mds[490:499,:])
     #X_mds[msk.todense()]=np.amax(X_mds)
@@ -655,7 +655,6 @@ def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_s
     c[loc_c, 3] = 0.8
     ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name)
 
-
 from datashader.bundling import connect_edges, hammer_bundle
 def sigmoid_func(X):
     return 1 / (1 + np.exp(-X))
@@ -683,7 +682,7 @@ def cosine_sim(A,B):
     '''
     #numerator
     num = np.dot(A, B.T)
-    #print('num',num)
+
     #denominator
     p1 = np.sqrt(np.sum(A ** 2, axis=1))#[:, np.newaxis] when A and B are both matrices
     p2 = np.sqrt(np.sum(B ** 2))
@@ -758,7 +757,7 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
     :param sc_graph: igraph graph set as the via attribute self.ig_full_graph (affinity graph)
     :param initial_bandwidth: increasing bw increases merging of minor edges
     :param decay: increasing decay increases merging of minor edges #https://datashader.org/user_guide/Networks.html
-    :param milestone_labels:list=[] single-cell level labels (clusters, groups, which function as milestone groupings of the single cells)
+    :param milestone_labels: default list=[]. Usually autocomputed. but can provide as single-cell level labels (clusters, groups, which function as milestone groupings of the single cells)
     :param sc_labels_numeric:list=None (default) automatically selects the sequential numeric time-series values in
     :return: dictionary containing keys: hb_dict['hammerbundle'] = hb hammerbundle class with hb.x and hb.y containing the coords
                 hb_dict['milestone_embedding'] dataframe with 'x' and 'y' columns for each milestone and hb_dict['edges'] dataframe with columns ['source','target'] milestone for each each and ['cluster_pop'], hb_dict['sc_milestone_labels'] is a list of milestone label for each single cell
@@ -771,7 +770,8 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
         if via_object is not None: sc_graph =via_object.ig_full_graph
     if embedding is None: print(f'{datetime.now()}\tERROR: Please provide either an embedding (single cell level) or via_object with an embedding attribute!')
     n_samples = embedding.shape[0]
-    if n_milestones is None: n_milestones = max(100, int(0.01*n_samples))
+    if n_milestones is None:
+        n_milestones = min(n_samples,max(100, int(0.01*n_samples)))
     #milestone_indices = random.sample(range(n_samples), n_milestones)  # this is sampling without replacement
     if len(milestone_labels)==0:
         print(f'{datetime.now()}\tStart finding milestones')
@@ -958,7 +958,10 @@ def infer_direction_piegraph(start_node, end_node, CSM, velocity_weight,pt, tanh
         print('csm', csm_se + -1 * csm_es)
         '''
         # Note csm_es does not equal -csm_se because the velocity vector used in the dot product refers to the originating cell
-    pt = pt * (3 / max(pt))  # bring the values to 0-3 so that the tanh function has a range of values
+
+    mpt=max(pt)
+    pt = [i*3 / mpt for i in pt]  # bring the values to 0-3 so that the tanh function has a range of values
+
     #print('pt of end node', end_node, round(pt[end_node], 2), 'pt of start node', start_node, round(pt[start_node], 2))
     tanh_ = math.tanh((pt[end_node] - pt[start_node]) * tanh_scaling_factor)
     #print('tanh', tanh_)
@@ -1091,8 +1094,9 @@ def stationary_probability_(A_velo):
 
 def velocity_transition(A,V,G, slope =4):
     '''
-    Reweighting the cluster level transition matrix based on the cosine similarities of velocity vectors
-    relative to the change in gene expression from the ith cell to its neighbors in knn_gene graph (at cluster level)
+    Reweighting the cluster level transition matrix based on the cosine similarities of velocity vectors.
+    negative direction is suppresed using logistic function, and positive directions are emphasize using logistic function
+    positive direction is when velocity relative to the change in gene expression from the ith cell to its neighbors in knn_gene graph (at cluster level) is also positive, and converse
     :param A: Adjacency of clustergraph
     :param V: velocity matrix, cluster average
     :param G: Gene expression matrix, cluster average
@@ -1122,14 +1126,10 @@ def velocity_transition(A,V,G, slope =4):
     #CSM[mask] = 0 #remove non-neighbor edges
     A_velo[mask]=0
     A_velo = np.multiply(A_velo,A) #multiply element-wise the edge-weight of the transition matrix A by the velocity-factor
-    #print('A_velo col sum', np.sum(A_velo,axis=1))
+
     print(f"{datetime.now()}\t Looking for initial states")
     pi, velo_root_top3 = stationary_probability_(A_velo)
 
-    #print('Avelo')
-    #print(A_velo)
-    #print('CSM')
-    #print(CSM)
     return A_velo, CSM, velo_root_top3
 
 def sc_CSM(A, V, G):
@@ -1142,8 +1142,8 @@ def sc_CSM(A, V, G):
     CSM = np.zeros_like(A)
     find_A = find(A)
     size_A = A.size
-    time_0=  time.ctime()
-    #print('single-cell computation of sc_CSM')
+
+
     for i in range(A.shape[0]):
         delta_gene = G-G[i,:] #change in gene expression when going from i'th cell to other cells
         #print('shape delta_gene', delta_gene.shape, delta_gene)
@@ -1157,11 +1157,9 @@ def sc_CSM(A, V, G):
         #A_velo_i = np.insert(A_velo_i,obj=i,values=0)
         CSM_i = np.insert(CSM_i,obj=i,values=0)
         CSM[i,:] = CSM_i
-    #print('shape 0', CSM.shape)
-    #print('time taken non csr computation of sc_CSM', round(time.ctime()-time_0),2)
+
     CSM_list = []
-    time_1 = time.ctime()
-    #print('time start CSR computation of sc_CSM', time_1)
+
     for i in range(size_A):
         start = find_A[0][i]
         end = find_A[1][i]
@@ -1177,10 +1175,7 @@ def sc_CSM(A, V, G):
         # A_velo_i = np.insert(A_velo_i,obj=i,values=0)
     CSM = csr_matrix((CSM_list, (np.array(find_A[0]), np.array(find_A[1]))),
                        shape=size_A)
-    #print('shape 1', CSM.shape)
-    #print('CSM.data', CSM.data)
 
-    #print('time taken for CSR computation of sc_CSM', round(time.ctime() - time_1), 2)
     return CSM
 def interpolate_stream(array):
     from scipy import interpolate
@@ -1364,17 +1359,16 @@ def map_velocity_to_color(X1D, Y1D, U, V,segments):
     coords = np.vstack((X, Y)).T #(nx2) array of grid coords
     neigh_graph = NearestNeighbors(n_neighbors=1)
     neigh_graph.fit(coords)
-    print('number coords for grid', coords.shape)
-    print(np.isnan(coords))
+
+
 
     seg_coors = np.squeeze(segments[:, ::2, :])
-    print('seg coors', seg_coors.shape)
+
     neigh_seg = neigh_graph.kneighbors(seg_coors, return_distance=False)#[0]
-    print('neighbors of seg points', neigh_seg)
+
     n= len(segments)
     u_seg = velo_coords[neigh_seg,1]
 
-    print('u-seg', u_seg.shape)
     print(u_seg)
     C = np.zeros((n, 4))
     C[::-1] = 1-np.clip(u_seg,0.01,1)
@@ -1382,13 +1376,10 @@ def map_velocity_to_color(X1D, Y1D, U, V,segments):
     return C
 
 def interpolate_static_stream(x, y, u,v):
-    print('original U')
-    print(u)
+
     from scipy.interpolate import griddata
     x, y = np.meshgrid(x, y)
 
-    print('inside interpolate static stream')
-    print('mesh original', x.shape, y.shape)
     #print(x, y)
     points = np.array((x.flatten(), y.flatten())).T
     u = np.nan_to_num(u.flatten())
@@ -1396,16 +1387,11 @@ def interpolate_static_stream(x, y, u,v):
     xi = np.linspace(x.min(), x.max(), 25)
     yi = np.linspace(y.min(), y.max(), 25)
     X, Y = np.meshgrid(xi, yi)
-    #print('new mesh', X.shape, Y.shape)
-    #print('X new mesh')
-    #print(X)
-    #print('Y new mesh')
-    #print(Y)
+
 
     U = griddata(points, u, (X, Y), method='cubic')
     V = griddata(points, v, (X, Y), method='cubic')
-    print('interp static U', U.shape, U)
-    print('interp static V', V.shape, V)
+
     return X, Y, U, V
 
 def l2_norm(x: Union[ndarray, spmatrix], axis: int = 1) -> Union[float, ndarray]:
