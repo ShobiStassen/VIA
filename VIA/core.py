@@ -20,12 +20,10 @@ from termcolor import colored
 from collections import Counter
 from typing import Optional, Union
 from pyVIA.plotting_via import *
-#from plotting_via import * #
-
 from pyVIA.utils_via import _construct_knn, sequential_knn
 from pyVIA.utils_via import *
+#from plotting_via import * #
 #from utils_via import *
-
 #from utils_via import _construct_knn, sequential_knn
 from sklearn.preprocessing import normalize
 import math
@@ -2319,14 +2317,15 @@ class VIA:
         else:
             self.revised_super_terminal_clusters = self.super_terminal_clusters
         self.hitting_times = hitting_times
-        print('hitting times', hitting_times[0:10])
+        #print('hitting times', hitting_times[0:10])
         self.markov_hitting_times = df_graph['markov_pt'].values  # hitting_times#
-        print('markov hitting times,', self.markov_hitting_times[0:10])
+        #print('markov hitting times,', self.markov_hitting_times[0:10])
         self.terminal_clusters = terminal_clus
         print(f"{datetime.now()}\tTerminal clusters corresponding to unique lineages are {self.terminal_clusters} ")
         self.node_degree_list = node_deg_list
         print(f"{datetime.now()}\tBegin projection of pseudotime and lineage likelihood")
         self.single_cell_bp, self.single_cell_pt_markov = self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
+        #print('scmarkov', self.single_cell_pt_markov[0:10])
 
         self.dict_terminal_super_sub_pairs = dict_terminal_super_sub_pairs
         hitting_times = self.markov_hitting_times

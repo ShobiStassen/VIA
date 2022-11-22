@@ -628,32 +628,39 @@ def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_s
     :return:
     '''
     from mpl_toolkits.axes_grid1 import make_axes_locatable
-    prob = np.sqrt(prob)  # scale values to improve visualization of colors
+    #prob = np.sqrt(prob)  # scale values to improve visualization of colors
+    vmax = np.percentile(prob,90)
+    print('vmax', vmax)
     cmap = matplotlib.cm.get_cmap(cmap_name)
     norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
     if scatter_size is None:
         size_point = 10 if embedding.shape[0] > 10000 else 30
     else: size_point = scatter_size
     # changing the alpha transparency parameter for plotting points
-    im =ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=0.01, cmap=cmap_name,    edgecolors = 'none')
+
+    c = cmap(prob).reshape(-1, 4)
+    im =ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=0.01, cmap=cmap_name,    edgecolors = 'none',vmin=0, vmax=vmax) #prevent auto-normalization of colors
+    #im = ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=0.01,  edgecolors='none')
     ax.set_title('Lineage: ' + str(ti))
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.05)
     fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
 
-    c = cmap(norm(prob)).reshape(-1, 4)
+    c = cmap(prob).reshape(-1, 4)
+
+    #c = cmap(norm(prob)).reshape(-1, 4)
     loc_c = np.where(prob <= 0.3)[0]
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none',alpha=0.2, cmap=cmap_name)
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none',alpha=0.2, cmap=cmap_name,vmin=0, vmax=vmax)
     c[loc_c, 3] = 0.2
     loc_c = np.where((prob > 0.3) & (prob <= 0.5))[0]
     c[loc_c, 3] = 0.5
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.5, cmap=cmap_name)
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.5, cmap=cmap_name,vmin=0, vmax=vmax)
     loc_c = np.where((prob > 0.5) & (prob <= 0.7))[0]
     c[loc_c, 3] = 0.8
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name)
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name,vmin=0, vmax=vmax)
     loc_c = np.where((prob > 0.7))[0]
     c[loc_c, 3] = 0.8
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name)
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name,vmin=0, vmax=vmax)
 
 from datashader.bundling import connect_edges, hammer_bundle
 def sigmoid_func(X):
@@ -784,7 +791,7 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
     if sc_labels_numeric is None:
         if via_object is not None:
             sc_labels_numeric = via_object.time_series_labels
-        else: print('please provide either a list of numeric labels (single cell level) or via_object')
+        else: print('Will use via-pseudotime for edges, otherwise consider providing a list of numeric labels (single cell level) or via_object')
     if sc_pt is None:
         sc_pt =via_object.single_cell_pt_markov
     '''

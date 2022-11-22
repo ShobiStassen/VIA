@@ -425,7 +425,15 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
     x_root = []
     root1_list = []
     p1_sc_bp = via_fine.single_cell_bp[idx, :]
+    #row normalize
+    row_sums = p1_sc_bp.sum(axis=1)
+    p1_sc_bp = p1_sc_bp / row_sums[:, np.newaxis]
+    print('draw sc',p1_sc_bp[16,:])
+    print('draw sc', p1_sc_bp[20, :])
+    print('draw sc', p1_sc_bp[22, :])
+
     p1_labels = np.asarray(via_fine.labels)[idx]
+    print('draw sc', p1_labels[120])
     p1_cc = via_fine.connected_comp_labels
     p1_sc_pt_markov = list(np.asarray(via_fine.single_cell_pt_markov)[idx])
     X_data = via_fine.data
@@ -469,6 +477,7 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
 
             if (ti < n_terminal_clusters):
                 if (via_fine.terminal_clusters[ti] in marker_lineages):
+
                     if fig_nrows ==1: plot_sc_pb(axs[c], fig, embedding, p1_sc_bp[:, ti], ti= via_fine.terminal_clusters[ti], cmap_name=cmap_name, scatter_size=scatter_size)
                     else: plot_sc_pb(axs[r,c], fig, embedding, p1_sc_bp[:, ti], ti= via_fine.terminal_clusters[ti], cmap_name=cmap_name, scatter_size=scatter_size)
                     ti+=1

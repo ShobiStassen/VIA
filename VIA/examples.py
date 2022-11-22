@@ -16,7 +16,7 @@ print(os.path.abspath(phate.__file__))
 import seaborn as sns
 #from core_working_github import *#pyVIA.core import * #pyVIA.core import * core_working import*
 from pyVIA.core import *
-#from core_working import *
+#from core_working_ import *
 import pyVIA.datasets_via as datasets
 import matplotlib as mpl
 
@@ -731,18 +731,19 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
         plt.scatter(embedding[:, 0], embedding[:, 1], c=[int(i[-1]) for i in true_label], cmap='rainbow', s=2)
         plt.show()
     X_pca= adata_counts.obsm['X_pca'][:, 0:ncomps]
-    print('root user', root_user)
+    print('root user', root_user, print(true_label))
     v0 = VIA(X_pca, true_label, jac_std_global=jac_std_global, dist_std_local=1,
              knn=knn,
              cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset=dataset,
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              random_seed=random_seed, piegraph_arrow_head_width=0.2,
-             piegraph_edgeweight_scalingfactor=1.0, embedding_type='via-mds', do_compute_embedding=True, resolution_parameter=1, user_defined_terminal_group=['M6','M8','M2','M7'])  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6']
+             piegraph_edgeweight_scalingfactor=1.0,  resolution_parameter=1)  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6'] #embedding_type='via-mds', do_compute_embedding=True,, user_defined_terminal_group=['M6','M8','M2','M7']
     v0.run_VIA()
-    draw_sc_lineage_probability(v0)
+    print(f'{datetime.now()}\tFor random seed: {random_seed}, the first sc markov pt are', v0.single_cell_pt_markov[0:10])
+    draw_sc_lineage_probability(v0, embedding=embedding)
     plt.show()
-    draw_sc_lineage_probability(v0, marker_lineages=[5,10])
+    draw_sc_lineage_probability(v0, embedding=embedding,marker_lineages=[5,10])
     plt.show()
     print('draw piechart graph')
     draw_piechart_graph(via0=v0)
@@ -2981,7 +2982,7 @@ def main1():
 
 
 def main():
-    dataset = 'Human'  #
+    dataset = 'Toy3'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
         main_Human(ncomps=80, knn=30, v0_random_seed=4,
