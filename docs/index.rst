@@ -75,7 +75,8 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
    Installation
    Release History
    Tutorial Video
-   Parameters and Attributes 
+   Parameters and Attributes
+   api
    Basic Example Code
 
 
