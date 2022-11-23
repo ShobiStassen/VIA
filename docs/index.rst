@@ -73,6 +73,7 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
    
    pyVia-home
    Installation
+   Release History
    Tutorial Video
    Parameters and Attributes 
    Basic Example Code
