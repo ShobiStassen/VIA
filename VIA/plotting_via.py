@@ -222,13 +222,13 @@ def via_mds(X_pca, viagraph_full: csr_matrix=None, k: int = 10,
 
     :param X_pca: dimension reduced
     :param viagraph_full: optional. if calling before via, then None. if calling after or from within via, then we can use the via-graph to reinforce the layout
-    :param k:
-    :param random_seed:
-    :param t_diffusion:
-    :param n_milestones:
-    :param time_series_labels:
-    :param knn_seq:
-    :param embedding_type (str) default = 'mds' or set to 'umap'
+    :param k:(int) number of knn for the via_mds reinforcement graph on milestones. 5-20 are reasonable
+    :param random_seed: (int)
+    :param t_diffusion: (int)
+    :param n_milestones: (int)
+    :param time_series_labels: (list) numerical values representing some sequentual information
+    :param knn_seq: (int) if time-series data is available, augment the knn with sequential neighbors (2-10 are reasonable values)
+    :param embedding_type: (str) default = 'mds' or set to 'umap'
     :return:
     '''
 
@@ -622,7 +622,7 @@ def draw_clustergraph(via_object, type_data='gene', gene_exp='', gene_list='', a
         ax_i.axis('off')
     fig.patch.set_visible(False)
     return fig, axs
-def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma_r', extra_title_text = '',size_scatter:int=3, alpha_scatter:float = 0.3 ,headwidth_bundle=0.1, headwidth_alpha=0.8, arrow_frequency=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.02, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False):
+def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma_r', extra_title_text = '',size_scatter:int=3, alpha_scatter:float = 0.3 ,headwidth_bundle=0.1, headwidth_alpha=0.8, arrow_frequency=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.02, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False):
 
     '''
     Edges can be colored by time-series numeric labels, pseudotime, or gene expression. If not specificed then time-series is chosen if available, otherwise falls back to pseudotime. to use gene expression the sc_labels_expression is provided as a list.
@@ -647,8 +647,11 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
     :param sc_labels_expression: list of single cell numeric values used for coloring edges and nodes of corresponding milestones mean expression levels (len n_single_cell samples)
             edges can be colored by time-series numeric labels, pseudotime, or gene expression. If not specificed then time-series is chosen if available, otherwise falls back to pseudotime. to use gene expression the sc_labels_expression is provided as a list
     :param sc_labels_sequential: list of single cell numeric sequential values used for directionality inference as replacement for  pseudotime or v0.time_series_labels (len n_samples single cell)
+    :param sc_labels:list=None list of single-cell level labels (categorial or discrete set of numerical values) to label the nodes
+    :param text_labels:bool=False if you want to label the nodes based on sc_labels (or true_label if via_object is provided)
     :return axis with bundled edges plotted
     '''
+
     if hammerbundle_dict is None:
         if via_object is None: print('if hammerbundle_dict is not provided, then you must provide via_object')
         else:
@@ -791,20 +794,36 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                 arrow_coords.append([seg_p[mid_point, 0], seg_p[mid_point, 1]])
 
         seg_count+=1
-    milestone_numeric_values_rgba=[]
-
-    if scale_scatter_size_pop==True:
-        n_samples = layout.shape[0]
-        group_pop_scale = [math.log(6 + (i / n_samples)) for i in
-                           hammerbundle_dict['milestone_embedding']['cluster population']]
-        size_scatter_scaled = []
+    if show_milestones == True:
+        milestone_numeric_values_rgba=[]
         for ei, i in enumerate(milestone_numeric_values):
             rgba_ = cmap((i - min_numerical_value) / (max_numerical_value - min_numerical_value))
             milestone_numeric_values_rgba.append(rgba_)
-            size_scatter_scaled.append(size_scatter * group_pop_scale[ei])
-        print('size scatter scaled', size_scatter_scaled)
-        ax.scatter(layout[:,0], layout[:,1], s=size_scatter_scaled, c=milestone_numeric_values_rgba, alpha=alpha_scatter, edgecolors='None')
-    if scale_scatter_size_pop==False: ax.scatter(layout[:,0], layout[:,1], s=size_scatter, c=milestone_numeric_values_rgba, alpha=alpha_scatter, edgecolors='None')
+        if scale_scatter_size_pop==True:
+
+            n_samples = layout.shape[0]
+            sqrt_nsamples = math.sqrt(n_samples)
+            group_pop_scale = [math.log(6+i /sqrt_nsamples) for i in
+                               hammerbundle_dict['milestone_embedding']['cluster population']]
+            size_scatter_scaled = [size_scatter * i for i in group_pop_scale]
+        else: size_scatter_scaled = size_scatter # constant value
+
+        if text_labels==False:ax.scatter(layout[:,0], layout[:,1], s=size_scatter_scaled, c=milestone_numeric_values_rgba, alpha=alpha_scatter, edgecolors='None')
+        if text_labels == True:
+            #if text labels is true but user has not provided any labels at the sc level from which to create milestone categorical labels
+            if sc_labels is None:
+                if via_object is not None: sc_labels = via_object.true_label
+                else: print(f'{datetime.now()}\t ERROR: in order to show labels, please provide list of sc_labels at the single cell level OR via_object')
+            for i in range(layout.shape[0]):
+                sc_milestone_labels = hammerbundle_dict['sc_milestone_labels']
+                loc_milestone = np.where(np.asarray(sc_milestone_labels)==i)[0]
+
+                mode_label = func_mode(list(np.asarray(sc_labels)[loc_milestone]))
+                ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=milestone_numeric_values_rgba[i],
+                           alpha=alpha_scatter, edgecolors='None', label=mode_label)
+
+                ax.text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=6, color="black")
+
 
     ax.set_facecolor(facecolor)
     ax.axis('off')
@@ -835,7 +854,7 @@ def animate_edge_bundle(hammerbundle_dict=None,  via_object=None, linewidth_bund
     import tqdm
 
     if hammerbundle_dict is None:
-        if via_object is None: print('if hammerbundle_dict is not provided, then you must provide via_object')
+        if via_object is None: print(f'{datetime.now()}\tERROR: Hammerbundle_dict needs to be provided either through via_object or by running make_edgebundle_milestone()')
         else:
             hammerbundle_dict = via_object.hammerbundle_milestone_dict
             if hammerbundle_dict is None:
@@ -845,7 +864,7 @@ def animate_edge_bundle(hammerbundle_dict=None,  via_object=None, linewidth_bund
                         sc_labels_numeric = via_object.time_series_labels
                     else:
                         sc_labels_numeric = via_object.single_cell_pt_markov
-                print('making hammerbundle')
+
                 hammerbundle_dict = make_edgebundle_milestone(via_object=via_object,
                     embedding=via_object.embedding, sc_graph=via_object.ig_full_graph, n_milestones=n_milestones,
                     sc_labels_numeric=sc_labels_numeric, initial_bandwidth=0.02, decay=0.7, weighted=True)
@@ -1768,7 +1787,7 @@ def draw_trajectory_gams(via_coarse, via_fine=None, embedding: ndarray=None, idx
     ax2.axis('off')
     return f, ax1, ax2
 
-def draw_sc_lineage_probability_solo(via_object, via_fine=None, embedding:ndarray=None, idx=None, cmap_name='plasma', dpi=150):
+def draw_sc_lineage_probability_solo(via_object, via_fine=None, embedding:ndarray=None, idx=None, cmap_name='plasma', dpi=150, vmax=99):
     '''
 
     :param via_object:
@@ -1777,6 +1796,7 @@ def draw_sc_lineage_probability_solo(via_object, via_fine=None, embedding:ndarra
     :param idx:
     :param cmap_name:
     :param dpi:
+    :param vmax: int default =99. vmax of the scatterplot cmap scale where vmax is the vmax'th percentile of the lienage probabilities in that lineage
     :return:
     '''
     # embedding is the full or downsampled 2D representation of the full dataset.
@@ -2056,7 +2076,7 @@ def slow_sklearn_mds(via_graph: csr_matrix, X_pca:ndarray, t_diff_op:int=1):
     return X_mds
 
 
-def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap=None, ax_text=True, dpi=150,headwidth_arrow = 0.1, alpha_edge=0.4, linewidth_edge=2, edge_color='darkblue',reference=None):
+def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:str=None, ax_text=True, dpi=150,headwidth_arrow = 0.1, alpha_edge=0.4, linewidth_edge=2, edge_color='darkblue',reference=None, pie_size_scale:float=0.8):
     '''
     :param via0 is class VIA (the same function also exists as a method of the class as it is called during the TI analysis when VIA is being generated,
     but we offer it outside for consistency with other plotting tools and for usage after teh TI is complete.
@@ -2067,7 +2087,8 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap=N
     :param ax_text: Bool default: True. Annotates each node with cluster number and population of membership
     :param dpi: int default 150
     :param headwidth_bundle: default = 0.1. width of arrowhead used to directed edges
-    :param reference=None. list of categorical (str) labels for cluster composition of the piecharts (LHS subplot) length = n_samples.
+    :param reference: (None or list) list of categorical (str) labels for cluster composition of the piecharts (LHS subplot) length = n_samples.
+    :param pie_size_scale: (float) default=0.8 scaling factor of the piechart nodes
     :return: matplotlib figure with two axes that plot the clustergraph using edge bundling
              left axis shows the clustergraph with each node colored by annotated ground truth membership.
              right axis shows the same clustergraph with each node colored by the pseudotime or gene expression
@@ -2083,7 +2104,7 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap=N
     node_pos = via0.graph_node_pos
 
     node_pos = np.asarray(node_pos)
-    if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'plasma'
+    if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'viridis_r'
 
     if type_data == 'pt':
         pt = via0.scaled_hitting_times  # these are the final MCMC refined pt then slightly scaled at cluster level
@@ -2137,7 +2158,7 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap=N
 
         cluster_i_loc = np.where(np.asarray(via0.labels) == node_i)[0]
         majority_true = via0.func_mode(list(np.asarray(reference_labels)[cluster_i_loc]))
-        pie_size = pie_size_ar[node_i][0]
+        pie_size = pie_size_ar[node_i][0] *pie_size_scale
 
         x1, y1 = trans(node_pos[node_i])  # data coordinates
         xa, ya = trans2((x1, y1))  # axis coordinates
@@ -2156,7 +2177,7 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap=N
         pie_axs[node_i].set_yticks([])
         pie_axs[node_i].set_aspect('equal')
         # pie_axs[node_i].text(0.5, 0.5, graph_node_label[node_i])
-        pie_axs[node_i].text(0.5, 0.5, majority_true)
+        if ax_text==True: pie_axs[node_i].text(0.5, 0.5, majority_true)
 
     patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
     labels = list(set(reference_labels))

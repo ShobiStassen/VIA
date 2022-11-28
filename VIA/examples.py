@@ -15,8 +15,8 @@ import os.path
 print(os.path.abspath(phate.__file__))
 import seaborn as sns
 #from core_working_github import *#pyVIA.core import * #pyVIA.core import * core_working import*
-from pyVIA.core import *
-#from core_working_ import *
+#from pyVIA.core import *
+from core_working_ import *
 import pyVIA.datasets_via as datasets
 import matplotlib as mpl
 
@@ -745,6 +745,20 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     plt.show()
     draw_sc_lineage_probability(v0, embedding=embedding,marker_lineages=[5,10])
     plt.show()
+
+    v0.embedding = embedding
+    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1, initial_bandwidth=0.02, decay=0.7)
+
+    print('hammer bundle dict', hammerbundle_milestone_dict.keys())
+    print(f"{datetime.now()}\tPlot milestone hammer external")
+    #edges can be colored by time-series numeric labels, pseudotime, or gene expression. If not specificed then time-series is chosen if available, otherwise falls back to pseudotime. to use gene expression the sc_labels_expression is provided as a list
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=1.5, alpha_bundle_factor=2,
+                     cmap='plasma_r', facecolor='white', size_scatter=15, alpha_scatter=0.2, scale_scatter_size_pop=True,
+                     extra_title_text='edgebundle plot showing gene0 expression', headwidth_bundle=0.15, sc_labels_expression = adata_counts.obsm['X_pca'][:, 0].tolist(), text_labels=True, sc_labels=true_label)
+
+    plt.show()
+
     print('draw piechart graph')
     draw_piechart_graph(via0=v0)
     plt.show()
@@ -754,17 +768,6 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     plot_edgebundle_viagraph(via_object=v0, plot_clusters=True, title='viagraph with bundling', fontsize=10)
     plt.show()
 
-    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1, initial_bandwidth=0.02, decay=0.7)
-
-    print('hammer bundle dict', hammerbundle_milestone_dict.keys())
-    print(f"{datetime.now()}\tPlot milestone hammer external")
-    #edges can be colored by time-series numeric labels, pseudotime, or gene expression. If not specificed then time-series is chosen if available, otherwise falls back to pseudotime. to use gene expression the sc_labels_expression is provided as a list
-    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
-                     linewidth_bundle=1.5, alpha_bundle_factor=2,
-                     cmap='plasma_r', facecolor='white', size_scatter=15, alpha_scatter=0.2,
-                     extra_title_text='edgebundle plot showing gene0 expression', headwidth_bundle=0.15, sc_labels_expression = adata_counts.obsm['X_pca'][:, 0].tolist())
-
-    plt.show()
 
 
 

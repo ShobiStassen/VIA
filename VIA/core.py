@@ -358,7 +358,7 @@ class VIA:
     n_milestones: int = None Number of milestones in the via-mds computation (anything more than 10,000 can be computationally heavy and time consuming) Typically auto-determined within the via-mds function
     '''
 
-    def __init__(self, data:ndarray, true_label=None, dist_std_local:float=2, jac_std_global='median',
+    def __init__(self, data:ndarray, true_label=None, dist_std_local:float=2, jac_std_global=0.15,
                  keep_all_local_dist='auto', too_big_factor:float=0.4, resolution_parameter:float=1.0, partition_type:str="ModularityVP", small_pop:int=10,
                  jac_weighted_edges:bool=True, knn:int=30, n_iter_leiden:int=5, random_seed:int=42,
                  num_threads=-1, distance='l2', time_smallpop=15,
@@ -382,7 +382,7 @@ class VIA:
         self.velo_weight = velo_weight #float between 0,1. the weight assigned to directionality and connectivity derived from scRNA-velocity
         if edgebundle_pruning is None: edgebundle_pruning = cluster_graph_pruning_std
         self.edgebundle_pruning = edgebundle_pruning
-        if root_user is None:
+        if (root_user is None) & (velocity_matrix is None):
             root_user = [0]
             dataset = ''
         self.root_user = root_user
@@ -1693,7 +1693,7 @@ class VIA:
         #g_local_global_jac =ig.Graph(n=self.nsamples, edges=list(edges[strong_locs]), edge_attrs={'weight': jac_sim_list}).simplify(combine_edges='sum') #used for clustering (globally and locally pruned) and then jacc weighted (Jacc does not consider weights)
         self.sparse_glob_loc_pruned = get_sparse_from_igraph(g_local_global_jac, weight_attr='weight')
 
-        print(f"{datetime.now()}\tFinished global pruning of {self.knn}-knn graph used for clustering. Kept {round(100 * len(strong_locs) / tot, 1)} % of edges. ")
+        print(f"{datetime.now()}\tFinished global pruning of {self.knn}-knn graph used for clustering at level of {self.jac_std_global}. Kept {round(100 * len(strong_locs) / tot, 1)} % of edges. ")
 
         if self.is_coarse:
             # Construct full graph with no pruning - used for cluster graph edges, not listed in any order of proximity
@@ -2355,7 +2355,7 @@ class VIA:
                                  preserve_disconnected=self.preserve_disconnected)
 
         if self.edgebundle_pruning_twice == True:
-            print(f"{datetime.now()}\tAdditional Visual cluster graph pruning for edge bundling at level:' {self.visual_cluster_graph_pruning}")
+            print(f"{datetime.now()}\tAdditional Visual cluster graph pruning for edge bundling at level: {self.visual_cluster_graph_pruning}")
             layout_g = ig.Graph(edgelist_maxout_2, edge_attrs={'weight': edgeweights_maxout_2}).simplify(combine_edges='sum')
             layout_g_csr = get_sparse_from_igraph(layout_g, weight_attr='weight')
             weights_for_layout = np.asarray(layout_g_csr.data)

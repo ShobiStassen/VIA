@@ -614,7 +614,7 @@ def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
     # print('new_superclust_index_ds',new_superclust_index_ds)
     return new_superclust_index_ds
 
-def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_size=None):
+def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_size=None, vmax=99):
     '''
     This is a helper function called by draw_sc_lineage_probability which plots the single-cell lineage probabilities
 
@@ -629,10 +629,10 @@ def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_s
     '''
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     #prob = np.sqrt(prob)  # scale values to improve visualization of colors
-    vmax = np.percentile(prob,90)
-    print('vmax', vmax)
+    vmax = np.percentile(prob,vmax)
+    #vmax=1
     cmap = matplotlib.cm.get_cmap(cmap_name)
-    norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
+    #norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
     if scatter_size is None:
         size_point = 10 if embedding.shape[0] > 10000 else 30
     else: size_point = scatter_size
@@ -1134,7 +1134,7 @@ def velocity_transition(A,V,G, slope =4):
     A_velo[mask]=0
     A_velo = np.multiply(A_velo,A) #multiply element-wise the edge-weight of the transition matrix A by the velocity-factor
 
-    print(f"{datetime.now()}\t Looking for initial states")
+    print(f"{datetime.now()}\tLooking for initial states")
     pi, velo_root_top3 = stationary_probability_(A_velo)
 
     return A_velo, CSM, velo_root_top3
