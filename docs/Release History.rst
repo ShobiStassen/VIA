@@ -1,6 +1,10 @@
 Release History
 ===============
 
+Version 0.1.60
+-------------
+- Bug fix for root detection (the initialization for None was over-writing RNA-velocity predicted roots)
+
 Version 0.1.59
 -------------
 - corrected the auto-scaling in draw_sc_lineage_probability() so that each subplot has the same colorbar scale
