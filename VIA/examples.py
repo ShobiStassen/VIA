@@ -15,8 +15,8 @@ import os.path
 print(os.path.abspath(phate.__file__))
 import seaborn as sns
 #from core_working_github import *#pyVIA.core import * #pyVIA.core import * core_working import*
-#from pyVIA.core import *
-from core_working_ import *
+from pyVIA.core import *
+#from core_working_ import *
 import pyVIA.datasets_via as datasets
 import matplotlib as mpl
 
