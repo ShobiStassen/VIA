@@ -3,8 +3,11 @@ Release History
 
 Version 0.1.62
 -------------
-- New Feature! Heatmap based gene trends (genes x pseudotime) for each lineage
+- New Feature! Heatmap based gene trends (genes x pseudotime) for each lineage 
+``plot_gene_trend_heatmaps(via_object, df_gene_exp:pd.DataFrame,...)``
+
 - New Feature! annotate nodes in plot_edge_bundle() by setting text_labels = True uses true_labels as annotations. Optionally provide list of single cell annotations length n_samples to use instead of true_labels. Example figure below
+``plot_edge_bundle(via_object, text_labels=True)``
 
 .. raw:: html
 
