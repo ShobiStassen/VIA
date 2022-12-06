@@ -22,7 +22,7 @@ import matplotlib as mpl
 
 
 
-sc.settings.set_figure_params(dpi=120, facecolor='black') #or whichever facecolor e.g. black, 'white'
+sc.settings.set_figure_params(dpi=120, facecolor='white') #or whichever facecolor e.g. black, 'white'
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
     import scvelo as scv
     dict_abb = {'Basophils': 'BASO1', 'CD4+ Effector Memory': 'TCEL7', 'Colony Forming Unit-Granulocytes': 'GRAN1',
@@ -164,7 +164,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
         '/home/shobi/Trajectory/Datasets/HumanCD34/human_cd34_bm_rep1.h5ad') #https://drive.google.com/file/d/1ZSZbMeTQQPfPBGcnfUNDNL4om98UiNcO/view
     # 5780 cells x 14651 genes Human Replicate 1. Male african american, 38 years
     print('h5ad  ad size', ad)
-    print('mpo raw')
+
     print(ad[:, 'MPO'].X.flatten().tolist())
     colors = pd.Series(ad.uns['cluster_colors'])
     colors['10'] = '#0b128f'
@@ -222,7 +222,8 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     # 'CD27', 'CD14', 'CD22', 'ITGAM', 'CLC', 'MS4A3', 'FCGR3A', 'CSF1R']
 
     true_label = nover_labels  # revised_clus
-    root_user = [4823]
+    root_user = ['HSC1']# [4823]
+    dataset = 'group'
     print('v0 random seed', v0_random_seed)
     # df_temp_write  = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:200])
     # df_temp_write.to_csv("/home/shobi/Trajectory/Datasets/HumanCD34/Human_CD34_200PCA.csv")
@@ -234,12 +235,12 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     print(time.ctime())
     v0 = VIA(Xin, true_label, jac_std_global=0.15, dist_std_local=1, knn=30,
              too_big_factor=0.3,
-             root_user=root_user, dataset='', preserve_disconnected=True, random_seed=v0_random_seed,
+             root_user=root_user, dataset=dataset, preserve_disconnected=True, random_seed=v0_random_seed,
               is_coarse=True, pseudotime_threshold_TS=10,
              neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1, edgebundle_pruning_twice=True, embedding=tsnem )# do_compute_embedding=True, embedding_type='via-mds')#,#embedding=adata_counts.obsm['X_umap'])  # *.4 root=1,
     #user_defined_terminal_group=['pDC','MONO1','MEGA1']
     v0.run_VIA()
-    f, ax, ax1 = draw_piechart_graph(via0=v0)
+    f, ax, ax1 = draw_piechart_graph(via0=v0, linewidth_edge=3)
     ax1.set_title('pseudotime')
     ax.set_title('reference cell types')
     plt.show()
@@ -264,7 +265,16 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     #ad[:,'CD34'].X.flatten().tolist()
     draw_sc_lineage_probability(v0, embedding = tsnem)
     plt.show()
-    draw_sc_lineage_probability(v0, embedding=tsnem, marker_lineages=[2,4,6,9])
+    #draw_sc_lineage_probability(v0, embedding=tsnem, marker_lineages=[2,4,6,9])
+    #plt.show()
+
+    marker_genes = ['ITGA2B', 'IL3RA', 'IRF8', 'MPO', 'CSF1R', 'GATA2', 'CD79B', 'CD34', 'GATA1']
+    print('dfmagic', df_magic.head())
+
+    plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_magic, cmap='plasma', marker_lineages=[2,3,5,6,9,12,16,17])
+    plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_magic, cmap='plasma',
+                             marker_lineages=[ 12, 16, 17])
+    #plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_magic, cmap='plasma', marker_lineages=[16], normalize=False) #looks bad if you dont normalize since some genes are more highly expressed
     plt.show()
 
     plot_scatter(embedding=tsnem, labels=df_magic['MPO'].tolist(), categorical=False, title='MPO') #CHECK THIS
@@ -348,16 +358,14 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     #df_.columns = [i for i in ad.var_names]
 
 
-    marker_genes = ['ITGA2B', 'IL3RA', 'IRF8', 'MPO', 'CSF1R', 'GATA2', 'CD79B', 'CD34', 'GATA1']
+
     # DC markers https://www.cell.com/pb-assets/products/nucleus/nucleus-phagocytes/rnd-systems-dendritic-cells-br.pdf
     gene_name_dict = {'GATA1': 'GATA1', 'GATA2': 'GATA2', 'ITGA2B': 'CD41 (Mega)', 'MPO': 'MPO (Mono)',
                       'CD79B': 'CD79B (B)', 'IRF8': 'IRF8 (DC)', 'SPI1': 'PU.1', 'CD34': 'CD34',
                       'CSF1R': 'CSF1R (cDC Up. Up then Down in pDC)', 'IL3RA': 'CD123 (pDC)', 'IRF4': 'IRF4 (pDC)',
                       'ITGAX': 'ITGAX (cDCs)', 'CSF2RA': 'CSF2RA (cDC)'}
 
-
-
-
+    marker_genes = ['ITGA2B', 'IL3RA', 'IRF8', 'MPO', 'CSF1R', 'GATA2', 'CD79B', 'CD34', 'GATA1']
     get_gene_expression(via0=v0, gene_exp=df_magic, cmap='rainbow', marker_genes=marker_genes)
     plt.show()
     draw_piechart_graph(via0=v0, type_data='gene', gene_exp=df_magic_cluster['GATA1'].values, title='GATA1', cmap='coolwarm')
@@ -743,10 +751,20 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     print(f'{datetime.now()}\tFor random seed: {random_seed}, the first sc markov pt are', v0.single_cell_pt_markov[0:10])
     draw_sc_lineage_probability(v0, embedding=embedding)
     plt.show()
-    draw_sc_lineage_probability(v0, embedding=embedding,marker_lineages=[5,10])
-    plt.show()
+    #draw_sc_lineage_probability(v0, embedding=embedding,marker_lineages=[5,10])
+    #plt.show()
 
     v0.embedding = embedding
+    df_genes = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
+
+    f, axlist = plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_genes, marker_lineages=[5,7,8,9,10])
+    axlist[-1].set_xlabel("pseudotime", fontsize=20)
+    plt.show()
+    get_gene_expression(v0, gene_exp=df_genes, marker_genes=['Gene0', 'Gene1', 'Gene2'])
+    plt.show()
+    draw_sc_lineage_probability(v0, embedding=embedding)
+    plt.show()
+
     hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1, initial_bandwidth=0.02, decay=0.7)
 
     print('hammer bundle dict', hammerbundle_milestone_dict.keys())
@@ -771,12 +789,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
 
 
 
-    df_genes = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
 
-    get_gene_expression(v0, gene_exp=df_genes, marker_genes=['Gene0', 'Gene1', 'Gene2'])
-    plt.show()
-    draw_sc_lineage_probability(v0,  embedding=embedding)
-    plt.show()
 
     print('making animated stream plot. This may take a few minutes when the streamline count is high')
     animated_streamplot(v0, embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1,
@@ -2988,8 +3001,9 @@ def main():
     dataset = 'Toy3'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
-        main_Human(ncomps=80, knn=30, v0_random_seed=4,
-                   run_palantir_func=False)  # 100 comps, knn30, seed=4 is great too// pc=100, knn20 rs=1// pc80,knn30,rs3
+
+        main_Human(ncomps=80, knn=30, v0_random_seed=10,
+                   run_palantir_func=False)  # 100 comps, knn30, seed=4 is great too// pc=100, knn20 rs=1// pc80,knn30,rs3//pc80,knn30,rs10
         # cellrank_Human(ncomps = 20, knn=30)
     elif dataset == 'Bcell':
         main_Bcell(ncomps=20, knn=10, random_seed=1)  # 0 is good

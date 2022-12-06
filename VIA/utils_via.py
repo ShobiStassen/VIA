@@ -23,6 +23,7 @@ from sklearn.preprocessing import normalize
 import random
 from collections import Counter
 import scipy
+import pygam as pg
 from scipy.sparse.csgraph import minimum_spanning_tree, connected_components
 from matplotlib.animation import FuncAnimation, writers
 
@@ -30,6 +31,54 @@ def func_mode(ll):
     # return MODE of list ll
     # If multiple items are maximal, the function returns the first one encountered.
     return max(set(ll), key=ll.count)
+def get_gene_trend(via_object, marker_lineages:list=[], df_gene_exp:pd.DataFrame=None,n_splines:int=10, spline_order:int=4):
+    '''
+    Get the gene trend vs pseudotime for a lineage (terminal cell fate)
+    :param via_object:
+    :param marker_lineages:
+    :param df_gene_exp:
+    :param n_splines:
+    :param spline_order:
+    :return: dict of dicts. First dict keys corresponding to terminal cluster of a lineage, second dict having keys "trends": entries with pandas DataFrame with genes (rows) x ("pseudotime") for that lineage and "name" : majority true label
+    '''
+    sc_pt = via_object.single_cell_pt_markov
+    sc_bp = via_object.single_cell_bp
+    n_terminal_states = sc_bp.shape[1]
+    ts = via_object.terminal_clusters
+    trends_dict = {}
+    for i_terminal in range(n_terminal_states):
+        df_trends = pd.DataFrame()
+        #print('ts[i_terminal]',ts[i_terminal],len(np.where(sc_bp[:, i_terminal] > 0.9)[0]))
+        if (ts[i_terminal] in marker_lineages and len(np.where(sc_bp[:, i_terminal] > 0.9)[0]) > 0):  # check if terminal state is in marker_lineage and i_terminal can be reached
+            loc_i = np.where(sc_bp[:, i_terminal] > 0.9)[0]
+            val_pt = [sc_pt[pt_i] for pt_i in loc_i]  # TODO,  replace with array to speed up
+
+            max_val_pt = max(val_pt)
+
+            loc_i_bp = np.where(sc_bp[:, i_terminal] > 0.000)[0]  # 0.001
+            loc_i_sc = np.where(np.asarray(sc_pt) <= max_val_pt)[0]
+
+            loc_ = np.intersect1d(loc_i_bp, loc_i_sc)
+            if len(loc_) > 1:
+                gam_in = np.asarray(sc_pt)[loc_]
+                x = gam_in.reshape(-1, 1)
+                for gene_i in df_gene_exp.columns:
+                    y = np.asarray(df_gene_exp[gene_i])[loc_].reshape(-1, 1)
+
+                    weights = np.asarray(sc_bp[:, i_terminal])[loc_].reshape(-1, 1)
+
+                    geneGAM = pg.LinearGAM(n_splines=n_splines, spline_order=spline_order, lam=10).fit(x, y, weights=weights)
+                    xval = np.linspace(min(sc_pt), max_val_pt, 100 * 2)
+                    yg = geneGAM.predict(X=xval)
+                    df_trends[str(gene_i)] = yg
+
+            else:
+                print(f'{datetime.now()}\tLineage {i_terminal} cannot be reached. Exclude this lineage in trend plotting')
+            loc_labels = np.where(np.asarray(via_object.labels)==ts[i_terminal])[0]
+            majority_composition = func_mode(list(np.asarray(via_object.true_label)[loc_labels]))
+            trends_dict[ts[i_terminal]]={'trends':df_trends.transpose(), 'name': majority_composition}
+    return trends_dict
+
 
 def csr_mst(adjacency):
     # return minimum spanning tree from adjacency matrix (csr)

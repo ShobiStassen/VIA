@@ -25,7 +25,49 @@ from typing import Optional, Union
 from pyVIA.utils_via import * #
 import random
 from scipy.spatial.distance import pdist, squareform
+from sklearn.preprocessing import StandardScaler
+def plot_gene_trend_heatmaps(via_object, df_gene_exp:pd.DataFrame, marker_lineages:list = [], fontsize:int=8,cmap:str='viridis', normalize:bool=True, ytick_labelrotation:int = 0, fig_width: int = 7):
+    '''
+     """ Plot the gene trends on heatmap: a heatmap is generated for each lineage (identified by terminal cluster number). Default selects all lineages
+    """
+    :param via_object:
+    :param df_gene_exp: pandas DataFrame single-cell level expression [cells x genes]
+    :param marker_lineages: (list) default = None and plots all detected all lineages. Optionally provide a list of integers corresponding to the cluster number of terminal cell fates
+    :param fontsize: (int) default = 8
+    :param cmap: (str) default = 'viridis'
+    :param normalize: (bool) True
+    :param ytick_labelrotation: (int) default = 0
+    :return: fig and list of axes
+    '''
+    import seaborn as sns
 
+    if len(marker_lineages) ==0: marker_lineages = via_object.terminal_clusters
+    dict_trends = get_gene_trend(via_object=via_object, marker_lineages=marker_lineages, df_gene_exp=df_gene_exp)
+    branches = list(dict_trends.keys())
+    genes = dict_trends[branches[0]]['trends'].index
+    height = len(genes) * len(branches)
+    # Standardize the matrix (standardization along each gene. Since SS function scales the columns, we first transpose the df)
+    #  Set up plot
+    fig = plt.figure(figsize=[fig_width, height])
+    ax_list = []
+    for i, branch in enumerate(branches):
+        ax = fig.add_subplot(len(branches), 1, i + 1)
+        df_trends=dict_trends[branch]['trends']
+        # normalize each genes (feature)
+        if normalize==True:
+            df_trends = pd.DataFrame(
+            StandardScaler().fit_transform(df_trends.T).T,
+            index=df_trends.index,
+            columns=df_trends.columns)
+
+        ax.set_title('Lineage: ' + str(branch) + '-' + str(dict_trends[branch]['name']), fontsize=int(fontsize*1.3))
+        #sns.set(size=fontsize)  # set fontsize 2
+        b=sns.heatmap(df_trends,yticklabels=True, xticklabels=False, cmap = cmap)
+        b.tick_params(labelsize=fontsize,labelrotation=ytick_labelrotation)
+        b.figure.axes[-1].tick_params(labelsize=fontsize)
+        ax_list.append(ax)
+    b.set_xlabel("pseudotime", fontsize=int(fontsize*1.3))
+    return fig, ax_list
 
 def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3, edgecolors='None',title:str='', text_labels:bool=True, color_dict=None, categorical:bool=None, via_object=None,sc_index_terminal_states:list=None,true_labels:list=[]):
     '''
@@ -64,10 +106,8 @@ def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3,
         color_dict = {}
         for index, value in enumerate(set(labels)):
             color_dict[value] = index
-
         palette = cm.get_cmap(cmap, len(color_dict.keys()))
         cmap_ = palette(range(len(color_dict.keys())))
-
 
         for key in color_dict:
             loc_key = np.where(np.asarray(labels) == key)[0]
@@ -84,7 +124,6 @@ def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3,
         fig.colorbar(im, cax=cax, orientation='vertical',
                    label='pseudotime')
         if via_object is not None:
-
             tsi_list = []
             for tsi in via_object.terminal_clusters:
                 loc_i = np.where(np.asarray(via_object.labels) == tsi)[0]
@@ -119,7 +158,6 @@ def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3,
     ax.grid(False)
     fig.patch.set_visible(False)
     return fig, ax
-
 
 def _make_knn_embeddedspace(embedding):
     # knn struct built in the embedded space to be used for drawing the lineage trajectories onto the 2D plot
@@ -405,12 +443,10 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
     '''
 
     if via_fine is None:
-        print('setting via_fine')
         via_fine = via_coarse
-    print('via_fine terminal clusters', via_fine.terminal_clusters)
     if len(marker_lineages) == 0:
         marker_lineages = via_fine.terminal_clusters
-        print(f'marker_lineages: {marker_lineages}')
+        print(f'{datetime.now()}\tMarker_lineages: {marker_lineages}')
     if embedding is None:
         if via_coarse.embedding is None:
             print('ERROR: please provide a single cell embedding or run re-via with do_compute_embedding==True using either embedding_type = via-umap OR via-mds')
@@ -424,16 +460,15 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
     y_root = []
     x_root = []
     root1_list = []
-    p1_sc_bp = via_fine.single_cell_bp[idx, :]
+    p1_sc_bp = np.nan_to_num(via_fine.single_cell_bp[idx, :],nan=0.0, posinf=0.0, neginf=0.0)
     #row normalize
     row_sums = p1_sc_bp.sum(axis=1)
     p1_sc_bp = p1_sc_bp / row_sums[:, np.newaxis]
-    print('draw sc',p1_sc_bp[16,:])
-    print('draw sc', p1_sc_bp[20, :])
-    print('draw sc', p1_sc_bp[22, :])
+    print(f'{datetime.now()}\tCheck sc pb {p1_sc_bp[0,:]}')
+
 
     p1_labels = np.asarray(via_fine.labels)[idx]
-    print('draw sc', p1_labels[120])
+
     p1_cc = via_fine.connected_comp_labels
     p1_sc_pt_markov = list(np.asarray(via_fine.single_cell_pt_markov)[idx])
     X_data = via_fine.data
@@ -459,7 +494,7 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
         for fst_i in via_fine.terminal_clusters:
             path_orange = G_orange.get_shortest_paths(via_fine.root[ii], to=fst_i)[0]
             #if the roots is in the same component as the terminal cluster, then print the path to output
-            if len(path_orange)>0: print(f'{datetime.now()}\tCluster path on clustergraph starting from Root Cluster {via_fine.root[ii]} to Terminal Cluster {fst_i}')
+            if len(path_orange)>0: print(f'{datetime.now()}\tCluster path on clustergraph starting from Root Cluster {via_fine.root[ii]} to Terminal Cluster {fst_i}: {path_orange}')
 
     # single-cell branch probability evolution probability
     n_terminal_clusters = len(via_fine.terminal_clusters)
@@ -477,9 +512,11 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
 
             if (ti < n_terminal_clusters):
                 if (via_fine.terminal_clusters[ti] in marker_lineages):
+                    loc_labels = np.where(np.asarray(via_fine.labels) == via_fine.terminal_clusters[ti])[0]
+                    majority_composition = func_mode(list(np.asarray(via_fine.true_label)[loc_labels]))
 
-                    if fig_nrows ==1: plot_sc_pb(axs[c], fig, embedding, p1_sc_bp[:, ti], ti= via_fine.terminal_clusters[ti], cmap_name=cmap_name, scatter_size=scatter_size)
-                    else: plot_sc_pb(axs[r,c], fig, embedding, p1_sc_bp[:, ti], ti= via_fine.terminal_clusters[ti], cmap_name=cmap_name, scatter_size=scatter_size)
+                    if fig_nrows ==1: plot_sc_pb(axs[c], fig, embedding, p1_sc_bp[:, ti], ti= str(via_fine.terminal_clusters[ti])+'-'+str(majority_composition), cmap_name=cmap_name, scatter_size=scatter_size)
+                    else: plot_sc_pb(axs[r,c], fig, embedding, p1_sc_bp[:, ti], ti= str(via_fine.terminal_clusters[ti])+'-'+str(majority_composition), cmap_name=cmap_name, scatter_size=scatter_size)
                     ti+=1
                     loc_i = np.where(p1_labels == ti)[0]
                     val_pt = [p1_sc_pt_markov[i] for i in loc_i]
@@ -519,7 +556,7 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
                             if num_instances_clus > 1:  # typically intermediate stages spend a few transitions at the sc level within a cluster
                                 if clus not in revised_cluster_path: revised_cluster_path.append(clus)  # cluster
                                 revised_sc_path.append(path[enum_i])  # index of single cell
-                print(f"{datetime.now()}\tCluster level path on sc-knnGraph from Root Cluster {via_fine.root[p1_cc[ti]]} to Terminal Cluster {ti} along path: {revised_cluster_path}")
+                    print(f"{datetime.now()}\tRevised Cluster level path on sc-knnGraph from Root Cluster {via_fine.root[p1_cc[ti-1]]} to Terminal Cluster {via_fine.terminal_clusters[ti-1]} along path: {revised_cluster_path}")
             fig.patch.set_visible(False)
             if fig_nrows==1: axs[c].axis('off')
             else: axs[r,c].axis('off')
@@ -663,10 +700,11 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                         sc_labels_sequential = via_object.time_series_labels
                     else:
                         sc_labels_sequential = via_object.single_cell_pt_markov
-                print('making hammerbundle')
+                print(f'{datetime.now()}\tComputing Edges')
                 hammerbundle_dict = make_edgebundle_milestone(via_object=via_object,
                     embedding=via_object.embedding, sc_graph=via_object.ig_full_graph, n_milestones=n_milestones,
                     sc_labels_numeric=sc_labels_sequential, initial_bandwidth=initial_bandwidth, decay=decay, weighted=True)
+                via_object.hammerbundle_dict = hammerbundle_dict
             hammer_bundle = hammerbundle_dict['hammerbundle']
             layout = hammerbundle_dict['milestone_embedding'][['x', 'y']].values
             milestone_edges = hammerbundle_dict['edges']
@@ -1420,7 +1458,7 @@ arrow_style="-|>",  max_length=4, linewidth=1,min_mass = 1, cutoff_perc = 5,scat
 
 def get_gene_expression(via0, gene_exp:pd.DataFrame, cmap:str='jet', dpi:int=150, marker_genes:list = [], linewidth:float = 2.0,n_splines:int=10, spline_order:int=4, fontsize_:int=8, marker_lineages=[]):
     '''
-    :param gene_exp: dataframe where columns are features (gene)
+    :param gene_exp: dataframe where columns are features (gene) and rows are single cells
     :param cmap: default: 'jet'
     :param dpi: default:150
     :param marker_genes: Default is to use all genes in gene_exp. other provide a list of marker genes that will be used from gene_exp.
@@ -1483,7 +1521,7 @@ def get_gene_expression(via0, gene_exp:pd.DataFrame, cmap:str='jet', dpi:int=150
                             yg = geneGAM.predict(X=xval)
 
                         else:
-                            print('loc_ has length zero')
+                            print(f'{datetime.now()}\tLineage {i_terminal} cannot be reached. Exclude this lineage in trend plotting')
 
                         if fig_nrows >1:
                             axs[r,c].plot(xval, yg, color=cmap_[i_terminal], linewidth=linewidth, zorder=3, label=f"Lineage:{via0.terminal_clusters[i_terminal]}")
@@ -2076,7 +2114,7 @@ def slow_sklearn_mds(via_graph: csr_matrix, X_pca:ndarray, t_diff_op:int=1):
     return X_mds
 
 
-def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:str=None, ax_text=True, dpi=150,headwidth_arrow = 0.1, alpha_edge=0.4, linewidth_edge=2, edge_color='darkblue',reference=None, pie_size_scale:float=0.8):
+def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:str=None, ax_text=True, dpi=150,headwidth_arrow = 0.1, alpha_edge=0.4, linewidth_edge=2, edge_color='darkblue',reference=None, show_legend:bool=True, pie_size_scale:float=0.8, fontsize:float=8):
     '''
     :param via0 is class VIA (the same function also exists as a method of the class as it is called during the TI analysis when VIA is being generated,
     but we offer it outside for consistency with other plotting tools and for usage after teh TI is complete.
@@ -2177,11 +2215,11 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:s
         pie_axs[node_i].set_yticks([])
         pie_axs[node_i].set_aspect('equal')
         # pie_axs[node_i].text(0.5, 0.5, graph_node_label[node_i])
-        if ax_text==True: pie_axs[node_i].text(0.5, 0.5, majority_true)
+        if ax_text==True: pie_axs[node_i].text(0.5, 0.5, majority_true, fontsize = fontsize )
 
     patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
     labels = list(set(reference_labels))
-    plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon=False)
+    if show_legend ==True: plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon=False)
 
     if via0.time_series==True:
         ti = 'Cluster Composition. K=' + str(via0.knn) + '. ncomp = ' + str(via0.ncomp)  +'knnseq_'+str(via0.knn_sequential)# "+ is_sub
@@ -2221,7 +2259,7 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:s
                 ax_i.text(node_pos[ii, 0] + max(x_max_range, y_max_range),
                           node_pos[ii, 1] + min(x_max_range, y_max_range),
                           'C' + str(ii) + 'pop' + str(int(group_pop[ii][0])),
-                          color='black', zorder=4)
+                          color='black', zorder=4, fontsize = fontsize)
         ax_i.set_title(title_list[i])
         ax_i.grid(False)
         ax_i.set_xticks([])
