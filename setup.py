@@ -12,6 +12,7 @@ setuptools.setup(
     version='0.1.63', #Dec-06-2022
     packages=['pyVIA',],
     license='MIT',
+    author='Shobi Stassen'
     author_email = 'shobana.venkat88@gmail.com',
     url = 'https://github.com/ShobiStassen/VIA',
     setup_requires = ['numpy>=1.17','pybind11'],
