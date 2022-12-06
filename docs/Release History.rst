@@ -1,6 +1,19 @@
 Release History
 ===============
 
+Version 0.1.62
+-------------
+- New Feature! Heatmap based gene trends (genes x pseudotime) for each lineage
+- New Feature! annotate nodes in plot_edge_bundle() by setting text_labels = True uses true_labels as annotations. Optionally provide list of single cell annotations length n_samples to use instead of true_labels. Example figure below
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/milestoneplot_withannots.png?raw=true" width="600px" align="center" </a>
+
+Version 0.1.61
+-------------
+- Bug fix for import module in examples.py
+
 Version 0.1.60
 -------------
 - Bug fix for root detection (the initialization for None was over-writing RNA-velocity predicted roots)
