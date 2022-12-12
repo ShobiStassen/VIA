@@ -22,21 +22,22 @@ import pygam as pg
 from sklearn.preprocessing import normalize
 from typing import Optional, Union
 #from utils_via import *
-from pyVIA.utils_via import * #
+from pyVIA.utils_via import * 
 import random
 from scipy.spatial.distance import pdist, squareform
 from sklearn.preprocessing import StandardScaler
 def plot_gene_trend_heatmaps(via_object, df_gene_exp:pd.DataFrame, marker_lineages:list = [], fontsize:int=8,cmap:str='viridis', normalize:bool=True, ytick_labelrotation:int = 0, fig_width: int = 7):
     '''
-     """ Plot the gene trends on heatmap: a heatmap is generated for each lineage (identified by terminal cluster number). Default selects all lineages
-    """
+
+    Plot the gene trends on heatmap: a heatmap is generated for each lineage (identified by terminal cluster number). Default selects all lineages
+
     :param via_object:
     :param df_gene_exp: pandas DataFrame single-cell level expression [cells x genes]
-    :param marker_lineages: (list) default = None and plots all detected all lineages. Optionally provide a list of integers corresponding to the cluster number of terminal cell fates
-    :param fontsize: (int) default = 8
-    :param cmap: (str) default = 'viridis'
-    :param normalize: (bool) True
-    :param ytick_labelrotation: (int) default = 0
+    :param marker_lineages: list default = None and plots all detected all lineages. Optionally provide a list of integers corresponding to the cluster number of terminal cell fates
+    :param fontsize: int default = 8
+    :param cmap: str default = 'viridis'
+    :param normalize: bool = True
+    :param ytick_labelrotation: int default = 0
     :return: fig and list of axes
     '''
     import seaborn as sns
@@ -72,15 +73,16 @@ def plot_gene_trend_heatmaps(via_object, df_gene_exp:pd.DataFrame, marker_lineag
 def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3, edgecolors='None',title:str='', text_labels:bool=True, color_dict=None, categorical:bool=None, via_object=None,sc_index_terminal_states:list=None,true_labels:list=[]):
     '''
     General scatter plotting tool for numeric and categorical labels on the single-cell level
-    :param embedding: ndarray (n_samples x 2)
+
+    :param embedding: ndarray n_samples x 2
     :param labels: list single cell labels list of number or strings
-    :param cmap: str (default = 'rainbow')
+    :param cmap: str default = 'rainbow'
     :param s: int size of scatter dot
-    :param alpha: float (0 transparent to 1 opaque) default =0.3
+    :param alpha: float with 0 transparent to 1 opaque default =0.3
     :param edgecolors:
     :param title: str
-    :param text_labels: bool (True)
-    :param categorical: bool (True)
+    :param text_labels: bool default =True
+    :param categorical: bool default =True
     :param via_object:
     :param sc_index_terminal_states: list of integers corresponding to one cell in each of the terminal states
     :param color_dict: {'true_label_group_1': #COLOR,'true_label_group_2': #COLOR2,....}
@@ -172,6 +174,7 @@ def via_forcelayout(X_pca, viagraph_full: csr_matrix=None, k: int = 10,
             knn_seq: int = 5, saveto='', random_seed:int = 0) -> ndarray:
     '''
     Compute force directed layout. #TODO not complete
+
     :param X_pca:
     :param viagraph_full: optional. if calling before via, then None. if calling after or from within via, then we can use the via-graph to reinforce the layout
     :param k:
@@ -267,7 +270,7 @@ def via_mds(X_pca, viagraph_full: csr_matrix=None, k: int = 10,
     :param time_series_labels: (list) numerical values representing some sequentual information
     :param knn_seq: (int) if time-series data is available, augment the knn with sequential neighbors (2-10 are reasonable values)
     :param embedding_type: (str) default = 'mds' or set to 'umap'
-    :return:
+    :return: numpy array of size n_samples x 2
     '''
 
     # use the csr_full_graph from via and subsample it.
@@ -371,14 +374,7 @@ def run_umap_hnsw(  X_input:ndarray , graph:csr_matrix, n_components:int=2, alph
     :param cluster_membership:
     :return:
     '''
-    ''''
-    :param init_pos:
-    :param
-    :param layout via0.graph_node_pos
-    :param cluster_membership = v0.labels
-    
-    
-    '''
+
     #X_input = via0.data
     n_cells = X_input.shape[0]
     #graph = graph+graph.T
@@ -424,17 +420,15 @@ def run_umap_hnsw(  X_input:ndarray , graph:csr_matrix, n_components:int=2, alph
 
 def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=None, idx:list=None, cmap_name='plasma', dpi=150, scatter_size =None,marker_lineages = []):
     '''
-    embedding is the full or downsampled 2D representation of the full dataset.
-    idx is the list of indices of the full dataset for which the embedding is available. if the dataset is very large the the user only has the visual embedding for a subsample of the data, then these idx can be carried forward
-    idx is the selected indices of the downsampled samples used in the visualization
+
     G is the igraph knn (low K) used for shortest path in high dim space. no idx needed as it's made on full sample
     knn_hnsw is the knn made in the embedded space used for query to find the nearest point in the downsampled embedding
     that corresponds to the single cells in the full graph
 
     :param via_coarse:
     :param via_fine: usually just set to same as via_coarse unless you ran a refined run and want to link it to via_coarse's terminal clusters
-    :param embedding: n_samples x 2
-    :param idx:
+    :param embedding: n_samples x 2. embedding is either the full or downsampled 2D representation of the full dataset.
+    :param idx: if one uses a downsampled embedding of the original data, then idx is the selected indices of the downsampled samples used in the visualization
     :param cmap_name:
     :param dpi:
     :param scatter_size:
@@ -455,7 +449,9 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
             print(f'automatically setting embedding to {via_coarse.embedding_type}')
             embedding = via_coarse.embedding
     if idx is None: idx = np.arange(0, via_coarse.nsamples)
-    G = via_coarse.full_graph_shortpath
+    #G = via_coarse.full_graph_shortpath
+    n_original_comp, n_original_comp_labels = connected_components(via_coarse.csr_full_graph, directed=False)
+    G = via_coarse.full_graph_paths(via_coarse.data, n_original_comp)
     knn_hnsw = _make_knn_embeddedspace(embedding)
     y_root = []
     x_root = []
@@ -659,11 +655,13 @@ def draw_clustergraph(via_object, type_data='gene', gene_exp='', gene_list='', a
         ax_i.axis('off')
     fig.patch.set_visible(False)
     return fig, axs
-def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma_r', extra_title_text = '',size_scatter:int=3, alpha_scatter:float = 0.3 ,headwidth_bundle=0.1, headwidth_alpha=0.8, arrow_frequency=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.02, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False):
+def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '',size_scatter:int=3, alpha_scatter:float = 0.3 ,headwidth_bundle=0.1, headwidth_alpha=0.8, arrow_frequency=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False):
 
     '''
+
     Edges can be colored by time-series numeric labels, pseudotime, or gene expression. If not specificed then time-series is chosen if available, otherwise falls back to pseudotime. to use gene expression the sc_labels_expression is provided as a list.
     To specify other numeric sequential data provide a list of sc_labels_sequential = [] n_samples in length
+
     :param hammer_bundle_dict: dictionary with keys: hammerbundle object with coordinates of all the edges to draw. If hammer_bundle and layout are None, then this will be computed internally
     :param via_object: type via object, if hammerbundle_dict is None, then you must provide a via_object
     :param layout: coords of cluster nodes and optionally also contains the numeric value associated with each cluster (such as time-stamp) layout[['x','y','numeric label']] sc/cluster/milestone level
@@ -686,7 +684,7 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
     :param sc_labels_sequential: list of single cell numeric sequential values used for directionality inference as replacement for  pseudotime or v0.time_series_labels (len n_samples single cell)
     :param sc_labels:list=None list of single-cell level labels (categorial or discrete set of numerical values) to label the nodes
     :param text_labels:bool=False if you want to label the nodes based on sc_labels (or true_label if via_object is provided)
-    :return axis with bundled edges plotted
+    :return: axis with bundled edges plotted
     '''
 
     if hammerbundle_dict is None:
@@ -857,7 +855,9 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                 loc_milestone = np.where(np.asarray(sc_milestone_labels)==i)[0]
 
                 mode_label = func_mode(list(np.asarray(sc_labels)[loc_milestone]))
-                ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=milestone_numeric_values_rgba[i],
+                if scale_scatter_size_pop==True: ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=milestone_numeric_values_rgba[i],
+                           alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                else:ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled, c=milestone_numeric_values_rgba[i],
                            alpha=alpha_scatter, edgecolors='None', label=mode_label)
 
                 ax.text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=6, color="black")
@@ -867,7 +867,7 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
     ax.axis('off')
     time = datetime.now()
     time = time.strftime("%H:%M")
-    title_ = 'n_milestones = '+str(int(layout.shape[0])) +' time: '+time + ' ' + extra_title_text
+    title_ = extra_title_text + ' n_milestones = '+str(int(layout.shape[0])) +' time: '+time
     ax.set_title(label=title_, color = 'orange')
     print(f"{datetime.now()}\tFinished plot")
     return fig, ax
@@ -885,9 +885,9 @@ def animate_edge_bundle(hammerbundle_dict=None,  via_object=None, linewidth_bund
     :param edge_color:
     :param headwidth_bundle: headwidth of arrows used in bundled edges
     :param arrow_frequency: min dist between arrows (bundled edges otherwise have overcrowding of arrows)
-    :param show_direction:=True will draw arrows along the lines to indicate direction
+    :param show_direction: True will draw arrows along the lines to indicate direction
     :param milestone_edges: pandas DataFrame milestone_edges[['source','target']]
-    :return axis with bundled edges plotted
+    :return: axis with bundled edges plotted
     '''
     import tqdm
 
@@ -1558,7 +1558,9 @@ def draw_trajectory_gams(via_coarse, via_fine=None, embedding: ndarray=None, idx
                          scatter_size:float=50, scatter_alpha:float=0.5,
                          linewidth:float=1.5, marker_edgewidth:float=1, cmap_pseudotime:str='viridis_r',dpi:int=150,highlight_terminal_states:bool=True, use_maxout_edgelist:bool =False):
     '''
+
     projects the graph based coarse trajectory onto a umap/tsne embedding
+
     :param via_coarse: via object
     :param via_fine: via object suggest to use via_coarse unless you found that running via_fine gave better pathways
     :param embedding: 2d array [n_samples x 2] with x and y coordinates of all n_samples. Umap, tsne, pca OR use the via computed embedding via_object.embedding
@@ -1825,7 +1827,7 @@ def draw_trajectory_gams(via_coarse, via_fine=None, embedding: ndarray=None, idx
     ax2.axis('off')
     return f, ax1, ax2
 
-def draw_sc_lineage_probability_solo(via_object, via_fine=None, embedding:ndarray=None, idx=None, cmap_name='plasma', dpi=150, vmax=99):
+def _draw_sc_lineage_probability_solo(via_object, via_fine=None, embedding:ndarray=None, idx=None, cmap_name='plasma', dpi=150, vmax=99):
     '''
 
     :param via_object:
@@ -1933,7 +1935,8 @@ def draw_sc_lineage_probability_solo(via_object, via_fine=None, embedding:ndarra
 
 def plot_edgebundle_viagraph(ax=None, hammer_bundle=None, layout:ndarray=None, CSM:ndarray=None, velocity_weight:float=None, pt:list=None, alpha_bundle=1, linewidth_bundle=2, edge_color='darkblue',headwidth_bundle=0.1, arrow_frequency=0.05, show_direction=True,ax_text:bool=True, title:str='', plot_clusters:bool=False, cmap:str='viridis', via_object=None, fontsize:float=9, dpi:int=300):
     '''
-    #this plots the edgebundles on the via clustergraph level and also adds the relevant arrow directions based on the TI directionality
+    this plots the edgebundles on the via clustergraph level and also adds the relevant arrow directions based on the TI directionality
+
     :param ax: axis to plot on
     :param hammer_bundle: hammerbundle object with coordinates of all the edges to draw. self.hammer
     :param layout: coords of cluster nodes
@@ -2116,17 +2119,19 @@ def slow_sklearn_mds(via_graph: csr_matrix, X_pca:ndarray, t_diff_op:int=1):
 
 def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:str=None, ax_text=True, dpi=150,headwidth_arrow = 0.1, alpha_edge=0.4, linewidth_edge=2, edge_color='darkblue',reference=None, show_legend:bool=True, pie_size_scale:float=0.8, fontsize:float=8):
     '''
-    :param via0 is class VIA (the same function also exists as a method of the class as it is called during the TI analysis when VIA is being generated,
+    plot two subplots with a clustergraph level representation of the viagraph showing true-label composition and pseudotime/gene expression
+
+    :param via0: is class VIA (the same function also exists as a method of the class as it is called during the TI analysis when VIA is being generated,
     but we offer it outside for consistency with other plotting tools and for usage after teh TI is complete.
-    :param type_data:string:  default 'pt' for pseudotime colored nodes. or 'gene' (RHS subplot)
+    :param type_data:string  default 'pt' for pseudotime colored nodes. or 'gene' (RHS subplot)
     :param gene_exp: list of values (column of dataframe) corresponding to feature or gene expression to be used to color nodes at CLUSTER level
     :param title: string
     :param cmap: default None. automatically chooses coolwarm for gene expression or viridis_r for pseudotime
-    :param ax_text: Bool default: True. Annotates each node with cluster number and population of membership
-    :param dpi: int default 150
+    :param ax_text: Bool default= True. Annotates each node with cluster number and population of membership
+    :param dpi: int default = 150
     :param headwidth_bundle: default = 0.1. width of arrowhead used to directed edges
-    :param reference: (None or list) list of categorical (str) labels for cluster composition of the piecharts (LHS subplot) length = n_samples.
-    :param pie_size_scale: (float) default=0.8 scaling factor of the piechart nodes
+    :param reference: None or list. list of categorical (str) labels for cluster composition of the piecharts (LHS subplot) length = n_samples.
+    :param pie_size_scale: float default=0.8 scaling factor of the piechart nodes
     :return: matplotlib figure with two axes that plot the clustergraph using edge bundling
              left axis shows the clustergraph with each node colored by annotated ground truth membership.
              right axis shows the same clustergraph with each node colored by the pseudotime or gene expression

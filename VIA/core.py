@@ -210,6 +210,8 @@ class VIA:
         input matrix of size n_cells x n_dims. Expects the PCs or features that will be used in the TI computation. Can be e.g. adata.obsm['X_pca][:,0:20]
     true_label:list
         list of str/int that correspond to the ground truth or reference annotations. Can also be None when no labels are available
+    labels: list
+        default is None. and PARC clusters are used for the viagraph. alternatively provide a list of clustermemberships that are integer values (not strings) to construct the viagraph using another clustering method or available annotations
     dist_std_local:float
         default = 2
         local level of pruning for PARC graph clustering stage. Range (0.1,3) higher numbers mean more edge retention
@@ -244,7 +246,7 @@ class VIA:
     cluster_graph_pruning_std: float
         (optional, default =0.15) Pruning level of the cluster graph. Often set to the same value as the PARC clustering level of jac_std_global.Reasonable range [0.1,1]
         To retain more connectivity in the clustergraph underlying the trajectory computations, increase the value
-    time_smallpop:
+    time_smallpop: max time to be allowed handling singletons
     super_cluster_labels:
     super_node_degree_list:
     super_terminal_cells:
@@ -358,7 +360,7 @@ class VIA:
     n_milestones: int = None Number of milestones in the via-mds computation (anything more than 10,000 can be computationally heavy and time consuming) Typically auto-determined within the via-mds function
     '''
 
-    def __init__(self, data:ndarray, true_label=None, dist_std_local:float=2, jac_std_global=0.15,
+    def __init__(self, data:ndarray, true_label=None, dist_std_local:float=2, jac_std_global=0.15, labels:list=None,
                  keep_all_local_dist='auto', too_big_factor:float=0.4, resolution_parameter:float=1.0, partition_type:str="ModularityVP", small_pop:int=10,
                  jac_weighted_edges:bool=True, knn:int=30, n_iter_leiden:int=5, random_seed:int=42,
                  num_threads=-1, distance='l2', time_smallpop=15,
@@ -383,12 +385,12 @@ class VIA:
         if edgebundle_pruning is None: edgebundle_pruning = cluster_graph_pruning_std
         self.edgebundle_pruning = edgebundle_pruning
         if (root_user is None) & (velocity_matrix is None):
-            root_user = [0]
+            root_user = []
             dataset = ''
         self.root_user = root_user
         self.dataset = dataset
         self.knn_struct = None
-        self.labels = None
+        self.labels = labels
         self.connected_comp_labels = None
         self.edgelist = None
         self.edgelist_unique = None
@@ -910,7 +912,8 @@ class VIA:
         bp_array_sc = weights.dot(bp_array_clus)
         bp_array_sc /= np.max(bp_array_sc, axis=0)  # divide cell probability by max value in that column
 
-        for i, label_ts in enumerate(list(set(self.terminal_clusters))):
+        for i, label_ts in enumerate(self.terminal_clusters): #list(set(self.terminal_clusters))
+
             loc_i = np.where(self.labels == label_ts)[0]
             loc_noti = np.where(self.labels != label_ts)[0]
             if np.max(bp_array_sc[loc_noti, i]) > 0.8: bp_array_sc[loc_i, i] = 1.2
@@ -918,7 +921,10 @@ class VIA:
         pt = np.reshape(pt, (n_clus, 1))
         pt_sc = weights.dot(pt)
         pt_sc /= np.amax(pt_sc)
-
+        df = pd.DataFrame(bp_array_sc[:,0])
+        #df['true'] = self.true_label
+        #df['parc'] = self.labels
+        #df.to_csv("/home/shobi/Trajectory/Datasets/Toy3/checking_brachingprobs.csv")
         return bp_array_sc, pt_sc.flatten()
 
     def sc_transition_matrix(self,smooth_transition,b=10, use_sequentially_augmented=False):
@@ -1178,7 +1184,7 @@ class VIA:
 
 
             #weights = 1 / (distances[msk] + distance_factor)
-            do_exp_weight=False
+            do_exp_weight=True
             if do_exp_weight==True:
                 #print('distances')
 
@@ -1740,34 +1746,44 @@ class VIA:
                     #X_input=self.data
                     min_dist =0.1
 
-                    self.embedding = run_umap_hnsw(X_input=self.data, graph=self.csr_full_graph, n_epochs=200,  spread=1,
-                                  distance_metric='euclidean', min_dist=min_dist, saveto='', random_state=self.random_seed) #default min_dist = 0.1
+                    distance_metric = 'euclidean' #'cosine'
+                    print(f'distance metric {distance_metric} and min_dist {min_dist}')
+                    self.embedding = run_umap_hnsw(X_input=self.data, graph=self.csr_full_graph, n_epochs=100,  spread=1,
+                                  distance_metric=distance_metric, min_dist=min_dist, saveto='', random_state=self.random_seed) #default min_dist = 0.1
 
-
+                    title_umap='via-umap knn/pc/knnseq:' + str(self.knn) + '/' + str(
+                        self.ncomp) + '/' + str(self.knn_sequential) + 'tdiff' + str(
+                        self.t_diff_step) + 'mindist' + str(
+                        min_dist)+'rs'+str(self.random_seed)
                     if self.time_series_labels is not None:
                         color_labels=self.time_series_labels
-                        f1, ax = plot_scatter(embedding=self.embedding, labels=color_labels, cmap='plasma', s=20,
+                        f1, ax = plot_scatter(embedding=self.embedding, labels=color_labels, cmap='plasma', s=5,
                                               alpha=0.5, edgecolors='None',
-                                              title='via-umap knn/pc/knnseq:' + str(self.knn) + '/' + str(
-                                                  self.ncomp) + '/' + str(self.knn_sequential) + 'mindist' + str(
-                                                  min_dist))
+                                              title=title_umap)
                         f1.set_size_inches(10, 10)
-                        # savefig_ = '/home/shobi/Trajectory/Datasets/EmbFlow/viaumap/devstage1000hvg_viaumap_knn_ncomp_seq'+str(self.knn)+str(self.ncomp)+'mindist'+str(min_dist)+'kseq'+str(self.knn_sequential)+'v2.png'
-                        # f1.savefig(savefig_,facecolor='white', transparent=False)
+                        #df_umap = pd.DataFrame(self.embedding)
+                        str_date = str(str(datetime.now())[-3:])
+                        #df_umap.to_csv('/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viaumap_k'+str(self.knn)+'kseq'+str(self.knn_sequential)+'nps'+str(self.ncomp)+'tdiff'+str(self.t_diff_step)+'mindist'+str(min_dist)+'rs'+str(self.random_seed)+'stage'+str_date+".csv")
+                        #savefig_ = '/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viaumap_k'+str(self.knn)+'kseq'+str(self.knn_sequential)+'nps'+str(self.ncomp)+'tdiff'+str(self.t_diff_step)+'mindist'+str(min_dist)+'rs'+str(self.random_seed)+str_date+'stage.png'
+                        #f1.savefig(savefig_,facecolor='white', transparent=False,)
 
 
-                    savefig_ = '/home/shobi/Trajectory/Datasets/EmbFlow/viaumap/celltype1000hvg_viaumap_knn_ncomp_seq' + str(
-                        self.knn) + str(self.ncomp) + 'mindist' + str(min_dist) +'kseq'+str(self.knn_sequential)+'v2.png'
-                    f2, ax =plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-umap knn/pc/knnseq:'+str(self.knn)+'/'+str(self.ncomp)+'/'+str(self.knn_sequential)+'mindist'+str(min_dist), alpha=0.5,  s=10, color_dict=self.color_dict)
+                    #savefig_ = '/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viaumap_k'+str(self.knn)+'kseq'+str(self.knn_sequential)+'nps'+str(self.ncomp)+'tdiff'+str(self.t_diff_step)+'mindist'+str(min_dist)+'rs'+str(self.random_seed)+str_date+'celltype.png'
+                    f2, ax =plot_scatter(embedding=self.embedding, labels=self.true_label, title=title_umap, alpha=0.5,  s=5, color_dict=self.color_dict)
                     f2.set_size_inches(10, 10)
                     #f2.savefig(savefig_,facecolor='white', transparent=False)
                     plt.show()
 
+
                 elif self.embedding_type =='via-mds':
+                    str_date = str(str(datetime.now())[-3:])
                     print(f'{datetime.now()}\tRun via-mds')
                     #n_milestones = min(self.nsamples, max(10000, int(0.1*self.nsamples)))
 
                     self.embedding = via_mds(X_pca=self.data, k=15, knn_seq=5, t_diffusion=1, n_milestones=None, random_seed=self.random_seed,  viagraph_full=self.csr_full_graph, time_series_labels=self.time_series_labels, saveto='/home/shobi/Trajectory/Datasets/2MOrgan/viamds_full_knn30seq10pcs50_tdiff2_milestones10000_v3.csv')
+                    df_mds = pd.DataFrame(self.embedding)
+                    str_date = str(str(datetime.now())[-3:])
+                    #df_mds.to_csv('/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viamds_k' + str(self.knn) + 'kseq' + str( self.knn_sequential) + 'nps' + str(self.ncomp) + 'tdiff' + str(self.t_diff_step)+str(self.random_seed)+ str_date + ".csv")
                     if self.time_series_labels is None: color_labels = self.true_label
                     else: color_labels=self.time_series_labels
                     if (isinstance(color_labels[0], str)) == True:
@@ -1776,9 +1792,17 @@ class VIA:
                         categorical = False
                     #df_=pd.DataFrame(self.embedding)
                     #df_.to_csv('/home/shobi/Trajectory/Datasets/2MOrgan/viamds_full_knn15_seq15pcs30.csv')
-                    plot_scatter(embedding=self.embedding,labels=color_labels,title='via-mds', categorical=categorical)
-                    if self.time_series_labels is not None: plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-mds', categorical=True)
+                    f1, ax =plot_scatter(embedding=self.embedding,labels=color_labels,title='via-mds', categorical=categorical)
+                    #savefig_ = '/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viamds_k' + str(self.knn) + 'kseq' + str(                        self.knn_sequential) + 'nps' + str(self.ncomp) + 'tdiff' + str(self.t_diff_step) +str(self.random_seed) + str_date + 'stage.png'
+                    #f1.savefig(savefig_, facecolor='white', transparent=False)
+
+                    if self.time_series_labels is not None:
+                        f2, ax2 = plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-mds', categorical=True)
+                        #savefig_ = '/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viamds_k' + str(                           self.knn) + 'kseq' + str(                            self.knn_sequential) + 'nps' + str(self.ncomp) + 'tdiff' + str(                            self.t_diff_step) +str(self.random_seed) + str_date + 'stage.png'
+                        #f2.savefig(savefig_, facecolor='white', transparent=False)
                     plt.show()
+
+
 
                 elif self.embedding_type == 'via-force':
                     print(f'{datetime.now()}\tRun via-force')
@@ -1799,86 +1823,86 @@ class VIA:
             self.full_distance_array = distances
 
             # knn graph used for making trajectory drawing on the visualization
-            self.full_graph_shortpath = self.full_graph_paths(self.data, n_original_comp)
+            #self.full_graph_shortpath = self.full_graph_paths(self.data, n_original_comp)
             neighbors = self.full_neighbor_array
-
-        print(f"{datetime.now()}\tCommencing community detection") #this is done on the non-time-series augmented graph to avoid clustering largely based on prior known time-level data
-        weights = 'weight' if self.jac_weighted_edges else None
-        #type = leidenalg.ModularityVertexPartition if self.partition_type == 'ModularityVP' else leidenalg.RBConfigurationVertexPartition
-        if self.partition_type == 'ModularityVP':
-            partition = leidenalg.find_partition(g_local_global_jac, leidenalg.ModularityVertexPartition, weights=weights,
-                                                 n_iterations=self.n_iter_leiden, seed=self.random_seed)
-            # print('partition type MVP')
-        else:
-            partition = leidenalg.find_partition(g_local_global_jac, leidenalg.RBConfigurationVertexPartition, weights=weights,
-                                                 n_iterations=self.n_iter_leiden, seed=self.random_seed,resolution_parameter=self.resolution_parameter)
-        #partition = leidenalg.find_partition(g_local_global_jac, partition_type=type, weights=weights,                                             n_iterations=self.n_iter_leiden, seed=self.random_seed)
-        labels = np.array(partition.membership)
-
-        print(f"{datetime.now()}\tFinished running Leiden algorithm. Found {len(set(labels))} clusters.")
-
-        # Searching for clusters that are too big and split them
-        too_big_clusters = [k for k, v in Counter(labels).items() if v > self.too_big_factor * self.nsamples]
-        if len(too_big_clusters):
-            print(f"{datetime.now()}\tFound {len(too_big_clusters)} clusters that are too big")
-
-        time0_big = time.time()
-        count_big_pop = len(too_big_clusters)
-        num_times_expanded = 0
-        # TODO - add max running time condition
-        while len(too_big_clusters)>0 & (not ((time.time() - time0_big > 200) & (num_times_expanded >= count_big_pop))):
-        #while len(too_big_clusters) & (not((time.time() - time0_big >200) & (num_times_expanded >= count_big_pop))):
-            print(f"{datetime.now()}\tExamining clusters that are above the too_big threshold")
-            cluster = too_big_clusters.pop(0)
-            idx = labels == cluster
-            print(f"{datetime.now()}\tCluster {cluster} contains "
-                  f"{idx.sum()}>{round(self.too_big_factor * self.nsamples)} samples and is too big")
-
-            data = self.data[idx]
-            membership = max(labels) + 1 + np.array(self.run_toobig_subPARC(data))
-            num_times_expanded +=1
-
-            if len(set(membership)) > 1:
-                labels[idx] = membership
-                too_big_clusters.extend(
-                    [k for k, v in Counter(membership).items() if v > self.too_big_factor * self.nsamples])
+        if self.labels is None:
+            print(f"{datetime.now()}\tCommencing community detection") #this is done on the non-time-series augmented graph to avoid clustering largely based on prior known time-level data
+            weights = 'weight' if self.jac_weighted_edges else None
+            #type = leidenalg.ModularityVertexPartition if self.partition_type == 'ModularityVP' else leidenalg.RBConfigurationVertexPartition
+            if self.partition_type == 'ModularityVP':
+                partition = leidenalg.find_partition(g_local_global_jac, leidenalg.ModularityVertexPartition, weights=weights,
+                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed)
+                # print('partition type MVP')
             else:
-                print(f"{datetime.now()}\tCould not expand cluster {cluster}")
+                partition = leidenalg.find_partition(g_local_global_jac, leidenalg.RBConfigurationVertexPartition, weights=weights,
+                                                     n_iterations=self.n_iter_leiden, seed=self.random_seed,resolution_parameter=self.resolution_parameter)
+            #partition = leidenalg.find_partition(g_local_global_jac, partition_type=type, weights=weights,                                             n_iterations=self.n_iter_leiden, seed=self.random_seed)
+            labels = np.array(partition.membership)
 
-        # Search for clusters that are too small (like singletons) and merge them to non-small clusters based on neighbors' majority vote
-        #first we make a quick pass through all clusters to remove very small outliers by merging with a larger cluster
-        #print('before final small cluster handling we have',len(set(labels)), 'communities')
+            print(f"{datetime.now()}\tFinished running Leiden algorithm. Found {len(set(labels))} clusters.")
 
-        too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
-        print(f"{datetime.now()}\tMerging {len(set(too_small_clusters))} very small clusters (<{self.small_pop})")
-        idx = np.where(np.isin(labels, list(too_small_clusters)))[0]
-        neighbours_labels = labels[neighbors[idx]]
-        for i, nl in zip(*[idx, neighbours_labels]):
-            # Retrieve the first non small cluster, with highest number of neighbours
-            label = next((label for label, n in Counter(nl).most_common() if label not in too_small_clusters), None)
-            # label = next((label for label, n in Counter(nl).most_common()), None)
-            if label is not None:  # recall 0 is a valid label value
-                labels[i] = label
+            # Searching for clusters that are too big and split them
+            too_big_clusters = [k for k, v in Counter(labels).items() if v > self.too_big_factor * self.nsamples]
+            if len(too_big_clusters):
+                print(f"{datetime.now()}\tFound {len(too_big_clusters)} clusters that are too big")
 
+            time0_big = time.time()
+            count_big_pop = len(too_big_clusters)
+            num_times_expanded = 0
+            # TODO - add max running time condition
+            while len(too_big_clusters)>0 & (not ((time.time() - time0_big > 200) & (num_times_expanded >= count_big_pop))):
+            #while len(too_big_clusters) & (not((time.time() - time0_big >200) & (num_times_expanded >= count_big_pop))):
+                print(f"{datetime.now()}\tExamining clusters that are above the too_big threshold")
+                cluster = too_big_clusters.pop(0)
+                idx = labels == cluster
+                print(f"{datetime.now()}\tCluster {cluster} contains "
+                      f"{idx.sum()}>{round(self.too_big_factor * self.nsamples)} samples and is too big")
 
-            #too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
-        too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
-        #in this pass we allow clusters to be merged even if they are not a Large Cluster.. as multiple smaller ones might come together to form an acceptably large cluster
-        do_while_time = time.time()
-        while len(too_small_clusters) & (time.time() - do_while_time < 15):
-            # membership of neighbours of samples in small clusters
+                data = self.data[idx]
+                membership = max(labels) + 1 + np.array(self.run_toobig_subPARC(data))
+                num_times_expanded +=1
+
+                if len(set(membership)) > 1:
+                    labels[idx] = membership
+                    too_big_clusters.extend(
+                        [k for k, v in Counter(membership).items() if v > self.too_big_factor * self.nsamples])
+                else:
+                    print(f"{datetime.now()}\tCould not expand cluster {cluster}")
+
+            # Search for clusters that are too small (like singletons) and merge them to non-small clusters based on neighbors' majority vote
+            #first we make a quick pass through all clusters to remove very small outliers by merging with a larger cluster
+            #print('before final small cluster handling we have',len(set(labels)), 'communities')
+
+            too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
+            print(f"{datetime.now()}\tMerging {len(set(too_small_clusters))} very small clusters (<{self.small_pop})")
             idx = np.where(np.isin(labels, list(too_small_clusters)))[0]
             neighbours_labels = labels[neighbors[idx]]
             for i, nl in zip(*[idx, neighbours_labels]):
                 # Retrieve the first non small cluster, with highest number of neighbours
-                # label = next((label for label, n in Counter(nl).most_common() if label not in too_small_clusters), None)
-                label = next((label for label, n in Counter(nl).most_common()), None)
+                label = next((label for label, n in Counter(nl).most_common() if label not in too_small_clusters), None)
+                # label = next((label for label, n in Counter(nl).most_common()), None)
                 if label is not None:  # recall 0 is a valid label value
                     labels[i] = label
-            # Update set of too small clusters, stopping if converged
+
+
+                #too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
             too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
-        # Reset labels to begin from zero and with no missing numbers
-        self.labels = labels = np.unique(labels, return_inverse=True)[1]
+            #in this pass we allow clusters to be merged even if they are not a Large Cluster.. as multiple smaller ones might come together to form an acceptably large cluster
+            do_while_time = time.time()
+            while len(too_small_clusters) & (time.time() - do_while_time < 15):
+                # membership of neighbours of samples in small clusters
+                idx = np.where(np.isin(labels, list(too_small_clusters)))[0]
+                neighbours_labels = labels[neighbors[idx]]
+                for i, nl in zip(*[idx, neighbours_labels]):
+                    # Retrieve the first non small cluster, with highest number of neighbours
+                    # label = next((label for label, n in Counter(nl).most_common() if label not in too_small_clusters), None)
+                    label = next((label for label, n in Counter(nl).most_common()), None)
+                    if label is not None:  # recall 0 is a valid label value
+                        labels[i] = label
+                # Update set of too small clusters, stopping if converged
+                too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
+            # Reset labels to begin from zero and with no missing numbers
+            self.labels = labels = np.unique(labels, return_inverse=True)[1]
 
         print(f"{datetime.now()}\tFinished detecting communities. Found", len(set(self.labels)), 'communities')
 
@@ -1902,7 +1926,7 @@ class VIA:
         print(f"{datetime.now()}\tMaking cluster graph. Global cluster graph pruning level: {self.cluster_graph_pruning_std}")
         graph = ig.VertexClustering(self.ig_full_graph, membership=self.labels).cluster_graph(combine_edges='sum')
 
-        graph = recompute_weights(graph, Counter(labels)) #returns csr matrix
+        graph = recompute_weights(graph, Counter(self.labels)) #returns csr matrix
 
         self.cluster_graph_csr_not_pruned = graph #type csr NOT PRUNED
         edgeweights_pruned_clustergraph, edges_pruned_clustergraph, comp_labels = pruning_clustergraph(graph,
@@ -1958,6 +1982,7 @@ class VIA:
         df_graph = pd.DataFrame(locallytrimmed_sparse_vc.todense())
         if (self.velocity_matrix is not None) & (self.gene_matrix is not None):
             df_velocity = pd.DataFrame(self.velocity_matrix)
+            print('size velocity matrix', len(self.labels), self.velocity_matrix.shape)
             df_velocity['labels'] = self.labels
             velocity_mean =df_velocity.groupby('labels', as_index=True).mean().to_numpy()
             gene_mean =pd.DataFrame(self.gene_matrix)
@@ -2076,7 +2101,6 @@ class VIA:
 
                 else:
                     for ri in self.root_user:
-
                         if PARC_labels_leiden[ri] in cluster_labels_subi:
                             root_user_ = ri
                             print(f"{datetime.now()}\tThe root index, {ri} provided by the user belongs to cluster number {PARC_labels_leiden[ri]} and corresponds to cell type {self.true_label[ri]}")
@@ -2321,7 +2345,13 @@ class VIA:
         self.markov_hitting_times = df_graph['markov_pt'].values  # hitting_times#
         #print('markov hitting times,', self.markov_hitting_times[0:10])
         self.terminal_clusters = terminal_clus
-        print(f"{datetime.now()}\tTerminal clusters corresponding to unique lineages are {self.terminal_clusters} ")
+
+        dict_ts_mode = {}
+        for i in terminal_clus:
+            loc__ = np.where(np.asarray(self.labels)==i)[0]
+            i_mode = func_mode(list(np.asarray(self.true_label)[loc__]))
+            dict_ts_mode[i]=i_mode
+        print(f"{datetime.now()}\tTerminal clusters corresponding to unique lineages are {dict_ts_mode}")#{self.terminal_clusters} ")
         self.node_degree_list = node_deg_list
         print(f"{datetime.now()}\tBegin projection of pseudotime and lineage likelihood")
         self.single_cell_bp, self.single_cell_pt_markov = self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)

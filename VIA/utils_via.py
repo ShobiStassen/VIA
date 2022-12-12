@@ -840,7 +840,7 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
     if sc_labels_numeric is None:
         if via_object is not None:
             sc_labels_numeric = via_object.time_series_labels
-        else: print('Will use via-pseudotime for edges, otherwise consider providing a list of numeric labels (single cell level) or via_object')
+        else: print(f'{datetime.now()}Will use via-pseudotime for edges, otherwise consider providing a list of numeric labels (single cell level) or via_object')
     if sc_pt is None:
         sc_pt =via_object.single_cell_pt_markov
     '''
@@ -883,7 +883,7 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
     #layout = vertex_milestone_graph.layout_fruchterman_reingold()
     #embedding = np.asarray(layout.coords)
 
-    print(f'{datetime.now()}\tmake node dataframe')
+    #print(f'{datetime.now()}\tmake node dataframe')
     data_node = [node for node in range(embedding.shape[0])]
     nodes = pd.DataFrame(data_node, columns=['id'])
     nodes.set_index('id', inplace=True)
@@ -915,7 +915,7 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
     # seems to work better when allowing the bundling to occur on unweighted representation and later using length of segments to color code significance
     if weighted ==True: edges['weight'] = edges['weight0']#1  # [1/i for i in edges['weight0']]np.where((edges['source_cluster'] != edges['target_cluster']) , 1,0.1)#[1/i for i in edges['weight0']]#
     else: edges['weight'] = 1
-    print(f'{datetime.now()}\tHammer bundling')
+    print(f'{datetime.now()}\tMaking smooth edges')
 
 
     hb = hammer_bundle(nodes_mean, edges, weight='weight', initial_bandwidth=initial_bandwidth,
@@ -1140,8 +1140,8 @@ def stationary_probability_(A_velo):
 
     print(f"{datetime.now()}\tStationary distribution normed {np.round(pi,3)}")
     sorted_pi = np.argsort(pi)
-    velo_root_top3 = sorted_pi[0:3]
-    print(f"{datetime.now()}\tTop 3 candidates for root: {np.round(sorted_pi[0:3],2)} with stationary prob (%) {np.round(pi[sorted_pi[0:3]]*100,2)}")
+    velo_root_top3 = sorted_pi[0:10]
+    print(f"{datetime.now()}\tTop 5 candidates for root: {np.round(sorted_pi[0:10],2)} with stationary prob (%) {np.round(pi[sorted_pi[0:10]]*100,3)}")
     print(f"{datetime.now()}\tTop 5 candidates for terminal: {np.flip(sorted_pi)[0:5]}")
 
     return pi, velo_root_top3

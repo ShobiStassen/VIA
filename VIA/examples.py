@@ -14,7 +14,7 @@ import os.path
 
 print(os.path.abspath(phate.__file__))
 import seaborn as sns
-#from core_working_github import *#pyVIA.core import * #pyVIA.core import * core_working import*
+
 from pyVIA.core import *
 #from core_working_ import *
 import pyVIA.datasets_via as datasets
@@ -690,32 +690,38 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     print('dataset, ncomps, knn, seed', dataset, ncomps, knn, random_seed)
 
     if dataset == "Toy3":
-        df_counts = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000.csv", delimiter=",")
-        df_ids = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000_ids_with_truetime.csv", delimiter=",")
+        print('inside Toy3')
+        #df_counts = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000.csv", delimiter=",")
+        #df_ids = pd.read_csv(foldername + "toy_multifurcating_M8_n1000d1000_ids_with_truetime.csv", delimiter=",")
 
-        root_user, dataset  = ['M1'], 'group'
-        #root_user, dataset = [120], ''
+
+        adata_counts = datasets.toy_multifurcating()
+
+        #root_user, dataset  = None, ''#['M1'], 'group' #alternative root setting
+        root_user, dataset= ['M1'], 'group'
+        #root_user, dataset = [16], ''
         paga_root = "M1"
+        dataset_name = 'Toy3'
     if dataset == "Toy4":  # 2 disconnected components
         print('inside toy4')
-        df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv", delimiter=",")
-        df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids_with_truetime.csv", delimiter=",")
+        #df_counts = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000.csv", delimiter=",")
+        #df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids_with_truetime.csv", delimiter=",")
+        adata_counts = datasets.toy_disconnected()
         #root_user, dataset =  [136,4], ''
-        root_user, dataset = ['T1_M1', 'T2_M1'],'group' #alternative root setting
+        root_user, dataset = ['T1_M1', 'T2_M1'],'group' #alternative root settings:   None, '' OR [136,4],''
         paga_root = 'T1_M1'
+        dataset_name = 'Toy4'
+    #df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
 
-    df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
-
-    df_counts = df_counts.drop('Unnamed: 0', 1)
-    df_ids = df_ids.sort_values(by=['cell_id_num'])
-    df_ids = df_ids.reset_index(drop=True)
-    true_label = df_ids['group_id'].tolist()
+    #df_counts = df_counts.drop('Unnamed: 0', 1)
+    #df_ids = df_ids.sort_values(by=['cell_id_num'])
+    #df_ids = df_ids.reset_index(drop=True)
+    true_label = adata_counts.obs['group_id'].tolist()#df_ids['group_id'].tolist()
     #true_time = df_ids['true_time']
-    adata_counts = sc.AnnData(df_counts, obs=df_ids)
-    if dataset == "Toy3": adata_counts = datasets.toy_multifurcating()
-    if datasets =='Toy4': adata_counts = datasets.toy_disconnected()
+    #adata_counts = sc.AnnData(df_counts, obs=df_ids)
+
     sc.tl.pca(adata_counts, svd_solver='arpack', n_comps=ncomps)
-    # true_label =['a' for i in true_label] #testing dummy true_label
+
     adata_counts.uns['iroot'] = np.flatnonzero(adata_counts.obs['group_id'] == paga_root)[0]  # 'T1_M1'#'M1'
 
     if dataset == 'Toy4':
@@ -725,7 +731,6 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     import umap
 
     embedding = umap.UMAP(min_dist=0.5).fit_transform(adata_counts.obsm['X_pca'][:, 0:10])  # 50
-
 
     # embedding = adata_counts.obsm['X_pca'][:, 0:2]
     # plt.scatter(embedding[:,0],embedding[:,1])
@@ -740,13 +745,20 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
         plt.show()
     X_pca= adata_counts.obsm['X_pca'][:, 0:ncomps]
     print('root user', root_user, print(true_label))
+    #optionally do kmeans or pass in cluster labels
+    from sklearn.cluster import KMeans
+    kmeans = KMeans(n_clusters=20, random_state=1).fit(X_pca)
+    #labels=kmeans.labels_
+
+    #self.labels = kmeans.labels_.flatten().tolist()
+
     v0 = VIA(X_pca, true_label, jac_std_global=jac_std_global, dist_std_local=1,
              knn=knn,
              cluster_graph_pruning_std=cluster_graph_pruning_std,
              too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset=dataset,
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              random_seed=random_seed, piegraph_arrow_head_width=0.2,
-             piegraph_edgeweight_scalingfactor=1.0,  resolution_parameter=1)  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6'] #embedding_type='via-mds', do_compute_embedding=True,, user_defined_terminal_group=['M6','M8','M2','M7']
+             piegraph_edgeweight_scalingfactor=1.0,  resolution_parameter=1, embedding=embedding)  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6'] #embedding_type='via-mds', do_compute_embedding=True,, user_defined_terminal_group=['M6','M8','M2','M7']
     v0.run_VIA()
     print(f'{datetime.now()}\tFor random seed: {random_seed}, the first sc markov pt are', v0.single_cell_pt_markov[0:10])
     draw_sc_lineage_probability(v0, embedding=embedding)
@@ -754,12 +766,17 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     #draw_sc_lineage_probability(v0, embedding=embedding,marker_lineages=[5,10])
     #plt.show()
 
-    v0.embedding = embedding
+    #v0.embedding = embedding
     df_genes = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
 
-    f, axlist = plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_genes, marker_lineages=[5,7,8,9,10])
-    axlist[-1].set_xlabel("pseudotime", fontsize=20)
-    plt.show()
+    if dataset_name=='Toy3':
+        f, axlist = plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_genes, marker_lineages=[5,7,8,9,10])
+        axlist[-1].set_xlabel("pseudotime", fontsize=20)
+        plt.show()
+    if dataset_name=='Toy4':
+        f, axlist = plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_genes, marker_lineages=[])
+        axlist[-1].set_xlabel("pseudotime", fontsize=20)
+        plt.show()
     get_gene_expression(v0, gene_exp=df_genes, marker_genes=['Gene0', 'Gene1', 'Gene2'])
     plt.show()
     draw_sc_lineage_probability(v0, embedding=embedding)
@@ -773,7 +790,15 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
                      linewidth_bundle=1.5, alpha_bundle_factor=2,
                      cmap='plasma_r', facecolor='white', size_scatter=15, alpha_scatter=0.2, scale_scatter_size_pop=True,
-                     extra_title_text='edgebundle plot showing gene0 expression', headwidth_bundle=0.15, sc_labels_expression = adata_counts.obsm['X_pca'][:, 0].tolist(), text_labels=True, sc_labels=true_label)
+                     extra_title_text='Gene0 Expression', headwidth_bundle=0.15, sc_labels_expression = adata_counts.obsm['X_pca'][:, 0].tolist(), text_labels=True, sc_labels=true_label)
+
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=1.5, alpha_bundle_factor=2,
+                     cmap='plasma_r', facecolor='white', size_scatter=15, alpha_scatter=0.2,
+                     scale_scatter_size_pop=True,
+                     extra_title_text='', headwidth_bundle=0.15,
+                    text_labels=True,
+                     sc_labels=true_label)
 
     plt.show()
 
@@ -786,11 +811,8 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     plot_edgebundle_viagraph(via_object=v0, plot_clusters=True, title='viagraph with bundling', fontsize=10)
     plt.show()
 
-
-
-
-
-
+    via_streamplot(v0, embedding, scatter_size=20)  # embedding
+    plt.show()
     print('making animated stream plot. This may take a few minutes when the streamline count is high')
     animated_streamplot(v0, embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1,
                         saveto='/home/shobi/Trajectory/Datasets/Toy3/test_framerates.gif', facecolor_='white',
@@ -834,8 +856,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
 
     plt.show()
 
-    via_streamplot(v0, embedding, scatter_size=20)  # embedding
-    plt.show()
+
     print(f"{datetime.now()}\tAnimate milestone hammer with white bg")
     animate_edge_bundle(via_object=v0, hammerbundle_dict=v0.hammerbundle_milestone_dict,
                         time_series_labels=v0.time_series_labels,
@@ -867,6 +888,8 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
 
     super_labels = v0.labels
     print('super labels', type(super_labels))
+    df_ids = pd.DataFrame()
+    df_ids['true_time'] =adata_counts.obs['true_time'].tolist()
     df_ids['pt'] = v0.single_cell_pt_markov
     correlation = df_ids['pt'].corr(df_ids['true_time'])
     print('corr via knn', knn, correlation)
@@ -3029,7 +3052,7 @@ def main():
         # main_Toy_comparisons(ncomps=10, knn=10, random_seed=2, dataset='ToyMultiM11',              foldername="/home/shobi/Trajectory/Datasets/ToyMultifurcating_M11/")
         # main_Toy_comparisons(ncomps=10, knn=20, random_seed=2, dataset='Toy3',                             foldername="/home/shobi/Trajectory/Datasets/Toy3/")
     elif dataset=='Toy4':
-        main_Toy(ncomps=10, knn=30, random_seed=2, dataset='Toy4',foldername="/home/shobi/Trajectory/Datasets/Toy4/")  # pc10/knn30/rs2 for Toy4
+        main_Toy(ncomps=10, knn=30, random_seed=0, dataset='Toy4',foldername="/home/shobi/Trajectory/Datasets/Toy4/")  # pc10/knn30/rs2 for Toy4
     elif dataset == 'wrapper':
 
         # Read two files 1) the first file contains 200PCs of the Bcell filtered and normalized data for the first 5000 HVG.

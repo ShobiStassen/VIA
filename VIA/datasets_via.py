@@ -5,13 +5,7 @@ import gdown
 import os
 from scipy.io import loadmat
 
-"HELLO to main"
-"SHOBI SAYS HELLO"
-"Hello again"
-"Hi after Kathy meeting"
 
-"simultaneous changes by Shobi"
-"Minato says hi"
 
 def toy_multifurcating(foldername="./"):
     """Load Toy_Multifurcating data as AnnData object
