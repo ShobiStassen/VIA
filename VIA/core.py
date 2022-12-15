@@ -22,7 +22,7 @@ from typing import Optional, Union
 from pyVIA.plotting_via import *
 from pyVIA.utils_via import _construct_knn, sequential_knn
 from pyVIA.utils_via import *
-#from plotting_via import * #
+#from plotting_via import * 
 #from utils_via import *
 #from utils_via import _construct_knn, sequential_knn
 from sklearn.preprocessing import normalize
@@ -892,7 +892,6 @@ class VIA:
         return abs(final_hitting_times), roundtrip_times
 
     def project_branch_probability_sc(self, bp_array_clus, pt):
-
         #print('sum of branch probabilities at cluster level', np.sum(bp_array_clus, axis=1))
         n_clus = len(list(set(self.labels)))
         n_cells = self.data.shape[0]
@@ -921,10 +920,7 @@ class VIA:
         pt = np.reshape(pt, (n_clus, 1))
         pt_sc = weights.dot(pt)
         pt_sc /= np.amax(pt_sc)
-        df = pd.DataFrame(bp_array_sc[:,0])
-        #df['true'] = self.true_label
-        #df['parc'] = self.labels
-        #df.to_csv("/home/shobi/Trajectory/Datasets/Toy3/checking_brachingprobs.csv")
+
         return bp_array_sc, pt_sc.flatten()
 
     def sc_transition_matrix(self,smooth_transition,b=10, use_sequentially_augmented=False):
@@ -1776,33 +1772,37 @@ class VIA:
 
 
                 elif self.embedding_type =='via-mds':
-                    str_date = str(str(datetime.now())[-3:])
-                    print(f'{datetime.now()}\tRun via-mds')
-                    #n_milestones = min(self.nsamples, max(10000, int(0.1*self.nsamples)))
 
-                    self.embedding = via_mds(X_pca=self.data, k=15, knn_seq=5, t_diffusion=1, n_milestones=None, random_seed=self.random_seed,  viagraph_full=self.csr_full_graph, time_series_labels=self.time_series_labels, saveto='/home/shobi/Trajectory/Datasets/2MOrgan/viamds_full_knn30seq10pcs50_tdiff2_milestones10000_v3.csv')
-                    df_mds = pd.DataFrame(self.embedding)
+                    print(f'{datetime.now()}\tRun via-mds')
+
+                    t_difference = 10 #default 2
+                    k_project_milestones = 3
+                    k_mds = 15
+                    diffusion_op = 1
+                    self.embedding = via_mds(X_pca=self.data, k=k_mds, knn_seq=15, k_project_milestones=k_project_milestones, diffusion_op=diffusion_op, n_milestones=None, random_seed=self.random_seed,  viagraph_full=self.csr_full_graph, t_difference=t_difference, time_series_labels=self.time_series_labels, saveto='', double_diffusion=False)
+
                     str_date = str(str(datetime.now())[-3:])
-                    #df_mds.to_csv('/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viamds_k' + str(self.knn) + 'kseq' + str( self.knn_sequential) + 'nps' + str(self.ncomp) + 'tdiff' + str(self.t_diff_step)+str(self.random_seed)+ str_date + ".csv")
+                    #save_str = '/home/shobi/Trajectory/Datasets/WagnerZebrafish/2000hvg/mds/singlediffusion_viamds/2000hvg_viamds_singlediffusion_k' + str(self.knn) + '_milestones'+str(3000)+'_kprojectmilestones'+str(k_project_milestones)+'t_step'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_rs'+str(rs_i)+'_'+str_date
+                    #save_str = '/home/shobi/Trajectory/Datasets/Cao_ProtoVert/mds_theseare1000hvg/singlediffusion_viamds/1000hvg_viamds_singlediffusion_k' + str(self.knn) + '_milestones'+str(10000)+'_kprojectmilestones'+str(k_project_milestones)+'t_step'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_rs'+str(rs_i)+'_'+str_date
+                    #df_mds = pd.DataFrame(self.embedding)
+                    #df_mds.to_csv( save_str+ ".csv")
                     if self.time_series_labels is None: color_labels = self.true_label
                     else: color_labels=self.time_series_labels
                     if (isinstance(color_labels[0], str)) == True:
                         categorical = True
                     else:
                         categorical = False
-                    #df_=pd.DataFrame(self.embedding)
-                    #df_.to_csv('/home/shobi/Trajectory/Datasets/2MOrgan/viamds_full_knn15_seq15pcs30.csv')
                     f1, ax =plot_scatter(embedding=self.embedding,labels=color_labels,title='via-mds', categorical=categorical)
-                    #savefig_ = '/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viamds_k' + str(self.knn) + 'kseq' + str(                        self.knn_sequential) + 'nps' + str(self.ncomp) + 'tdiff' + str(self.t_diff_step) +str(self.random_seed) + str_date + 'stage.png'
+                    f1.set_size_inches(10, 10)
+                    #savefig_ = save_str+ 'stage.png'
                     #f1.savefig(savefig_, facecolor='white', transparent=False)
 
                     if self.time_series_labels is not None:
                         f2, ax2 = plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-mds', categorical=True)
-                        #savefig_ = '/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viamds_k' + str(                           self.knn) + 'kseq' + str(                            self.knn_sequential) + 'nps' + str(self.ncomp) + 'tdiff' + str(                            self.t_diff_step) +str(self.random_seed) + str_date + 'stage.png'
+                        f2.set_size_inches(10, 10)
+                        #savefig_ = save_str+ 'celltype.png'
                         #f2.savefig(savefig_, facecolor='white', transparent=False)
                     plt.show()
-
-
 
                 elif self.embedding_type == 'via-force':
                     print(f'{datetime.now()}\tRun via-force')
@@ -1904,7 +1904,8 @@ class VIA:
             # Reset labels to begin from zero and with no missing numbers
             self.labels = labels = np.unique(labels, return_inverse=True)[1]
 
-        print(f"{datetime.now()}\tFinished detecting communities. Found", len(set(self.labels)), 'communities')
+            print(f"{datetime.now()}\tFinished detecting communities. Found", len(set(self.labels)), 'communities')
+        else:print(f'{datetime.now}\tUsing predfined labels provided by user')
 
         # end community detection
         # do kmeans instead
@@ -2426,27 +2427,6 @@ class VIA:
         scaled_hitting_times = scaled_hitting_times.astype(int)
         pal = ig.drawing.colors.AdvancedGradientPalette(['yellow', 'green', 'blue'], n=1001)
 
-        # making a new "augmented" single-cell graph based on the computed pseudotimes - useful when there are no time-series labels for (optionally) guiding the graph structure
-        use_pt_to_guide_graph=False
-        if use_pt_to_guide_graph==True:
-            print(f'{datetime.now()}\tMake pt-augmented knn')
-            pt_augmented_adjacency_igraph, adjacency_augmented=self.make_pt_augmented_adjacency_igraph(neighbors=neighbors, distances=distances, k_reverse=10, knn=20)
-
-            print(f'{datetime.now()}\tRun via-umap on pt-augmented knn')  # graph=csr_full_graph
-            self.embedding = run_umap_hnsw(X_input=self.data, graph=self.adjacency_pt_augmented, n_epochs=100, spread=1,
-                                       distance_metric='euclidean', min_dist=0.3,
-                                       saveto='/home/shobi/Trajectory/Datasets/HumanCD34/pt-aug/not_ptaug_umap_.csv')  # usually min_dist default =0.1, for cd34 0.8
-
-
-
-
-        '''
-        self.embedding = via_mds(X_pca=self.data, k=15, t_diffusion=2,
-                                 n_milestones=min(self.nsamples, max(10000, int(0.1 * self.nsamples))),
-                                 viagraph_full=adjacency_pt_augmented, time_series_labels=[int(i*10) for i in self.single_cell_pt_markov],
-                                 saveto='')
-        '''
-
         if self.time_series_labels is None:
             color_labels = self.true_label
         else:
@@ -2495,63 +2475,6 @@ class VIA:
                                                                      weighted=True,
                                                                      sc_labels_numeric=self.time_series_labels,
                                                                      sc_pt=self.single_cell_pt_markov)
-
-        '''
-        TESTING EDGEBUNDLING
-        if self.nsamples < 200:
-            print(f"{datetime.now()}\t Starting make edgebundle single cell...")
-            self.hammerbundle_sc = make_edgebundle_sc(embedding=self.embedding, sc_graph=self.ig_full_graph,
-                                                                sc_clusterlabel=self.labels, initial_bandwidth=0.3,
-                                                                decay=0.9)
-
-        print(f"{datetime.now()}\tPlot milestone hammer")
-        plot_edge_bundle(hammerbundle_dict=self.hammerbundle_milestone_dict,
-                         linewidth_bundle=1.5, alpha_bundle_factor=2,
-                         cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
-                         extra_title_text=extra_title_text, headwidth_bundle=0.15)
-        plt.show()
-        
-        print(f"{datetime.now()}\tAnimate milestone hammer with white bg")
-        animate_edge_bundle(hammerbundle_dict=self.hammerbundle_milestone_dict,
-                            time_series_labels=self.time_series_labels,
-                            linewidth_bundle=5, alpha_bundle_factor=2, cmap='rainbow', facecolor='white',
-                            extra_title_text=extra_title_text, alpha_scatter=0.1, size_scatter=10,
-                            saveto='/home/shobi/Trajectory/Datasets/Cao_ProtoVert/1000hvg/animation1_whitebg_oct21.gif')
-
-        print(f"{datetime.now()}\tAnimate milestone hammer with black bg")
-        animate_edge_bundle(hammerbundle_dict=self.hammerbundle_milestone_dict,
-                            time_series_labels=self.time_series_labels,
-                            linewidth_bundle=5, 
-                            cmap='rainbow', facecolor='black', extra_title_text=extra_title_text,
-                            alpha_scatter=0.1,
-                            size_scatter=10,
-                            saveto='/home/shobi/Trajectory/Datasets/Cao_ProtoVert/1000hvg/animation1_blackbg_oct21.gif')
-        
-        print(f"{datetime.now()}\tPlot milestone hammer")
-        plot_edge_bundle(hammerbundle_dict=self.hammerbundle_milestone_dict, extra_title_text=extra_title_text,
-                         linewidth_bundle=3,
-                         cmap='rainbow_r', facecolor='white', size_scatter=10, alpha_scatter=0.2, headwidth_bundle=0.2)
-        plt.show()
-
-        print(f"{datetime.now()}\tPlot milestone hammer")
-        plot_edge_bundle(hammerbundle_dict=self.hammerbundle_milestone_dict,
-                         linewidth_bundle=3,
-                         cmap='plasma',
-                         facecolor='white', extra_title_text=extra_title_text)
-        plt.show()
-
-        print('single cell hammer')
-
-        #if self.hammerbundle_sc is not None: plot_edge_bundle(hammerbundle_dict=self.hammerbundle_sc, alpha_bundle=0.4,   linewidth_bundle=3)
-        plt.show()
-        
-          #self.draw_piechart_graph(headwidth_arrow=self.piegraph_arrow_head_width * 1.5, reference=self.time_series_labels, ax_text=False)
-        #self.draw_piechart_graph(headwidth_arrow=self.piegraph_arrow_head_width * 1.5, ax_text=False)
-        '''
-
-
-        #self.draw_piechart_graph(headwidth_arrow=self.piegraph_arrow_head_width * 1.5, ax_text=True)
-
 
         self.labels = list(self.labels)
 
