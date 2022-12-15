@@ -22,7 +22,7 @@ from typing import Optional, Union
 from pyVIA.plotting_via import *
 from pyVIA.utils_via import _construct_knn, sequential_knn
 from pyVIA.utils_via import *
-#from plotting_via import * 
+#from plotting_via import * #
 #from utils_via import *
 #from utils_via import _construct_knn, sequential_knn
 from sklearn.preprocessing import normalize
@@ -1180,7 +1180,7 @@ class VIA:
 
 
             #weights = 1 / (distances[msk] + distance_factor)
-            do_exp_weight=True
+            do_exp_weight=False
             if do_exp_weight==True:
                 #print('distances')
 
@@ -1635,7 +1635,7 @@ class VIA:
         # normalize across columns to get Transition matrix.
         transition_full_graph = normalize(self.csr_full_graph, norm='l1', axis=1) ** magic_steps
 
-        #print('shape of transition matrix raised to power', magic_steps, transition_full_graph.shape)
+        print('shape of transition matrix raised to power', magic_steps, transition_full_graph.shape)
         subset = df_gene[gene_list].values
         return pd.DataFrame(transition_full_graph.dot(subset), index=df_gene.index, columns=gene_list)
 
@@ -1772,37 +1772,41 @@ class VIA:
 
 
                 elif self.embedding_type =='via-mds':
-
-                    print(f'{datetime.now()}\tRun via-mds')
-
-                    t_difference = 10 #default 2
-                    k_project_milestones = 3
-                    k_mds = 15
-                    diffusion_op = 1
-                    self.embedding = via_mds(X_pca=self.data, k=k_mds, knn_seq=15, k_project_milestones=k_project_milestones, diffusion_op=diffusion_op, n_milestones=None, random_seed=self.random_seed,  viagraph_full=self.csr_full_graph, t_difference=t_difference, time_series_labels=self.time_series_labels, saveto='', double_diffusion=False)
-
                     str_date = str(str(datetime.now())[-3:])
-                    #save_str = '/home/shobi/Trajectory/Datasets/WagnerZebrafish/2000hvg/mds/singlediffusion_viamds/2000hvg_viamds_singlediffusion_k' + str(self.knn) + '_milestones'+str(3000)+'_kprojectmilestones'+str(k_project_milestones)+'t_step'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_rs'+str(rs_i)+'_'+str_date
-                    #save_str = '/home/shobi/Trajectory/Datasets/Cao_ProtoVert/mds_theseare1000hvg/singlediffusion_viamds/1000hvg_viamds_singlediffusion_k' + str(self.knn) + '_milestones'+str(10000)+'_kprojectmilestones'+str(k_project_milestones)+'t_step'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_rs'+str(rs_i)+'_'+str_date
-                    #df_mds = pd.DataFrame(self.embedding)
-                    #df_mds.to_csv( save_str+ ".csv")
-                    if self.time_series_labels is None: color_labels = self.true_label
-                    else: color_labels=self.time_series_labels
-                    if (isinstance(color_labels[0], str)) == True:
-                        categorical = True
-                    else:
-                        categorical = False
-                    f1, ax =plot_scatter(embedding=self.embedding,labels=color_labels,title='via-mds', categorical=categorical)
-                    f1.set_size_inches(10, 10)
-                    #savefig_ = save_str+ 'stage.png'
-                    #f1.savefig(savefig_, facecolor='white', transparent=False)
+                    print(f'{datetime.now()}\tRun via-mds')
+                    #n_milestones = min(self.nsamples, max(10000, int(0.1*self.nsamples)))
 
-                    if self.time_series_labels is not None:
-                        f2, ax2 = plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-mds', categorical=True)
-                        f2.set_size_inches(10, 10)
-                        #savefig_ = save_str+ 'celltype.png'
-                        #f2.savefig(savefig_, facecolor='white', transparent=False)
-                    plt.show()
+                    for diffusion_i in [5]:
+                        for k_seq_i in [10]:
+                            for k_mds_i in [15]:
+                                for rs_i in [self.random_seed,2,3]:
+                                    t_difference = 5 #default 2
+                                    k_project_milestones = 5
+                                    n_milestones_mds = 20000
+                                    self.embedding = via_mds(X_pca=self.data, k=k_mds_i, knn_seq=k_seq_i, k_project_milestones=k_project_milestones, diffusion_op=diffusion_i, n_milestones=n_milestones_mds, random_seed=rs_i,  viagraph_full=self.csr_full_graph, t_difference=t_difference, time_series_labels=self.time_series_labels, saveto='', double_diffusion=False)
+
+                                    str_date = str(str(datetime.now())[-3:])
+                                    #save_str = '/home/shobi/Trajectory/Datasets/WagnerZebrafish/2000hvg/mds/singlediffusion_viamds/2000hvg_viamds_singlediffusion_k' + str(self.knn) + '_milestones'+str(3000)+'_kprojectmilestones'+str(k_project_milestones)+'t_step'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_rs'+str(rs_i)+'_'+str_date
+                                    save_str = '/home/shobi/Trajectory/Datasets/Cao_ProtoVert/mds_theseare1000hvg/singlediffusion_viamds/1000hvg_viamds_singlediffusion_k' + str(self.knn) + '_milestones'+str(n_milestones_mds)+'_kprojectmilestones'+str(k_project_milestones)+'t_stepmds'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_rsMds'+str(rs_i)+'_'+str_date
+                                    #df_mds = pd.DataFrame(self.embedding)
+                                    #df_mds.to_csv( save_str+ ".csv")
+                                    if self.time_series_labels is None: color_labels = self.true_label
+                                    else: color_labels=self.time_series_labels
+                                    if (isinstance(color_labels[0], str)) == True:
+                                        categorical = True
+                                    else:
+                                        categorical = False
+                                    f1, ax =plot_scatter(embedding=self.embedding,labels=color_labels,title='via-mds', categorical=categorical)
+                                    savefig_ = save_str+ 'stage.png'
+                                    f1.set_size_inches(10, 10)
+                                    f1.savefig(savefig_, facecolor='white', transparent=False)
+
+                                    if self.time_series_labels is not None:
+                                        f2, ax2 = plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-mds', categorical=True)
+                                        savefig_ = save_str+ 'celltype.png'
+                                        f2.set_size_inches(10, 10)
+                                        f2.savefig(savefig_, facecolor='white', transparent=False)
+                                    #plt.show()
 
                 elif self.embedding_type == 'via-force':
                     print(f'{datetime.now()}\tRun via-force')
@@ -2426,6 +2430,27 @@ class VIA:
         self.scaled_hitting_times = scaled_hitting_times
         scaled_hitting_times = scaled_hitting_times.astype(int)
         pal = ig.drawing.colors.AdvancedGradientPalette(['yellow', 'green', 'blue'], n=1001)
+
+        # making a new "augmented" single-cell graph based on the computed pseudotimes - useful when there are no time-series labels for (optionally) guiding the graph structure
+        use_pt_to_guide_graph=False
+        if use_pt_to_guide_graph==True:
+            print(f'{datetime.now()}\tMake pt-augmented knn')
+            pt_augmented_adjacency_igraph, adjacency_augmented=self.make_pt_augmented_adjacency_igraph(neighbors=neighbors, distances=distances, k_reverse=10, knn=20)
+
+            print(f'{datetime.now()}\tRun via-umap on pt-augmented knn')  # graph=csr_full_graph
+            self.embedding = run_umap_hnsw(X_input=self.data, graph=self.adjacency_pt_augmented, n_epochs=100, spread=1,
+                                       distance_metric='euclidean', min_dist=0.3,
+                                       saveto='/home/shobi/Trajectory/Datasets/HumanCD34/pt-aug/not_ptaug_umap_.csv')  # usually min_dist default =0.1, for cd34 0.8
+
+
+
+
+        '''
+        self.embedding = via_mds(X_pca=self.data, k=15, t_diffusion=2,
+                                 n_milestones=min(self.nsamples, max(10000, int(0.1 * self.nsamples))),
+                                 viagraph_full=adjacency_pt_augmented, time_series_labels=[int(i*10) for i in self.single_cell_pt_markov],
+                                 saveto='')
+        '''
 
         if self.time_series_labels is None:
             color_labels = self.true_label

@@ -305,7 +305,7 @@ def affinity_milestone_knn(data, knn_struct,k:int=10, time_series_labels:list=[]
                 if abs(time_series_labels[n_i] - t_row)>t_diff_mean*t_diff_step:
                     count= count+1
                     if np.sum(msk[row[0]])>4: msk[row[0],e_i]=False # we want to ensure that each cell has at least 5 nn
-        print('number of non temporal neighbors removed', count)
+        print(f'{datetime.now()}\tNumber of non temporal neighbors removed', count)
     else:
         msk = np.full_like(distance_array, True, dtype=np.bool_)
         # print('all edges', np.sum(msk))
@@ -344,22 +344,22 @@ def affinity_milestone_knn(data, knn_struct,k:int=10, time_series_labels:list=[]
     return result
 
 
-def sgd_mds(via_graph: csr_matrix, X_pca, t_diff_op: int = 1, ndims: int = 2, random_seed = 0):
+def sgd_mds(via_graph: csr_matrix, X_pca, diff_op: int = 1, ndims: int = 2, random_seed = 0, double_diffusion:bool=True):
     '''
 
     :param via_graph: via_graph = v0.csr_full_graph #single cell knn graph representation based on hnsw
-    :param t_diff_op:
+    :param diff_op: power of diffusion operation
     :param ndims:
     :return:
     '''
     # outlier handling of graph edges
     via_graph.data = np.clip(via_graph.data, np.percentile(via_graph.data, 10), np.percentile(via_graph.data, 90))
     row_stoch = normalize(via_graph, norm='l1', axis=1)
-    row_stoch = row_stoch ** t_diff_op
+    row_stoch = row_stoch ** diff_op
     #msk = row_stoch==0
     from scipy.sparse.csgraph import connected_components
     n_components, labels_cc = connected_components(csgraph=row_stoch, directed=False, return_labels=True)
-    if n_components>1: print('Please rerun with higher knn value. disconnected components exist')
+    if n_components>1: print('Considering re-running with higher knn value. disconnected components exist')
 
     temp_pca = csr_matrix(X_pca)
 
@@ -381,7 +381,7 @@ def sgd_mds(via_graph: csr_matrix, X_pca, t_diff_op: int = 1, ndims: int = 2, ra
     Y_classic = classic(X_mds, n_components=ndims, random_state=random_seed)
 
     X_mds = sgd(X_mds, n_components=ndims, random_state=random_seed, init=Y_classic)
-
+    if double_diffusion==True: X_mds = row_stoch*X_mds #added Dec 12 10pm to test diffusion of x-mds after mds
     return X_mds
 
 
@@ -663,7 +663,7 @@ def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
     # print('new_superclust_index_ds',new_superclust_index_ds)
     return new_superclust_index_ds
 
-def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_size=None, vmax=99):
+def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_size=None, vmax=99, fontsize:int=10):
     '''
     This is a helper function called by draw_sc_lineage_probability which plots the single-cell lineage probabilities
 
@@ -690,11 +690,17 @@ def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_s
     c = cmap(prob).reshape(-1, 4)
     im =ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=0.01, cmap=cmap_name,    edgecolors = 'none',vmin=0, vmax=vmax) #prevent auto-normalization of colors
     #im = ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=0.01,  edgecolors='none')
-    ax.set_title('Lineage: ' + str(ti))
+    ax.set_title('Lineage: ' + str(ti), fontsize=int(fontsize*1.2))
+
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.05)
-    fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
+    cb = fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
 
+    ax_cb = cb.ax
+    text = ax_cb.yaxis.label
+    font = matplotlib.font_manager.FontProperties( size=fontsize)#family='times new roman', style='italic',
+    text.set_font_properties(font)
+    ax_cb.tick_params(labelsize=int(fontsize*0.8))
     c = cmap(prob).reshape(-1, 4)
 
     #c = cmap(norm(prob)).reshape(-1, 4)
@@ -840,7 +846,7 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
     if sc_labels_numeric is None:
         if via_object is not None:
             sc_labels_numeric = via_object.time_series_labels
-        else: print(f'{datetime.now()}Will use via-pseudotime for edges, otherwise consider providing a list of numeric labels (single cell level) or via_object')
+        else: print(f'{datetime.now()}\tWill use via-pseudotime for edges, otherwise consider providing a list of numeric labels (single cell level) or via_object')
     if sc_pt is None:
         sc_pt =via_object.single_cell_pt_markov
     '''
