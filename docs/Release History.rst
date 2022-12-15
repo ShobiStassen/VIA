@@ -1,6 +1,16 @@
 Release History
 ===============
 
+Version 0.1.66
+-------------
+- improved ``draw_sc_lineage_probability()`` to correctly assign subplots when ``marker_lineages = []`` is given by user as a subset of the terminal_clusters attribute of via. (corrections to the update in 0.1.57)
+- control fontsize
+- New Feature! VIA can autocompute via-umap and via-mds by passing do_compute_embedding = True and embedding_type = 'via-mds' or 'via-umap' when initializing a via object. e.g. ``v0 = via.VIA(X_data....)`` or after doing ``v0.run_via()``
+
+Version 0.1.64
+-------------
+- Bugfix in ``via_mds()`` parameter ``saveto=''``
+
 Version 0.1.62
 -------------
 - New Feature! Heatmap based gene trends (genes x pseudotime) for each lineage 
