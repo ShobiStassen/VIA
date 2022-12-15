@@ -1,7 +1,7 @@
 Release History
 ===============
 
-Version 0.1.66
+Version 0.1.67
 -------------
 - improved ``draw_sc_lineage_probability()`` to correctly assign subplots when ``marker_lineages = []`` is given by user as a subset of the terminal_clusters attribute of via. (corrections to the update in 0.1.57)
 - control fontsize
