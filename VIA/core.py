@@ -210,7 +210,7 @@ class VIA:
         input matrix of size n_cells x n_dims. Expects the PCs or features that will be used in the TI computation. Can be e.g. adata.obsm['X_pca][:,0:20]
     true_label:list
         list of str/int that correspond to the ground truth or reference annotations. Can also be None when no labels are available
-    labels: list
+    labels: ndarray (nsamples, )
         default is None. and PARC clusters are used for the viagraph. alternatively provide a list of clustermemberships that are integer values (not strings) to construct the viagraph using another clustering method or available annotations
     dist_std_local:float
         default = 2
@@ -360,7 +360,7 @@ class VIA:
     n_milestones: int = None Number of milestones in the via-mds computation (anything more than 10,000 can be computationally heavy and time consuming) Typically auto-determined within the via-mds function
     '''
 
-    def __init__(self, data:ndarray, true_label=None, dist_std_local:float=2, jac_std_global=0.15, labels:list=None,
+    def __init__(self, data:ndarray, true_label=None, dist_std_local:float=2, jac_std_global=0.15, labels:ndarray=None,
                  keep_all_local_dist='auto', too_big_factor:float=0.4, resolution_parameter:float=1.0, partition_type:str="ModularityVP", small_pop:int=10,
                  jac_weighted_edges:bool=True, knn:int=30, n_iter_leiden:int=5, random_seed:int=42,
                  num_threads=-1, distance='l2', time_smallpop=15,
@@ -568,7 +568,7 @@ class VIA:
                 if clus_ not in terminal_cluster_list:
                     terminal_cluster_list.append(clus_)
                     dict_user_defined_terminal_clusters[user_terminal_group] = clus_
-        print(f'{datetime.now()}\t Terminal cluster list based on user defined cells/groups:', [(key,dict_user_defined_terminal_clusters[key]) for key in dict_user_defined_terminal_clusters])
+        print(f'{datetime.now()}\tTerminal cluster list based on user defined cells/groups:', [(key,dict_user_defined_terminal_clusters[key]) for key in dict_user_defined_terminal_clusters])
         return terminal_cluster_list
 
     def get_terminal_clusters(self, A, markov_pt, root_ai):
@@ -1907,6 +1907,7 @@ class VIA:
                 too_small_clusters = {k for k, v in Counter(labels).items() if v < self.small_pop}
             # Reset labels to begin from zero and with no missing numbers
             self.labels = labels = np.unique(labels, return_inverse=True)[1]
+
 
             print(f"{datetime.now()}\tFinished detecting communities. Found", len(set(self.labels)), 'communities')
         else:print(f'{datetime.now}\tUsing predfined labels provided by user')

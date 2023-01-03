@@ -22,7 +22,7 @@ import pygam as pg
 from sklearn.preprocessing import normalize
 from typing import Optional, Union
 #from utils_via import *
-from pyVIA.utils_via import * 
+from pyVIA.utils_via import * #
 import random
 from scipy.spatial.distance import pdist, squareform
 from sklearn.preprocessing import StandardScaler
@@ -503,11 +503,12 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
 
     # single-cell branch probability evolution probability
     n_terminal_clusters = len(marker_lineages)
-    fig_ncols = min(4, len(marker_lineages))
-    fig_nrows, mod = divmod(len(marker_lineages), fig_ncols)
-    if mod ==0: fig_nrows=fig_nrows
+    fig_ncols = min(4, n_terminal_clusters)
+    fig_nrows, mod = divmod(n_terminal_clusters, fig_ncols)
+    if mod ==0:
+        if fig_nrows==0: fig_nrows+=1
+        else: fig_nrows=fig_nrows
     if mod != 0:        fig_nrows+=1
-
 
     fig, axs = plt.subplots(fig_nrows,fig_ncols,dpi=dpi)
 
@@ -523,7 +524,8 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
                 majority_composition = func_mode(list(np.asarray(via_fine.true_label)[loc_labels]))
 
                 if fig_nrows ==1:
-                    plot_sc_pb(axs[c], fig, embedding, p1_sc_bp[:, loc_ts_current], ti= str(ts_current)+'-'+str(majority_composition), cmap_name=cmap_name, scatter_size=scatter_size, fontsize=fontsize)
+                    if fig_ncols ==1:plot_sc_pb(axs, fig, embedding, p1_sc_bp[:, loc_ts_current], ti= str(ts_current)+'-'+str(majority_composition), cmap_name=cmap_name, scatter_size=scatter_size, fontsize=fontsize)
+                    else: plot_sc_pb(axs[c], fig, embedding, p1_sc_bp[:, loc_ts_current], ti= str(ts_current)+'-'+str(majority_composition), cmap_name=cmap_name, scatter_size=scatter_size, fontsize=fontsize)
 
                 else:
                     plot_sc_pb(axs[r,c], fig, embedding, p1_sc_bp[:, loc_ts_current], ti= str(ts_current)+'-'+str(majority_composition), cmap_name=cmap_name, scatter_size=scatter_size, fontsize=fontsize)
@@ -569,8 +571,17 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
                 print(f"{datetime.now()}\tRevised Cluster level path on sc-knnGraph from Root Cluster {via_fine.root[p1_cc[ti-1]]} to Terminal Cluster {ts_current} along path: {revised_cluster_path}")
                 ti += 1
             fig.patch.set_visible(False)
-            if fig_nrows==1: axs[c].axis('off')
-            else: axs[r,c].axis('off')
+            if fig_nrows==1:
+                if fig_ncols ==1:
+                    axs.axis('off')
+                    axs.grid(False)
+                else:
+                    axs[c].axis('off')
+                    axs[c].grid(False)
+            else:
+                axs[r,c].axis('off')
+                axs[r, c].grid(False)
+
     return fig, axs
 
 def draw_clustergraph(via_object, type_data='gene', gene_exp='', gene_list='', arrow_head=0.1,
@@ -1575,6 +1586,7 @@ def get_gene_expression(via0, gene_exp:pd.DataFrame, cmap:str='jet', dpi:int=150
                                 axs[r, c].set_ylabel('Intensity', fontsize=fontsize_)
                             axs[r,c].spines['top'].set_visible(False)
                             axs[r,c].spines['right'].set_visible(False)
+                            axs[r, c].grid(False)
                         else:
                             axs[c].plot(xval, yg, color=cmap_[i_terminal], linewidth=linewidth, zorder=3,   label=f"Lineage:{via0.terminal_clusters[i_terminal]}")
                             axs[c].set_title(gene_i, fontsize=fontsize_)
@@ -1587,10 +1599,15 @@ def get_gene_expression(via0, gene_exp:pd.DataFrame, cmap:str='jet', dpi:int=150
                                 axs[ c].set_ylabel('Intensity', fontsize=fontsize_)
                             axs[c].spines['top'].set_visible(False)
                             axs[c].spines['right'].set_visible(False)
+                            axs[c].grid(False)
                 i_gene+=1
             else:
-                if fig_nrows > 1: axs[r,c].axis('off')
-                else: axs[c].axis('off')
+                if fig_nrows > 1:
+                    axs[r,c].axis('off')
+                    axs[r, c].grid(False)
+                else:
+                    axs[c].axis('off')
+                    axs[c].grid(False)
     return fig, axs
 
 def draw_trajectory_gams(via_coarse, via_fine=None, embedding: ndarray=None, idx:Optional[list]=None,

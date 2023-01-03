@@ -12,15 +12,15 @@ import phate
 import os.path
 
 
-print(os.path.abspath(phate.__file__))
 import seaborn as sns
 
 from pyVIA.core import *
 #from core_working_ import *
 import pyVIA.datasets_via as datasets
 import matplotlib as mpl
-
-
+#import pyVIA.core as via
+#print(os.path.abspath(via.__file__))
+print(os.path.abspath(phate.__file__))
 
 sc.settings.set_figure_params(dpi=120, facecolor='white') #or whichever facecolor e.g. black, 'white'
 def cellrank_Human(ncomps=80, knn=30, v0_random_seed=7):
@@ -109,7 +109,7 @@ def adata_preprocess(adata, n_top_genes=1000, log=True):
     return adata
 
 
-def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
+def main_Human(ncomps=80, knn=30, v0_random_seed=10, run_palantir_func=False):
     '''
     df = pd.read_csv('/home/shobi/Trajectory/Datasets/HumanCD34/pca_components_importance_500hvg.csv')
     print(df)
@@ -237,9 +237,10 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
              too_big_factor=0.3,
              root_user=root_user, dataset=dataset, preserve_disconnected=True, random_seed=v0_random_seed,
               is_coarse=True, pseudotime_threshold_TS=10,
-             neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1, edgebundle_pruning_twice=True, embedding=tsnem )# do_compute_embedding=True, embedding_type='via-mds')#,#embedding=adata_counts.obsm['X_umap'])  # *.4 root=1,
+             neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1, edgebundle_pruning_twice=True, embedding=tsnem)#, user_defined_terminal_group=['pDC','ERY1', 'ERY3', 'MONO1','mDC (cDC)','PRE_B2'] )# do_compute_embedding=True, embedding_type='via-mds')#,#embedding=adata_counts.obsm['X_umap'])  # *.4 root=1,
     #user_defined_terminal_group=['pDC','MONO1','MEGA1']
     v0.run_VIA()
+    print('type of labels', type(v0.labels))
     f, ax, ax1 = draw_piechart_graph(via0=v0, linewidth_edge=3)
     ax1.set_title('pseudotime')
     ax.set_title('reference cell types')
@@ -265,15 +266,20 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
     #ad[:,'CD34'].X.flatten().tolist()
     draw_sc_lineage_probability(v0, embedding = tsnem)
     plt.show()
-    #draw_sc_lineage_probability(v0, embedding=tsnem, marker_lineages=[2,4,6,9])
-    #plt.show()
+    draw_sc_lineage_probability(v0, embedding=tsnem, marker_lineages=[2])
+    plt.show()
+
+    plot_edge_bundle(via_object=v0)
+    plt.show()
 
     marker_genes = ['ITGA2B', 'IL3RA', 'IRF8', 'MPO', 'CSF1R', 'GATA2', 'CD79B', 'CD34', 'GATA1']
     print('dfmagic', df_magic.head())
 
-    plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_magic, cmap='plasma', marker_lineages=[2,3,5,6,9,12,16,17])
-    plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_magic, cmap='plasma',
-                             marker_lineages=[ 12, 16, 17])
+    plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_magic, cmap='plasma', marker_lineages=[6,3,5])
+
+    get_gene_expression(via0=v0, gene_exp=df_magic, marker_genes=marker_genes)
+    plt.show()
+    get_gene_expression(via0=v0, gene_exp=df_magic, marker_genes=marker_genes, marker_lineages=[6,3,5])
     #plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_magic, cmap='plasma', marker_lineages=[16], normalize=False) #looks bad if you dont normalize since some genes are more highly expressed
     plt.show()
 
@@ -284,6 +290,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=7, run_palantir_func=False):
 
     via_streamplot(v0, embedding=tsnem, scatter_size=50, title='original tsne')
     plt.show()
+
 
 
     draw_trajectory_gams(v0, embedding=tsnem, draw_all_curves=False)
@@ -725,7 +732,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     adata_counts.uns['iroot'] = np.flatnonzero(adata_counts.obs['group_id'] == paga_root)[0]  # 'T1_M1'#'M1'
 
     if dataset == 'Toy4':
-        jac_std_global = 0.15  # 1
+        jac_std_global = 0.05#0.15  # 1
     else:
         jac_std_global = 0.05#0.15#0.15
     import umap
@@ -746,8 +753,8 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     X_pca= adata_counts.obsm['X_pca'][:, 0:ncomps]
     print('root user', root_user, print(true_label))
     #optionally do kmeans or pass in cluster labels
-    from sklearn.cluster import KMeans
-    kmeans = KMeans(n_clusters=20, random_state=1).fit(X_pca)
+    #from sklearn.cluster import KMeans
+    #kmeans = KMeans(n_clusters=20, random_state=1).fit(X_pca)
     #labels=kmeans.labels_
 
     #self.labels = kmeans.labels_.flatten().tolist()
@@ -758,10 +765,10 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
              too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset=dataset,
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              random_seed=random_seed, piegraph_arrow_head_width=0.2,
-             piegraph_edgeweight_scalingfactor=1.0,  resolution_parameter=1, embedding=embedding)  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6'] #embedding_type='via-mds', do_compute_embedding=True,, user_defined_terminal_group=['M6','M8','M2','M7']
+             piegraph_edgeweight_scalingfactor=1.0,  resolution_parameter=1, do_compute_embedding=True, embedding_type='via-umap')#, embedding=embedding)  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6'] #embedding_type='via-mds', do_compute_embedding=True,, user_defined_terminal_group=['M6','M8','M2','M7']
     v0.run_VIA()
     print(f'{datetime.now()}\tFor random seed: {random_seed}, the first sc markov pt are', v0.single_cell_pt_markov[0:10])
-    draw_sc_lineage_probability(v0, embedding=embedding)
+    draw_sc_lineage_probability(v0, embedding=embedding, marker_lineages=[3,4,6,9])#[10,5,1,0,2]) #Toy3)
     plt.show()
     #draw_sc_lineage_probability(v0, embedding=embedding,marker_lineages=[5,10])
     #plt.show()
@@ -779,8 +786,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
         plt.show()
     get_gene_expression(v0, gene_exp=df_genes, marker_genes=['Gene0', 'Gene1', 'Gene2'])
     plt.show()
-    draw_sc_lineage_probability(v0, embedding=embedding)
-    plt.show()
+
 
     hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1, initial_bandwidth=0.02, decay=0.7)
 
@@ -3021,7 +3027,7 @@ def main1():
 
 
 def main():
-    dataset = 'Toy3'  #
+    dataset = 'Human'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
 
