@@ -1,8 +1,13 @@
 Release History
 ===============
+
+Version 0.1.71
+-------------
+- small bugfixes in plotting functions
+
 Version 0.1.70
 -------------
-- fixed ``draw_sc_lineage_probability() to allow plotting single lineage
+- fixed `draw_sc_lineage_probability()` to allow plotting single lineage
 
 Version 0.1.68
 -------------
