@@ -765,8 +765,16 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
              too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset=dataset,
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              random_seed=random_seed, piegraph_arrow_head_width=0.2,
-             piegraph_edgeweight_scalingfactor=1.0,  resolution_parameter=1, do_compute_embedding=True, embedding_type='via-umap')#, embedding=embedding)  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6'] #embedding_type='via-mds', do_compute_embedding=True,, user_defined_terminal_group=['M6','M8','M2','M7']
+             piegraph_edgeweight_scalingfactor=1.0,  resolution_parameter=1, do_compute_embedding=True, embedding_type='via-mds')#, embedding=embedding)  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6'] #embedding_type='via-mds', do_compute_embedding=True,, user_defined_terminal_group=['M6','M8','M2','M7']
     v0.run_VIA()
+    '''
+    via_mds1 = via_mds(via_object=v0)
+    f, ax = plot_scatter(embedding=via_mds1, labels=v0.true_label)
+    plt.show()
+    via_umap1 = run_umap_hnsw(X_input=v0.data, graph=v0.csr_full_graph)
+    f, ax = plot_scatter(embedding=via_umap1, labels=v0.true_label)
+    plt.show()
+    '''
     print(f'{datetime.now()}\tFor random seed: {random_seed}, the first sc markov pt are', v0.single_cell_pt_markov[0:10])
     draw_sc_lineage_probability(v0, embedding=embedding, marker_lineages=[3,4,6,9])#[10,5,1,0,2]) #Toy3)
     plt.show()
@@ -774,18 +782,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     #plt.show()
 
     #v0.embedding = embedding
-    df_genes = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
 
-    if dataset_name=='Toy3':
-        f, axlist = plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_genes, marker_lineages=[5,7,8,9,10])
-        axlist[-1].set_xlabel("pseudotime", fontsize=20)
-        plt.show()
-    if dataset_name=='Toy4':
-        f, axlist = plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_genes, marker_lineages=[])
-        axlist[-1].set_xlabel("pseudotime", fontsize=20)
-        plt.show()
-    get_gene_expression(v0, gene_exp=df_genes, marker_genes=['Gene0', 'Gene1', 'Gene2'])
-    plt.show()
 
 
     hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1, initial_bandwidth=0.02, decay=0.7)
@@ -806,6 +803,18 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
                     text_labels=True,
                      sc_labels=true_label)
 
+    plt.show()
+    df_genes = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
+
+    if dataset_name=='Toy3':
+        f, axlist = plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_genes, marker_lineages=[5,7,8,9,10])
+        axlist[-1].set_xlabel("pseudotime", fontsize=20)
+        plt.show()
+    if dataset_name=='Toy4':
+        f, axlist = plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_genes, marker_lineages=[])
+        axlist[-1].set_xlabel("pseudotime", fontsize=20)
+        plt.show()
+    get_gene_expression(v0, gene_exp=df_genes, marker_genes=['Gene0', 'Gene1', 'Gene2'])
     plt.show()
 
     print('draw piechart graph')
@@ -3027,7 +3036,7 @@ def main1():
 
 
 def main():
-    dataset = 'Human'  #
+    dataset = 'Toy3'  #
     # dataset = 'mESC'  # 'EB'#'mESC'#'Human'#,'Toy'#,'Bcell'  # 'Toy'
     if dataset == 'Human':
 

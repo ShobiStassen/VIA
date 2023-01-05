@@ -480,6 +480,7 @@ class VIA:
         If you dont have time-series labels to adjust the construction of the single-cell graph, you can try using the
         pseudotime (single-cell level) to achieve the same sequencing effect. However, since the pseudo-times are derived from
         the original unguided structure, there may not neccessarily be a large visible impact on the graph structure
+
         :param neighbors: ndarray (n_cells x n_neighbors) original unguided knn graph structure
         :param distances: ndarray (n_cell x n_neighbors)
         :param k_reverse: (int) default = 10
@@ -543,6 +544,7 @@ class VIA:
     def get_terminal_clusters_user_defined_(self, user_defined_terminal_cell:list=[], user_defined_terminal_group:list=[]):
         '''
         Allow the user to optionally select group or cell index level terminal fates that override the automated cell fate detection
+
         :param user_defined_terminal_cell: list of cell indices corresponding to terminal fate cells
         :param user_defined_terminal_cell_group: list of group level labels corresponding to labels found int true_label, that represent cell fates
         :return: list of clusters to represent the cell fate clusters in the via-clustergraph
@@ -927,6 +929,7 @@ class VIA:
         '''
         #computes the single cell level transition directions that are later used to calculate velocity of embedding
         #based on changes at single cell level in genes and single cell level velocity
+
         :param smooth_transition:
         :param b: slope of logistic function
         :return:
@@ -1776,13 +1779,14 @@ class VIA:
                     print(f'{datetime.now()}\tRun via-mds')
                     #n_milestones = min(self.nsamples, max(10000, int(0.1*self.nsamples)))
 
-                    for diffusion_i in [5]:
-                        for k_seq_i in [10]:
+                    for diffusion_i in [2]:
+                        for k_seq_i in [5]:
                             for k_mds_i in [15]:
-                                for rs_i in [self.random_seed,2,3]:
-                                    t_difference = 5 #default 2
-                                    k_project_milestones = 5
-                                    n_milestones_mds = 20000
+                                for rs_i in [self.random_seed]:
+                                    t_difference = 2
+                                    k_project_milestones = 3
+                                    n_milestones_mds = 2000
+
                                     self.embedding = via_mds(X_pca=self.data, k=k_mds_i, knn_seq=k_seq_i, k_project_milestones=k_project_milestones, diffusion_op=diffusion_i, n_milestones=n_milestones_mds, random_seed=rs_i,  viagraph_full=self.csr_full_graph, t_difference=t_difference, time_series_labels=self.time_series_labels, saveto='', double_diffusion=False)
 
                                     str_date = str(str(datetime.now())[-3:])
@@ -1790,23 +1794,25 @@ class VIA:
                                     save_str = '/home/shobi/Trajectory/Datasets/Cao_ProtoVert/mds_theseare1000hvg/singlediffusion_viamds/1000hvg_viamds_singlediffusion_k' + str(self.knn) + '_milestones'+str(n_milestones_mds)+'_kprojectmilestones'+str(k_project_milestones)+'t_stepmds'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_rsMds'+str(rs_i)+'_'+str_date
                                     #df_mds = pd.DataFrame(self.embedding)
                                     #df_mds.to_csv( save_str+ ".csv")
+                                    '''
                                     if self.time_series_labels is None: color_labels = self.true_label
                                     else: color_labels=self.time_series_labels
                                     if (isinstance(color_labels[0], str)) == True:
                                         categorical = True
                                     else:
                                         categorical = False
-                                    f1, ax =plot_scatter(embedding=self.embedding,labels=color_labels,title='via-mds', categorical=categorical)
-                                    savefig_ = save_str+ 'stage.png'
-                                    f1.set_size_inches(10, 10)
-                                    f1.savefig(savefig_, facecolor='white', transparent=False)
-
-                                    if self.time_series_labels is not None:
-                                        f2, ax2 = plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-mds', categorical=True)
-                                        savefig_ = save_str+ 'celltype.png'
-                                        f2.set_size_inches(10, 10)
-                                        f2.savefig(savefig_, facecolor='white', transparent=False)
+                                    #f1, ax =plot_scatter(embedding=self.embedding,labels=color_labels,title='via-mds', categorical=categorical)
+                                    #savefig_ = save_str+ 'stage.png'
+                                    #f1.set_size_inches(10, 10)
+                                    #f1.savefig(savefig_, facecolor='white', transparent=False)
+                
+                                    #if self.time_series_labels is not None:
+                                        #f2, ax2 = plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-mds', categorical=True)
+                                        #savefig_ = save_str+ 'celltype.png'
+                                        #f2.set_size_inches(10, 10)
+                                        #f2.savefig(savefig_, facecolor='white', transparent=False)
                                     #plt.show()
+                                    '''
 
                 elif self.embedding_type == 'via-force':
                     print(f'{datetime.now()}\tRun via-force')
@@ -2521,7 +2527,7 @@ class VIA:
 
         if self.embedding is not None:
             plot_scatter(embedding=self.embedding, labels = self.single_cell_pt_markov, sc_index_terminal_states = tsi_list, title='pseudotime and terminal states', cmap='plasma', true_labels=self.true_label )
-            plt.show()
+
             plot_scatter(embedding=self.embedding, labels=self.true_label,
                          sc_index_terminal_states=tsi_list, title='lineage and terminal states', cmap='rainbow',
                          true_labels=self.labels)

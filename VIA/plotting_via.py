@@ -85,7 +85,7 @@ def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3,
     :param categorical: bool default =True
     :param via_object:
     :param sc_index_terminal_states: list of integers corresponding to one cell in each of the terminal states
-    :param color_dict: {'true_label_group_1': #COLOR,'true_label_group_2': #COLOR2,....}
+    :param color_dict: {'true_label_group_1': #COLOR,'true_label_group_2': #COLOR2,....} where the dictionary keys correspond to the provided labels
     :param true_labels: list of single cell labels used to annotate the terminal states
     :return: matplotlib pyplot fig, ax
     '''
@@ -183,7 +183,7 @@ def via_forcelayout(X_pca, viagraph_full: csr_matrix=None, k: int = 10,
     :param n_milestones:
     :param time_series_labels:
     :param knn_seq:
-    :return:
+    :return: ndarray
     '''
     # use the csr_full_graph from via and subsample it.
     # but this results in a very fragmented graph because the subsampling index is too small a fraction of the total number of possible edges.
@@ -260,40 +260,51 @@ def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None,
             random_seed: int = 0, diffusion_op: int = 1, n_milestones=2000, time_series_labels: list = [],
             knn_seq: int = 5, k_project_milestones:int = 3, t_difference:int=2, saveto='', embedding_type:str='mds', double_diffusion:bool=False) -> ndarray:
     '''
-    :param via_object
+
+    Fast computation of a 2D embedding
+    FOR EXAMPLE:
+    v0.embedding = via.via_mds(via_object = v0)
+    via.plot_scatter(embedding = v0.embedding, labels = v0.true_labels)
+
+    :param via_object:
     :param X_pca: dimension reduced (only if via_object is not passed)
     :param viagraph_full: optional. if calling before or without via, then None and a milestone graph will be computed. if calling after or from within via, then we can use the via-graph to reinforce the layout of the milestone graph
     :param k:(int) number of knn for the via_mds reinforcement graph on milestones. 5-20 are reasonable
-    :param random_seed: (int)
-    :param t_diffusion: (int) default 1 higher values generate more smoothing
-    :param n_milestones: (int)
-    :param time_series_labels: (list) numerical values representing some sequentual information
-    :param knn_seq: (int) if time-series data is available, augment the knn with sequential neighbors (2-10 are reasonable values)
-    :param embedding_type: (str) default = 'mds' or set to 'umap'
+    :param random_seed: int
+    :param t_diffusion: int default 1 higher values generate more smoothing
+    :param n_milestones: int
+    :param time_series_labels: list numerical values representing some sequentual information
+    :param knn_seq: int if time-series data is available, augment the knn with sequential neighbors (2-10 are reasonable values)
+    :param embedding_type: str default = 'mds' or set to 'umap'
     :param double_diffusion: bool default is False. To achieve sharper strokes/lineages, set to True
+    :param k_project_milestones: int number of milestones in the milestone-knngraph used to compute the single-cell projection
     :return: numpy array of size n_samples x 2
     '''
 
     # use the csr_full_graph from via and subsample it.
     # but this results in a very fragmented graph because the subsampling index is too small a fraction of the total number of possible edges.
     # only works if you take a high enough percentage of the original samples
+    #however, omitting the integration of csr_full_graph also compromises the ability of the embedding to better reflect the underlying trajectory in terms of global structure
 
     print(f"{datetime.now()}\tCommencing Via-MDS")
     if via_object is not None:
         if X_pca is None: X_pca = via_object.data
         if viagraph_full is None: viagraph_full=via_object.csr_full_graph
     n_samples = X_pca.shape[0]
+
     if n_milestones is None:
         n_milestones = min(n_samples,max(2000, int(0.01*n_samples)))
+    if n_milestones > n_samples:
+        n_milestones = min(n_samples, max(2000, int(0.01 * n_samples)))
+        print(f"{datetime.now()}\tResetting n_milestones to {n_milestones} as n_samples > original n_milestones")
+
     np.random.seed(random_seed)
+
     milestone_indices = random.sample(range(X_pca.shape[0]), n_milestones) #this is sampling without replacement
     if viagraph_full is not None:
-
         milestone_knn = viagraph_full[milestone_indices]  #
         milestone_knn = milestone_knn[:, milestone_indices]
         milestone_knn = normalize(milestone_knn, axis=1)
-
-
 
     knn_struct = construct_knn_utils(X_pca[milestone_indices, :], knn=k)
     # we need to add the new knn (milestone_knn_new) built on the subsampled indices to ensure connectivity. o/w graph is fragmented if only relying on the subsampled graph
@@ -379,7 +390,7 @@ def run_umap_hnsw(  X_input:ndarray , graph:csr_matrix, n_components:int=2, alph
     :param distance_metric:
     :param layout: ndarray This is required if the init_pos is set to 'via'. layout should then = via0.graph_node_pos (which is a list of lists)
     :param cluster_membership:
-    :return:
+    :return: ndarray of shape (nsamples,n_components)
     '''
 
     #X_input = via0.data
@@ -457,6 +468,7 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
         else:
             print(f'automatically setting embedding to {via_coarse.embedding_type}')
             embedding = via_coarse.embedding
+
     if idx is None: idx = np.arange(0, via_coarse.nsamples)
     #G = via_coarse.full_graph_shortpath
     n_original_comp, n_original_comp_labels = connected_components(via_coarse.csr_full_graph, directed=False)
@@ -681,15 +693,15 @@ def draw_clustergraph(via_object, type_data='gene', gene_exp='', gene_list='', a
         ax_i.axis('off')
     fig.patch.set_visible(False)
     return fig, axs
-def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '',size_scatter:int=3, alpha_scatter:float = 0.3 ,headwidth_bundle=0.1, headwidth_alpha=0.8, arrow_frequency=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False):
+def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '',size_scatter:int=3, alpha_scatter:float = 0.3 ,headwidth_bundle:float=0.1, headwidth_alpha:float=0.8, arrow_frequency:float=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False):
 
     '''
 
     Edges can be colored by time-series numeric labels, pseudotime, or gene expression. If not specificed then time-series is chosen if available, otherwise falls back to pseudotime. to use gene expression the sc_labels_expression is provided as a list.
-    To specify other numeric sequential data provide a list of sc_labels_sequential = [] n_samples in length
+    To specify other numeric sequential data provide a list of sc_labels_sequential = [] n_samples in length. via_object.embedding must be an ndarray of shape (nsamples,2)
 
     :param hammer_bundle_dict: dictionary with keys: hammerbundle object with coordinates of all the edges to draw. If hammer_bundle and layout are None, then this will be computed internally
-    :param via_object: type via object, if hammerbundle_dict is None, then you must provide a via_object
+    :param via_object: type via object, if hammerbundle_dict is None, then you must provide a via_object. Ensure that via_object has embedding attribute
     :param layout: coords of cluster nodes and optionally also contains the numeric value associated with each cluster (such as time-stamp) layout[['x','y','numeric label']] sc/cluster/milestone level
     :param CSM: cosine similarity matrix. cosine similarity between the RNA velocity between neighbors and the change in gene expression between these neighbors. Only used when available
     :param velocity_weight: percentage weightage given to the RNA velocity based transition matrix
@@ -704,12 +716,12 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
             if this is None then the edges are colored by length to distinguish short and long range edges
     :param arrow_frequency: 0.05. higher means fewer arrows
     :param n_milestones: int  None. if no hammerbundle_dict is provided, but via_object is provided, then the user can specify level of granularity by setting the n_milestones. otherwise it will be automatically selected
-    :param scale_scatter_size_pop:bool=False
-    :param sc_labels_expression: list of single cell numeric values used for coloring edges and nodes of corresponding milestones mean expression levels (len n_single_cell samples)
+    :param scale_scatter_size_pop: bool default False
+    :param sc_labels_expression: list single cell numeric values used for coloring edges and nodes of corresponding milestones mean expression levels (len n_single_cell samples)
             edges can be colored by time-series numeric labels, pseudotime, or gene expression. If not specificed then time-series is chosen if available, otherwise falls back to pseudotime. to use gene expression the sc_labels_expression is provided as a list
-    :param sc_labels_sequential: list of single cell numeric sequential values used for directionality inference as replacement for  pseudotime or v0.time_series_labels (len n_samples single cell)
-    :param sc_labels:list None list of single-cell level labels (categorial or discrete set of numerical values) to label the nodes
-    :param text_labels:bool False if you want to label the nodes based on sc_labels (or true_label if via_object is provided)
+    :param sc_labels_sequential: list single cell numeric sequential values used for directionality inference as replacement for  pseudotime or v0.time_series_labels (len n_samples single cell)
+    :param sc_labels: list None list of single-cell level labels (categorial or discrete set of numerical values) to label the nodes
+    :param text_labels: bool False if you want to label the nodes based on sc_labels (or true_label if via_object is provided)
     :return: axis with bundled edges plotted
     '''
 
@@ -881,9 +893,9 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                 loc_milestone = np.where(np.asarray(sc_milestone_labels)==i)[0]
 
                 mode_label = func_mode(list(np.asarray(sc_labels)[loc_milestone]))
-                if scale_scatter_size_pop==True: ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=milestone_numeric_values_rgba[i],
+                if scale_scatter_size_pop==True: ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=np.array([milestone_numeric_values_rgba[i]]),
                            alpha=alpha_scatter, edgecolors='None', label=mode_label)
-                else:ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled, c=milestone_numeric_values_rgba[i],
+                else:ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled, c=np.array([milestone_numeric_values_rgba[i]]),
                            alpha=alpha_scatter, edgecolors='None', label=mode_label)
 
                 ax.text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=6, color="black")
@@ -1141,10 +1153,10 @@ def animated_streamplot(via_coarse, embedding , density_grid=1,
  linewidth=0.5,min_mass = 1, cutoff_perc = None,scatter_size=500, scatter_alpha=0.2,marker_edgewidth=0.1, smooth_transition=1, smooth_grid=0.5, color_scheme = 'annotation', other_labels=[] , b_bias=20, n_neighbors_velocity_grid=None, fontsize=8, alpha_animate=0.7,
                         cmap_scatter = 'rainbow', cmap_stream='Blues', segment_length=1, saveto='/home/shobi/Trajectory/Datasets/animation.gif',use_sequentially_augmented=False, facecolor_='white', random_seed=0):
     '''
-    Draw Animated vector plots
+    Draw Animated vector plots. the Saved .gif file saved at the saveto address, is the best for viewing the animation as the fig, ax output can be slow
 
-    :param via_coarse:
-    :param embedding:
+    :param via_coarse: viaobject
+    :param embedding: ndarray (nsamples,2) umap, tsne, via-umap, via-mds
     :param density_grid:
     :param linewidth:
     :param min_mass:
@@ -1169,7 +1181,7 @@ def animated_streamplot(via_coarse, embedding , density_grid=1,
     :param color_stream: string like 'white'. will override cmap_stream
     :param segment_length:
 
-    :return: fig, ax. the Saved .gif file is the best for viewing the animation as the ax output can be slow
+    :return: fig, ax.
     '''
     import tqdm
 
@@ -1180,7 +1192,9 @@ def animated_streamplot(via_coarse, embedding , density_grid=1,
     import matplotlib.patheffects as PathEffects
 
     #import cartopy.crs as ccrs
-
+    if embedding is None:
+        embedding = via_coarse.embedding
+        if embedding is None: print(f'ERROR: please provide input parameter embedding of ndarray with shape (nsamples, 2)')
     V_emb = via_coarse._velocity_embedding(embedding, smooth_transition, b=b_bias, use_sequentially_augmented=use_sequentially_augmented)
 
     V_emb *= 10 #the velocity of the samples has shape (n_samples x 2).*100
@@ -1359,33 +1373,6 @@ def animated_streamplot(via_coarse, embedding , density_grid=1,
     plt.show()
     return fig, ax
 
-
-def via_clustergraph_bundle(via0, std_edgebundle_pruning:float = 0.15):
-    '''
-
-    :param via0:
-    :param std_edgebundle_pruning:
-    :return: edgebundle
-    '''
-
-
-    edgeweights_layout, edges_layout, comp_labels_layout = pruning_clustergraph(via0.cluster_graph_csr_not_pruned,
-                                                                                global_pruning_std=std_edgebundle_pruning,
-                                                                                preserve_disconnected=True,
-                                                                                preserve_disconnected_after_pruning=True)
-
-    # layout = locallytrimmed_g.layout_fruchterman_reingold(weights='weight') #uses non-clipped weights but this can skew layout due to one or two outlier edges
-    layout_g = ig.Graph(edges_layout, edge_attrs={'weight': edgeweights_layout}).simplify(combine_edges='sum')
-    layout_g_csr = get_sparse_from_igraph(layout_g, weight_attr='weight')
-    weights_for_layout = np.asarray(layout_g_csr.data)
-    # clip weights to prevent distorted visual scale in layout
-    weights_for_layout = np.clip(weights_for_layout, np.percentile(weights_for_layout, 10),
-                                 np.percentile(weights_for_layout, 90))
-    weights_for_layout = list(weights_for_layout)
-    graph = ig.Graph(list(zip(*layout_g_csr.nonzero())), edge_attrs={'weight': weights_for_layout})
-    layout = graph.layout_fruchterman_reingold(weights='weight')
-    hammer_bundle = make_edgebundle_viagraph(layout, graph)
-    return hammer_bundle
 
 def via_streamplot(via_coarse, embedding:ndarray=None , density_grid:float=0.5, arrow_size:float=0.7, arrow_color:str = 'k',
 arrow_style="-|>",  max_length:int=4, linewidth:float=1,min_mass = 1, cutoff_perc:int = 5,scatter_size:int=500, scatter_alpha:float=0.5,marker_edgewidth:float=0.1, density_stream:int = 2, smooth_transition:int=1, smooth_grid:float=0.5, color_scheme:str = 'annotation', add_outline_clusters:bool=False, cluster_outline_edgewidth = 0.001,gp_color = 'white', bg_color='black' , dpi=300 , title='Streamplot', b_bias=20, n_neighbors_velocity_grid=None, other_labels:list = None,use_sequentially_augmented=False, cmap_str:str='rainbow'):
@@ -2005,10 +1992,10 @@ def plot_edgebundle_viagraph(ax=None, hammer_bundle=None, layout:ndarray=None, C
     :param edge_color:
     :param headwidth_bundle: headwidth of arrows used in bundled edges
     :param arrow_frequency: min dist between arrows (bundled edges otherwise have overcrowding of arrows)
-    :param show_direction=True will draw arrows along the lines to indicate direction
-    :param plot_clusters:bool=False When this function is called on its own (and not from within draw_piechart_graph() then via_object must be provided
-    :param ax_text:bool=True. Show labels of the clusters with the cluster population and PARC cluster label
-    :param fontsize:float = 9 Font size of labels
+    :param show_direction: bool default True. will draw arrows along the lines to indicate direction
+    :param plot_clusters: bool default False. When this function is called on its own (and not from within draw_piechart_graph() then via_object must be provided
+    :param ax_text: bool default True. Show labels of the clusters with the cluster population and PARC cluster label
+    :param fontsize: float default 9 Font size of labels
     :return: fig, ax with bundled edges plotted
     '''
     return_fig_ax = False #return only the ax
@@ -2137,13 +2124,13 @@ def plot_edgebundle_viagraph(ax=None, hammer_bundle=None, layout:ndarray=None, C
         return fig, ax
     else: return ax
 
-def slow_sklearn_mds(via_graph: csr_matrix, X_pca:ndarray, t_diff_op:int=1):
+def _slow_sklearn_mds(via_graph: csr_matrix, X_pca:ndarray, t_diff_op:int=1):
     '''
 
     :param via_graph: via_graph = v0.csr_full_graph #single cell knn graph representation based on hnsw
     :param t_diff_op:
     :param X_pca ndarray adata_counts.obsm['X_pca'][:, 0:ncomps]
-    :return:
+    :return: ndarray
     '''
     from sklearn.preprocessing import normalize
 
@@ -2173,14 +2160,15 @@ def slow_sklearn_mds(via_graph: csr_matrix, X_pca:ndarray, t_diff_op:int=1):
     # X_mds = squareform(pdist(adata_counts.obsm['X_pca'][:, 0:ncomps+20])) #no diffusion makes is less streamlined and compact. more fuzzy
     return X_mds
 
-
 def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:str=None, ax_text=True, dpi=150,headwidth_arrow = 0.1, alpha_edge=0.4, linewidth_edge=2, edge_color='darkblue',reference=None, show_legend:bool=True, pie_size_scale:float=0.8, fontsize:float=8):
     '''
-    plot two subplots with a clustergraph level representation of the viagraph showing true-label composition and pseudotime/gene expression
+    plot two subplots with a clustergraph level representation of the viagraph showing true-label composition (lhs) and pseudotime/gene expression (rhs)
+    Returns matplotlib figure with two axes that plot the clustergraph using edge bundling
+             left axis shows the clustergraph with each node colored by annotated ground truth membership.
+             right axis shows the same clustergraph with each node colored by the pseudotime or gene expression
 
-    :param via0: is class VIA (the same function also exists as a method of the class as it is called during the TI analysis when VIA is being generated,
-    but we offer it outside for consistency with other plotting tools and for usage after teh TI is complete.
-    :param type_data:string  default 'pt' for pseudotime colored nodes. or 'gene' (RHS subplot)
+    :param via0: is class VIA (the same function also exists as a method of the class and an external plotting function
+    :param type_data: string  default 'pt' for pseudotime colored nodes. or 'gene'
     :param gene_exp: list of values (column of dataframe) corresponding to feature or gene expression to be used to color nodes at CLUSTER level
     :param title: string
     :param cmap: default None. automatically chooses coolwarm for gene expression or viridis_r for pseudotime
@@ -2189,17 +2177,11 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:s
     :param headwidth_bundle: default = 0.1. width of arrowhead used to directed edges
     :param reference: None or list. list of categorical (str) labels for cluster composition of the piecharts (LHS subplot) length = n_samples.
     :param pie_size_scale: float default=0.8 scaling factor of the piechart nodes
-    :return: matplotlib figure with two axes that plot the clustergraph using edge bundling
-             left axis shows the clustergraph with each node colored by annotated ground truth membership.
-             right axis shows the same clustergraph with each node colored by the pseudotime or gene expression
-             returns f, ax, ax1
+    :return: f, ax, ax1
     '''
-    # type_data can be 'pt' pseudotime or 'gene' for gene expression
-
 
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True, dpi=dpi)
-
 
     node_pos = via0.graph_node_pos
 
@@ -2252,7 +2234,6 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:s
     trans2 = ax.transAxes.inverted().transform
     pie_axs = []
     pie_size_ar = ((group_pop - np.min(group_pop)) / (np.max(group_pop) - np.min(group_pop)) + 0.5) / 10  # 10
-    # print('pie_size_ar', pie_size_ar)
 
     for node_i in range(n_groups):
 
@@ -2305,11 +2286,11 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:s
                 c_edge.append('gray')
                 l_width.append(0.0)
 
-        gp_scaling = 1000 / max(group_pop)  # 500 / max(group_pop)
-        # print(gp_scaling, 'gp_scaling')
+        gp_scaling = 1000 / max(group_pop)
+
         group_pop_scale = group_pop * gp_scaling * 0.5
         ax_i=plot_edgebundle_viagraph(ax_i, via0.hammerbundle_cluster, layout=via0.graph_node_pos,CSM=via0.CSM, velocity_weight=via0.velo_weight, pt=pt,headwidth_bundle=headwidth_arrow, alpha_bundle=alpha_edge, linewidth_bundle=linewidth_edge, edge_color=edge_color)
-        ## ax_i.plot(hammer_bundle.x, hammer_bundle.y, 'y', zorder=2, linewidth=2, color='gray', alpha=0.8)
+
         im1 = ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap=cmap,
                            edgecolors=c_edge,
                            alpha=1, zorder=3, linewidth=l_width)
