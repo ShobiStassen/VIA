@@ -26,6 +26,147 @@ from pyVIA.utils_via import * #
 import random
 from scipy.spatial.distance import pdist, squareform
 from sklearn.preprocessing import StandardScaler
+
+
+def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=None, sc_pt:list = None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, milestone_labels:list=[], sc_labels_numeric:list=None, weighted:bool=True, global_visual_pruning:float=0.5, terminal_cluster_list:list=[], single_cell_lineage_prob:ndarray=None, random_state:int=0):
+    '''
+    # Perform Edgebundling of edges in a milestone level to return a hammer bundle of milestone-level edges. This is more granular than the original parc-clusters but less granular than single-cell level and hence also less computationally expensive
+    # requires some type of embedding (n_samples x 2) to be available
+
+    :param embedding: optional (not required if via_object is provided) embedding single cell. also looks nice when done on via_mds as more streamlined continuous diffused graph structure. Umap is a but "clustery"
+    :param graph: optional (not required if via_object is provided) igraph single cell graph level
+    :param via_object: via_object (best way to run this function by simply providing via_object)
+    :param sc_graph: igraph graph set as the via attribute self.ig_full_graph (affinity graph)
+    :param initial_bandwidth: increasing bw increases merging of minor edges
+    :param decay: increasing decay increases merging of minor edges #https://datashader.org/user_guide/Networks.html
+    :param milestone_labels: default list=[]. Usually autocomputed. but can provide as single-cell level labels (clusters, groups, which function as milestone groupings of the single cells)
+    :param sc_labels_numeric:list=None (default) automatically selects the sequential numeric time-series values in
+    :param terminal_cluster_list: list (default []) set to via_object.terminal_clusters
+    :return: dictionary containing keys: hb_dict['hammerbundle'] = hb hammerbundle class with hb.x and hb.y containing the coords
+                hb_dict['milestone_embedding'] dataframe with 'x' and 'y' columns for each milestone and hb_dict['edges'] dataframe with columns ['source','target'] milestone for each each and ['cluster_pop'], hb_dict['sc_milestone_labels'] is a list of milestone label for each single cell
+
+    '''
+    if embedding is None:
+        if via_object is not None: embedding = via_object.embedding
+
+    if sc_graph is None:
+        if via_object is not None: sc_graph =via_object.ig_full_graph
+    if embedding is None:
+        if via_object is None:
+            print(f'{datetime.now()}\tERROR: Please provide via_object')
+            return
+        else:
+            print(f'{datetime.now()}\tWARNING: VIA will now autocompute an embedding. It would be better to precompute an embedding using embedding = via_umap() or via_mds() and setting this as the embedding attribute via_object = embedding.')
+            embedding = via_mds(via_object=via_object, random_seed=random_state)
+    n_samples = embedding.shape[0]
+    if n_milestones is None:
+        n_milestones = min(n_samples,max(100, int(0.01*n_samples)))
+    #milestone_indices = random.sample(range(n_samples), n_milestones)  # this is sampling without replacement
+    if len(milestone_labels)==0:
+        print(f'{datetime.now()}\tStart finding milestones')
+        from sklearn.cluster import KMeans
+        kmeans = KMeans(n_clusters=n_milestones, random_state=random_state).fit(embedding)
+        milestone_labels = kmeans.labels_.flatten().tolist()
+        print(f'{datetime.now()}\tEnd milestones')
+        #plt.scatter(embedding[:, 0], embedding[:, 1], c=milestone_labels, cmap='tab20', s=1, alpha=0.3)
+        #plt.show()
+    if sc_labels_numeric is None:
+        if via_object is not None:
+            sc_labels_numeric = via_object.time_series_labels
+        else: print(f'{datetime.now()}\tWill use via-pseudotime for edges, otherwise consider providing a list of numeric labels (single cell level) or via_object')
+    if sc_pt is None:
+        sc_pt =via_object.single_cell_pt_markov
+    '''
+    numeric_val_of_milestone = []
+    if len(sc_labels_numeric)>0:
+        for cluster_i in set(milestone_labels):
+            loc_cluster_i = np.where(np.asarray(milestone_labels)==cluster_i)[0]
+            majority_ = func_mode(list(np.asarray(sc_labels_numeric)[loc_cluster_i]))
+            numeric_val_of_milestone.append(majority_)
+    '''
+    vertex_milestone_graph = ig.VertexClustering(sc_graph, membership=milestone_labels).cluster_graph(combine_edges='sum')
+
+    print(f'{datetime.now()}\tRecompute weights')
+    vertex_milestone_graph = recompute_weights(vertex_milestone_graph, Counter(milestone_labels))
+    print(f'{datetime.now()}\tpruning milestone graph based on recomputed weights')
+    #was at 0.1 global_pruning for 2000+ milestones
+    edgeweights_pruned_milestoneclustergraph, edges_pruned_milestoneclustergraph, comp_labels = pruning_clustergraph(vertex_milestone_graph,
+                                                                                                   global_pruning_std=global_visual_pruning,
+                                                                                                   preserve_disconnected=True,
+                                                                                                   preserve_disconnected_after_pruning=False, do_max_outgoing=False)
+
+    print(f'{datetime.now()}\tregenerate igraph on pruned edges')
+    vertex_milestone_graph = ig.Graph(edges_pruned_milestoneclustergraph,
+                                edge_attrs={'weight': edgeweights_pruned_milestoneclustergraph}).simplify(combine_edges='sum')
+    vertex_milestone_csrgraph = get_sparse_from_igraph(vertex_milestone_graph, weight_attr='weight')
+
+    weights_for_layout = np.asarray(vertex_milestone_csrgraph.data)
+    # clip weights to prevent distorted visual scale
+    weights_for_layout = np.clip(weights_for_layout, np.percentile(weights_for_layout, 20),
+                                 np.percentile(weights_for_layout,
+                                               80))  # want to clip the weights used to get the layout
+    #print('weights for layout', (weights_for_layout))
+    #print('weights for layout std', np.std(weights_for_layout))
+
+    weights_for_layout = weights_for_layout/np.std(weights_for_layout)
+    #print('weights for layout post-std', weights_for_layout)
+    #print(f'{datetime.now()}\tregenerate igraph after clipping')
+    vertex_milestone_graph = ig.Graph(list(zip(*vertex_milestone_csrgraph.nonzero())), edge_attrs={'weight': list(weights_for_layout)})
+
+    #layout = vertex_milestone_graph.layout_fruchterman_reingold()
+    #embedding = np.asarray(layout.coords)
+
+    #print(f'{datetime.now()}\tmake node dataframe')
+    data_node = [node for node in range(embedding.shape[0])]
+    nodes = pd.DataFrame(data_node, columns=['id'])
+    nodes.set_index('id', inplace=True)
+    nodes['x'] = embedding[:, 0]
+    nodes['y'] = embedding[:, 1]
+    nodes['pt'] = sc_pt
+    if via_object is not None:
+        terminal_cluster_list = via_object.terminal_clusters
+        single_cell_lineage_prob = via_object.single_cell_bp#_rownormed does not make a huge difference whether or not rownorming is applied.
+    if (len(terminal_cluster_list)>0) and (single_cell_lineage_prob is not None):
+        for i, c_i in enumerate(terminal_cluster_list):
+            nodes['sc_lineage_probability_'+str(c_i)] = single_cell_lineage_prob[:,i]
+    if sc_labels_numeric is not None:
+        print(f'{datetime.now()}\tSetting numeric label as time_series_labels or other sequential metadata for coloring edges')
+        nodes['numeric label'] = sc_labels_numeric
+    else:
+        print(f'{datetime.now()}\tSetting numeric label as single cell pseudotime for coloring edges')
+        nodes['numeric label'] = sc_pt
+
+    nodes['kmeans'] = milestone_labels
+    group_pop = []
+    for i in sorted(set(milestone_labels)):
+        group_pop.append(milestone_labels.count(i))
+
+    nodes_mean = nodes.groupby('kmeans').mean()
+    nodes_mean['cluster population'] = group_pop
+
+    edges = pd.DataFrame([e.tuple for e in vertex_milestone_graph.es], columns=['source', 'target'])
+
+    edges['weight0'] = vertex_milestone_graph.es['weight']
+    edges = edges[edges['source'] != edges['target']]
+
+    # seems to work better when allowing the bundling to occur on unweighted representation and later using length of segments to color code significance
+    if weighted ==True: edges['weight'] = edges['weight0']#1  # [1/i for i in edges['weight0']]np.where((edges['source_cluster'] != edges['target_cluster']) , 1,0.1)#[1/i for i in edges['weight0']]#
+    else: edges['weight'] = 1
+    print(f'{datetime.now()}\tMaking smooth edges')
+    hb = hammer_bundle(nodes_mean, edges, weight='weight', initial_bandwidth=initial_bandwidth,
+                       decay=decay)  # default bw=0.05, dec=0.7
+    # hb.x and hb.y contain all the x and y coords of the points that make up the edge lines.
+    # each new line segment is separated by a nan value
+    # https://datashader.org/_modules/datashader/bundling.html#hammer_bundle
+    #nodes_mean contains the averaged 'x' and 'y' milestone locations based on the embedding
+    hb_dict = {}
+    hb_dict['hammerbundle'] = hb
+    hb_dict['milestone_embedding'] = nodes_mean
+    hb_dict['edges'] = edges[['source','target']]
+    hb_dict['sc_milestone_labels'] = milestone_labels
+
+    return hb_dict
+
 def plot_gene_trend_heatmaps(via_object, df_gene_exp:pd.DataFrame, marker_lineages:list = [], fontsize:int=8,cmap:str='viridis', normalize:bool=True, ytick_labelrotation:int = 0, fig_width: int = 7):
     '''
 
@@ -346,7 +487,7 @@ def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None,
 
     if embedding_type == 'mds': milestone_mds = sgd_mds(via_graph=milestone_knn, X_pca=X_pca[milestone_indices, :], diff_op=diffusion_op, ndims=2,
                             random_seed=random_seed, double_diffusion=double_diffusion)  # returns an ndarray
-    elif embedding_type =='umap': milestone_mds = run_umap_hnsw(X_input=X_pca[milestone_indices, :], graph=milestone_knn)
+    elif embedding_type =='umap': milestone_mds = via_umap(X_input=X_pca[milestone_indices, :], graph=milestone_knn)
 
     print(f"{datetime.now()}\tEnd computing mds with diffusion power:{diffusion_op}")
     #TESTING
@@ -369,15 +510,16 @@ def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None,
         U_df.to_csv(saveto)
     return full_mds
 
-def run_umap_hnsw(  X_input:ndarray , graph:csr_matrix, n_components:int=2, alpha: float = 1.0, negative_sample_rate: int = 5,
+def via_umap(via_object = None, X_input: ndarray = None, graph:csr_matrix=None, n_components:int=2, alpha: float = 1.0, negative_sample_rate: int = 5,
                   gamma: float = 1.0, spread:float=1.0, min_dist:float=0.1, init_pos:Union[str, ndarray]='spectral', random_state:int=0,
                     n_epochs:int=0, distance_metric: str = 'euclidean', layout:Optional[list]=None, cluster_membership:list=[], saveto='')-> ndarray:
     '''
 
     Run dimensionality reduction using the VIA modified HNSW graph
 
-    :param X_input:
-    :param graph:
+    :param via_object: if via_object is provided then X_input and graph are ignored
+    :param X_input: ndarray nsamples x features (PCs)
+    :param graph: csr_matrix of knngraph. This usually is via's pruned, sequentially augmented sc-knn graph accessed as an attribute of via v0.csr_full_graph
     :param n_components:
     :param alpha:
     :param negative_sample_rate:
@@ -392,7 +534,12 @@ def run_umap_hnsw(  X_input:ndarray , graph:csr_matrix, n_components:int=2, alph
     :param cluster_membership:
     :return: ndarray of shape (nsamples,n_components)
     '''
-
+    if via_object is None:
+        if (X_input is None) or (graph is None):
+            print(f"{datetime.now()}\tERROR: please provide both X_input and graph")
+    else:
+        X_input = via_object.data
+        graph = via_object.csr_full_graph
     #X_input = via0.data
     n_cells = X_input.shape[0]
     #graph = graph+graph.T
@@ -435,6 +582,21 @@ def run_umap_hnsw(  X_input:ndarray , graph:csr_matrix, n_components:int=2, alph
         U_df = pd.DataFrame(X_umap)
         U_df.to_csv(saveto)
     return X_umap
+
+
+def run_umap_hnsw(via_object=None, X_input: ndarray = None, graph: csr_matrix = None, n_components: int = 2,
+                  alpha: float = 1.0, negative_sample_rate: int = 5,
+                  gamma: float = 1.0, spread: float = 1.0, min_dist: float = 0.1,
+                  init_pos: Union[str, ndarray] = 'spectral', random_state: int = 0,
+                  n_epochs: int = 0, distance_metric: str = 'euclidean', layout: Optional[list] = None,
+                  cluster_membership: list = [], saveto='') -> ndarray:
+    print(f"{datetime.now()}\tWarning: in future call via_umap() to run this function")
+
+    return via_umap(via_object=via_object, X_input=X_input, graph=graph, n_components=n_components, alpha=alpha,
+                    negative_sample_rate=negative_sample_rate,
+                    gamma=gamma, spread=spread, min_dist=min_dist, init_pos=init_pos, random_state=random_state,
+                    n_epochs=n_epochs, distance_metric=distance_metric, layout=layout,
+                    cluster_membership=cluster_membership, saveto=saveto)
 
 def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=None, idx:list=None, cmap_name='plasma', dpi=150, scatter_size =None,marker_lineages = [], fontsize:int=8):
     '''
@@ -693,7 +855,7 @@ def draw_clustergraph(via_object, type_data='gene', gene_exp='', gene_list='', a
         ax_i.axis('off')
     fig.patch.set_visible(False)
     return fig, axs
-def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '',size_scatter:int=3, alpha_scatter:float = 0.3 ,headwidth_bundle:float=0.1, headwidth_alpha:float=0.8, arrow_frequency:float=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False):
+def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '',size_scatter:int=3, alpha_scatter:float = 0.3 ,headwidth_bundle:float=0.1, headwidth_alpha:float=0.8, arrow_frequency:float=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False, lineage_pathway:list = [], dpi:int = 300, fontsize:int=6):
 
     '''
 
@@ -724,7 +886,7 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
     :param text_labels: bool False if you want to label the nodes based on sc_labels (or true_label if via_object is provided)
     :return: axis with bundled edges plotted
     '''
-
+    cmap_name = cmap
     if hammerbundle_dict is None:
         if via_object is None: print('if hammerbundle_dict is not provided, then you must provide via_object')
         else:
@@ -756,11 +918,14 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                 df = df.groupby('sc_milestone_labels').mean()
 
                 milestone_numeric_values = df['sc_expression'].values  # used to color edges
+
+
     else:
         hammer_bundle = hammerbundle_dict['hammerbundle']
         layout = hammerbundle_dict['milestone_embedding'][['x', 'y']].values
         milestone_edges = hammerbundle_dict['edges']
         milestone_numeric_values = hammerbundle_dict['milestone_embedding']['numeric label']
+
         if sc_labels_expression is not None: #if both sclabelexpression and sequential are provided, then sc_labels_expression takes precedence
             df = pd.DataFrame()
             df['sc_milestone_labels']= hammerbundle_dict['sc_milestone_labels']
@@ -768,146 +933,288 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
             df = df.groupby('sc_milestone_labels').mean()
             milestone_numeric_values = df['sc_expression'].values #used to color edges
         milestone_pt = hammerbundle_dict['milestone_embedding']['pt']
-    fig, ax = plt.subplots(facecolor=facecolor)
+    if len(lineage_pathway)== 0:
+        #fig, ax = plt.subplots(facecolor=facecolor)
+        fig_nrows, fig_ncols = 1,1
+    else:
+        n_terminal_clusters = len(lineage_pathway)
+        fig_ncols = min(3, n_terminal_clusters)
+        fig_nrows, mod = divmod(n_terminal_clusters, fig_ncols)
+        if mod ==0:
+            if fig_nrows==0: fig_nrows+=1
+            else: fig_nrows=fig_nrows
+        if mod != 0: fig_nrows+=1
+    fig, ax = plt.subplots(fig_nrows,fig_ncols,dpi=dpi)
+    counter_ = 0
+    n_real_subplots = max(len(lineage_pathway), 1)
 
-    ax.grid(False)
-    x_ = [l[0] for l in layout ]
-    y_ =  [l[1] for l in layout ]
-    #min_x, max_x = min(x_), max(x_)
-    #min_y, max_y = min(y_), max(y_)
-    delta_x =  max(x_)- min(x_)
+    for r in range(fig_nrows):
+        for c in range(fig_ncols):
+            if (counter_ < n_real_subplots):
+                if len(lineage_pathway) > 0:
+                    milestone_numeric_values = hammerbundle_dict['milestone_embedding'][
+                        'sc_lineage_probability_' + str(lineage_pathway[counter_])]
 
-    delta_y = max(y_)- min(y_)
+                x_ = [l[0] for l in layout ]
+                y_ =  [l[1] for l in layout ]
+                #min_x, max_x = min(x_), max(x_)
+                #min_y, max_y = min(y_), max(y_)
+                delta_x =  max(x_)- min(x_)
+                delta_y = max(y_)- min(y_)
 
-    layout = np.asarray(layout)
+                layout = np.asarray(layout)
+                # get each segment. these are separated by nans.
+                hbnp = hammer_bundle.to_numpy()
+                splits = (np.isnan(hbnp[:, 0])).nonzero()[0] #location of each nan values
+                edgelist_segments = []
+                start = 0
+                segments = []
+                arrow_coords=[]
+                seg_len = [] #length of a segment
+                for stop in splits:
+                    seg = hbnp[start:stop, :]
+                    segments.append(seg)
+                    seg_len.append(seg.shape[0])
+                    start = stop
 
-    # get each segment. these are separated by nans.
-    hbnp = hammer_bundle.to_numpy()
-    splits = (np.isnan(hbnp[:, 0])).nonzero()[0] #location of each nan values
-    edgelist_segments = []
-    start = 0
-    segments = []
-    arrow_coords=[]
-    seg_len = [] #length of a segment
-    for stop in splits:
-        seg = hbnp[start:stop, :]
-        segments.append(seg)
-        seg_len.append(seg.shape[0])
-        start = stop
+                min_seg_length = min(seg_len)
+                max_seg_length = max(seg_len)
+                seg_len=np.asarray(seg_len)
+                seg_len = np.clip(seg_len, a_min=np.percentile(seg_len, 10),
+                                  a_max=np.percentile(seg_len,90))
+                #mean_seg_length = sum(seg_len)/len(seg_len)
 
-    min_seg_length = min(seg_len)
-    max_seg_length = max(seg_len)
-    seg_len=np.asarray(seg_len)
-    seg_len = np.clip(seg_len, a_min=np.percentile(seg_len, 10),
-                      a_max=np.percentile(seg_len,90))
-    #mean_seg_length = sum(seg_len)/len(seg_len)
+                step = 1  # every step'th segment is plotted
 
-    step = 1  # every step'th segment is plotted
+                cmap = matplotlib.cm.get_cmap(cmap)
+                if milestone_numeric_values is not None:
+                    max_numerical_value = max(milestone_numeric_values)
+                    min_numerical_value = min(milestone_numeric_values)
 
+                seg_count = 0
 
-    cmap = matplotlib.cm.get_cmap(cmap)
-    if milestone_numeric_values is not None:
-        max_numerical_value = max(milestone_numeric_values)
-        min_numerical_value = min(milestone_numeric_values)
+                for seg in segments[::step]:
+                    do_arrow = True
 
-    seg_count = 0
+                    #seg_weight = max(0.3, math.log(1+seg[-1,2])) seg[-1,2] column index 2 has the weight information
 
-    for seg in segments[::step]:
-        do_arrow = True
+                    seg_weight=seg[-1,2]*seg_len[seg_count]/(max_seg_length-min_seg_length)##seg.shape[0] / (max_seg_length - min_seg_length)#seg.shape[0]
 
-        #seg_weight = max(0.3, math.log(1+seg[-1,2])) seg[-1,2] column index 2 has the weight information
+                    #cant' quite decide yet if sigmoid is desirable
+                    #seg_weight=sigmoid_scalar(seg.shape[0] / (max_seg_length - min_seg_length), scale=5, shift=mean_seg_length / (max_seg_length - min_seg_length))
+                    alpha_bundle =  max(seg_weight*alpha_bundle_factor,0.1)# max(0.1, math.log(1 + seg[-1, 2]))
+                    if alpha_bundle>1: alpha_bundle=1
 
-        seg_weight=seg[-1,2]*seg_len[seg_count]/(max_seg_length-min_seg_length)##seg.shape[0] / (max_seg_length - min_seg_length)#seg.shape[0]
+                    source_milestone = milestone_edges['source'].values[seg_count]
+                    target_milestone = milestone_edges['target'].values[seg_count]
 
-        #cant' quite decide yet if sigmoid is desirable
-        #seg_weight=sigmoid_scalar(seg.shape[0] / (max_seg_length - min_seg_length), scale=5, shift=mean_seg_length / (max_seg_length - min_seg_length))
-        alpha_bundle =  max(seg_weight*alpha_bundle_factor,0.1)# max(0.1, math.log(1 + seg[-1, 2]))
-        if alpha_bundle>1: alpha_bundle=1
+                    direction = milestone_pt[target_milestone] - milestone_pt[source_milestone]
+                    if direction <0: direction = -1
+                    else: direction = 1
+                    source_milestone_numerical_value = milestone_numeric_values[source_milestone]
 
+                    target_milestone_numerical_value = milestone_numeric_values[target_milestone]
+                    #print('source milestone', source_milestone_numerical_value)
+                    #print('target milestone', target_milestone_numerical_value)
+                    min_source_target_numerical_value = min(source_milestone_numerical_value,target_milestone_numerical_value)
 
+                    rgba = cmap((min_source_target_numerical_value - min_numerical_value) / (max_numerical_value - min_numerical_value))
 
-        source_milestone = milestone_edges['source'].values[seg_count]
-        target_milestone = milestone_edges['target'].values[seg_count]
+                    #else: rgba = cmap(min(seg_weight,0.95))#cmap(seg.shape[0]/(max_seg_length-min_seg_length))
+                    #if seg_weight>0.05: seg_weight=0.1
+                    #if seg_count%10000==0: print('seg weight', seg_weight)
+                    seg = seg[:,0:2].reshape(-1,2)
+                    seg_p = seg[~np.isnan(seg)].reshape((-1, 2))
 
-        direction = milestone_pt[target_milestone] - milestone_pt[source_milestone]
-        if direction <0: direction = -1
-        else: direction = 1
-        source_milestone_numerical_value = milestone_numeric_values[source_milestone]
+                    if fig_nrows == 1:
+                        if fig_ncols == 1: ax.plot(seg_p[:, 0], seg_p[:, 1],linewidth=linewidth_bundle*seg_weight, alpha=alpha_bundle, color=rgba)#edge_color )
+                        else:  ax[c].plot(seg_p[:, 0], seg_p[:, 1],linewidth=linewidth_bundle*seg_weight, alpha=alpha_bundle, color=rgba)#edge_color )
+                    else: ax[r,c].plot(seg_p[:, 0], seg_p[:, 1],linewidth=linewidth_bundle*seg_weight, alpha=alpha_bundle, color=rgba)#edge_color )
 
-        target_milestone_numerical_value = milestone_numeric_values[target_milestone]
-        #print('source milestone', source_milestone_numerical_value)
-        #print('target milestone', target_milestone_numerical_value)
-        min_source_target_numerical_value = min(source_milestone_numerical_value,target_milestone_numerical_value)
+                    if (show_arrow) & (seg_p.shape[0]>3):
+                        mid_point = math.floor(seg_p.shape[0] / 2)
 
-        rgba = cmap((min_source_target_numerical_value - min_numerical_value) / (max_numerical_value - min_numerical_value))
-        #else: rgba = cmap(min(seg_weight,0.95))#cmap(seg.shape[0]/(max_seg_length-min_seg_length))
-        #if seg_weight>0.05: seg_weight=0.1
-        #if seg_count%10000==0: print('seg weight', seg_weight)
-        seg = seg[:,0:2].reshape(-1,2)
-        seg_p = seg[~np.isnan(seg)].reshape((-1, 2))
+                        if len(arrow_coords)>0: #dont draw arrows in overlapping segments
+                            for v1 in arrow_coords:
+                                dist_ = dist_points(v1,v2=[seg_p[mid_point, 0], seg_p[mid_point, 1]])
 
-        ax.plot(seg_p[:, 0], seg_p[:, 1],linewidth=linewidth_bundle*seg_weight, alpha=alpha_bundle, color=rgba)#edge_color )
+                                if dist_< arrow_frequency*delta_x: do_arrow=False
+                                if dist_< arrow_frequency*delta_y: do_arrow=False
 
-        if (show_arrow) & (seg_p.shape[0]>3):
-            mid_point = math.floor(seg_p.shape[0] / 2)
+                        if (do_arrow==True) & (seg_p.shape[0]>3):
+                            if fig_nrows == 1:
+                                if fig_ncols == 1:
+                                    ax.arrow(seg_p[mid_point, 0], seg_p[mid_point, 1],
+                                 seg_p[mid_point + (direction * step), 0] - seg_p[mid_point, 0],
+                                 seg_p[mid_point + (direction * step), 1] - seg_p[mid_point, 1],
+                                 lw=0, length_includes_head=False, head_width=headwidth_bundle, color=rgba,shape='full', alpha= headwidth_alpha, zorder=5)
 
+                                else: ax[c].arrow(seg_p[mid_point, 0], seg_p[mid_point, 1],
+                                 seg_p[mid_point + (direction * step), 0] - seg_p[mid_point, 0],
+                                 seg_p[mid_point + (direction * step), 1] - seg_p[mid_point, 1],
+                                 lw=0, length_includes_head=False, head_width=headwidth_bundle, color=rgba,shape='full', alpha= headwidth_alpha, zorder=5)
 
-            if len(arrow_coords)>0: #dont draw arrows in overlapping segments
-                for v1 in arrow_coords:
-                    dist_ = dist_points(v1,v2=[seg_p[mid_point, 0], seg_p[mid_point, 1]])
-
-                    if dist_< arrow_frequency*delta_x: do_arrow=False
-                    if dist_< arrow_frequency*delta_y: do_arrow=False
-
-            if (do_arrow==True) & (seg_p.shape[0]>3):
-
-                ax.arrow(seg_p[mid_point, 0], seg_p[mid_point, 1],
-                     seg_p[mid_point + (direction * step), 0] - seg_p[mid_point, 0],
-                     seg_p[mid_point + (direction * step), 1] - seg_p[mid_point, 1],
-                     lw=0, length_includes_head=False, head_width=headwidth_bundle, color=rgba,shape='full', alpha= headwidth_alpha, zorder=5)
-                arrow_coords.append([seg_p[mid_point, 0], seg_p[mid_point, 1]])
-
-        seg_count+=1
-    if show_milestones == True:
-        milestone_numeric_values_rgba=[]
-        for ei, i in enumerate(milestone_numeric_values):
-            rgba_ = cmap((i - min_numerical_value) / (max_numerical_value - min_numerical_value))
-            milestone_numeric_values_rgba.append(rgba_)
-        if scale_scatter_size_pop==True:
-
-            n_samples = layout.shape[0]
-            sqrt_nsamples = math.sqrt(n_samples)
-            group_pop_scale = [math.log(6+i /sqrt_nsamples) for i in
-                               hammerbundle_dict['milestone_embedding']['cluster population']]
-            size_scatter_scaled = [size_scatter * i for i in group_pop_scale]
-        else: size_scatter_scaled = size_scatter # constant value
-
-        if text_labels==False:ax.scatter(layout[:,0], layout[:,1], s=size_scatter_scaled, c=milestone_numeric_values_rgba, alpha=alpha_scatter, edgecolors='None')
-        if text_labels == True:
-            #if text labels is true but user has not provided any labels at the sc level from which to create milestone categorical labels
-            if sc_labels is None:
-                if via_object is not None: sc_labels = via_object.true_label
-                else: print(f'{datetime.now()}\t ERROR: in order to show labels, please provide list of sc_labels at the single cell level OR via_object')
-            for i in range(layout.shape[0]):
-                sc_milestone_labels = hammerbundle_dict['sc_milestone_labels']
-                loc_milestone = np.where(np.asarray(sc_milestone_labels)==i)[0]
-
-                mode_label = func_mode(list(np.asarray(sc_labels)[loc_milestone]))
-                if scale_scatter_size_pop==True: ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=np.array([milestone_numeric_values_rgba[i]]),
-                           alpha=alpha_scatter, edgecolors='None', label=mode_label)
-                else:ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled, c=np.array([milestone_numeric_values_rgba[i]]),
-                           alpha=alpha_scatter, edgecolors='None', label=mode_label)
-
-                ax.text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=6, color="black")
+                            else: ax[r,c].arrow(seg_p[mid_point, 0], seg_p[mid_point, 1],
+                                 seg_p[mid_point + (direction * step), 0] - seg_p[mid_point, 0],
+                                 seg_p[mid_point + (direction * step), 1] - seg_p[mid_point, 1],
+                                 lw=0, length_includes_head=False, head_width=headwidth_bundle, color=rgba,shape='full', alpha= headwidth_alpha, zorder=5)
+                            arrow_coords.append([seg_p[mid_point, 0], seg_p[mid_point, 1]])
 
 
-    ax.set_facecolor(facecolor)
-    ax.axis('off')
-    time = datetime.now()
-    time = time.strftime("%H:%M")
-    title_ = extra_title_text + ' n_milestones = '+str(int(layout.shape[0])) +' time: '+time
-    ax.set_title(label=title_, color = 'orange')
-    print(f"{datetime.now()}\tFinished plot")
+                    seg_count+=1
+                if show_milestones == False:
+                    size_scatter = 0.01
+                    show_milestones=True
+                    scale_scatter_size_pop = False
+                if show_milestones == True:
+                    milestone_numeric_values_normed = []
+                    milestone_numeric_values_rgba=[]
+                    for ei, i in enumerate(milestone_numeric_values):
+                        rgba_ = cmap((i - min_numerical_value) / (max_numerical_value - min_numerical_value))
+                        color_numeric = (i - min_numerical_value) / (max_numerical_value - min_numerical_value)
+                        milestone_numeric_values_normed.append(color_numeric)
+                        milestone_numeric_values_rgba.append(rgba_)
+                    if scale_scatter_size_pop==True:
+
+                        n_samples = layout.shape[0]
+                        sqrt_nsamples = math.sqrt(n_samples)
+                        group_pop_scale = [math.log(6+i /sqrt_nsamples) for i in
+                                           hammerbundle_dict['milestone_embedding']['cluster population']]
+                        size_scatter_scaled = [size_scatter * i for i in group_pop_scale]
+                    else: size_scatter_scaled = size_scatter # constant value
+
+                    if fig_nrows == 1:
+                        if fig_ncols == 1:
+                            im = ax.scatter(layout[:, 0], layout[:, 1], s=0.01,
+                                       c=milestone_numeric_values_normed, cmap=cmap_name,
+                                       edgecolors='None') #without alpha parameter which otherwise gets passed onto the colorbar
+                            ax.scatter(layout[:,0], layout[:,1], s=size_scatter_scaled, c=milestone_numeric_values_normed, cmap= cmap_name, alpha=alpha_scatter, edgecolors='None')
+                        else:
+                            im = ax[c].scatter(layout[:, 0], layout[:, 1], s=size_scatter_scaled,
+                                               c=milestone_numeric_values_normed, cmap=cmap_name,
+                                            edgecolors='None') #without alpha parameter which otherwise gets passed onto the colorbar
+                            ax[c].scatter(layout[:,0], layout[:,1], s=size_scatter_scaled, c=milestone_numeric_values_normed,cmap= cmap_name, alpha=alpha_scatter, edgecolors='None')
+                    else:
+
+                        im = ax[r, c].scatter(layout[:,0], layout[:,1], c=milestone_numeric_values_normed, s=0.01, cmap=cmap_name,  edgecolors='none', vmin= min_numerical_value, vmax=1)  # prevent auto-normalization of colors
+                        ax[r, c].scatter(layout[:, 0], layout[:, 1], s=size_scatter_scaled,
+                                              c=milestone_numeric_values_normed, cmap=cmap_name,
+                                              alpha=alpha_scatter, edgecolors='None', vmin=min_numerical_value,
+                                              vmax=1)
+
+                    if text_labels == True:
+
+                        #if text labels is true but user has not provided any labels at the sc level from which to create milestone categorical labels
+                        if sc_labels is None:
+                            if via_object is not None: sc_labels = via_object.true_label
+                            else: print(f'{datetime.now()}\t ERROR: in order to show labels, please provide list of sc_labels at the single cell level OR via_object')
+                        for i in range(layout.shape[0]):
+                            sc_milestone_labels = hammerbundle_dict['sc_milestone_labels']
+                            loc_milestone = np.where(np.asarray(sc_milestone_labels)==i)[0]
+
+                            mode_label = func_mode(list(np.asarray(sc_labels)[loc_milestone]))
+                            if scale_scatter_size_pop==True:
+                                if fig_nrows == 1:
+                                    if fig_ncols == 1:
+                                        ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=np.array([milestone_numeric_values_rgba[i]]),
+                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                                    else:
+                                        ax[c].scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=np.array([milestone_numeric_values_rgba[i]]),
+                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                                else:
+                                    ax[r,c].scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=np.array([milestone_numeric_values_rgba[i]]),
+                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                            else:
+                                if fig_nrows == 1:
+                                    if fig_ncols == 1:
+                                        ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled, c=np.array([milestone_numeric_values_rgba[i]]),
+                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                                    else: ax[c].scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled, c=np.array([milestone_numeric_values_rgba[i]]),
+                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                                else: ax[r, c].scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled, c=np.array([milestone_numeric_values_rgba[i]]),
+                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                            if fig_nrows == 1:
+                                if fig_ncols == 1:
+                                    ax.text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=6, color="black")
+                                else:ax[c].text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=6, color="black")
+                            else: ax[r,c].text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=6, color="black")
+                time = datetime.now()
+                time = time.strftime("%H:%M")
+                if len(lineage_pathway)==0: title_ = extra_title_text + ' n_milestones = ' + str(int(layout.shape[0])) #+ ' time: ' + time
+                else: title_ = 'lineage:'+str(lineage_pathway[counter_])
+
+                if fig_nrows==1:
+                    if fig_ncols ==1:
+                        ax.axis('off')
+                        ax.grid(False)
+                        ax.spines['top'].set_visible(False)
+                        ax.spines['right'].set_visible(False)
+                        ax.set_facecolor(facecolor)
+                        ax.set_title(label=title_, color='black',fontsize=fontsize)
+                        divider = make_axes_locatable(ax)
+                        cax = divider.append_axes('right', size='5%', pad=0.05)
+                        cb = fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
+                        ax_cb = cb.ax
+                        text = ax_cb.yaxis.label
+                        font = matplotlib.font_manager.FontProperties(
+                            size=fontsize)  # family='times new roman', style='italic',
+                        text.set_font_properties(font)
+                        ax_cb.tick_params(labelsize=int(fontsize * 0.8))
+                        cb.outline.set_visible(False)
+
+                    else:
+                        ax[c].axis('off')
+                        ax[c].grid(False)
+                        ax[c].spines['top'].set_visible(False)
+                        ax[c].spines['right'].set_visible(False)
+                        ax[c].set_facecolor(facecolor)
+                        ax[c].set_title(label=title_, color='black',fontsize=fontsize)
+
+
+                        divider = make_axes_locatable(ax[c])
+                        cax = divider.append_axes('right', size='5%', pad=0.05)
+                        cb = fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
+                        ax_cb = cb.ax
+                        text = ax_cb.yaxis.label
+                        font = matplotlib.font_manager.FontProperties(
+                            size=fontsize)  # family='times new roman', style='italic',
+                        text.set_font_properties(font)
+                        ax_cb.tick_params(labelsize=int(fontsize * 0.8))
+                        cb.outline.set_visible(False)
+
+                else:
+
+                    ax[r,c].axis('off')
+                    ax[r, c].grid(False)
+                    ax[r, c].spines['top'].set_visible(False)
+                    ax[r, c].spines['right'].set_visible(False)
+                    ax[r, c].set_facecolor(facecolor)
+                    ax[r,c].set_title(label=title_, color='black', fontsize=fontsize)
+
+                    divider = make_axes_locatable(ax[r, c])
+                    cax = divider.append_axes('right', size='5%', pad=0.05)
+                    cb = fig.colorbar(im, cax=cax, orientation='vertical', label='Lineage likelihood',
+                                      cmap='plasma')
+                    ax_cb = cb.ax
+                    text = ax_cb.yaxis.label
+                    font = matplotlib.font_manager.FontProperties(
+                        size=fontsize)  # family='times new roman', style='italic',
+                    text.set_font_properties(font)
+                    ax_cb.tick_params(labelsize=int(fontsize * 0.8))
+                    cb.outline.set_visible(False)
+
+                counter_ +=1
+            else:
+                if fig_nrows==1:
+                    if fig_ncols ==1:
+                        ax.axis('off')
+                        ax.grid(False)
+                    else:
+                        ax[c].axis('off')
+                        ax[c].grid(False)
+                else:
+                    ax[r, c].axis('off')
+                    ax[r, c].grid(False)
     return fig, ax
 def animate_edge_bundle(hammerbundle_dict=None,  via_object=None, linewidth_bundle=2, n_milestones:int=None,facecolor:str='white', cmap:str = 'plasma_r', extra_title_text = '',size_scatter:int=1, alpha_scatter:float = 0.2, saveto='/home/shobi/Trajectory/Datasets/animation_default.gif', time_series_labels:list=None, sc_labels_numeric:list=None ):
 
@@ -1055,7 +1362,7 @@ def animate_edge_bundle(hammerbundle_dict=None,  via_object=None, linewidth_bund
     time = datetime.now()
     time = time.strftime("%H:%M")
     title_ = 'n_milestones = '+str(int(layout.shape[0])) +' time: '+time + ' ' + extra_title_text
-    ax.set_title(label=title_, color = 'orange')
+    ax.set_title(label=title_, color = 'black')
     print(f"{datetime.now()}\tFinished plotting edge bundle")
     if time_series_labels is not None:
         time_series_set_order = list(sorted(list(set(time_series_labels))))
@@ -1427,7 +1734,10 @@ arrow_style="-|>",  max_length:int=4, linewidth:float=1,min_mass = 1, cutoff_per
    """
 
     import matplotlib.patheffects as PathEffects
-    if embedding is None: embedding = via_coarse.embedding
+    if embedding is None:
+        embedding = via_coarse.embedding
+        if embedding is None:
+            print(f'{datetime.now()}\tWARNING: please assign ambedding attribute to via_coarse as v0.embedding = ndarray of [n_cells x 2]')
 
     V_emb = via_coarse._velocity_embedding(embedding, smooth_transition,b=b_bias, use_sequentially_augmented=use_sequentially_augmented)
 
@@ -1624,7 +1934,7 @@ def draw_trajectory_gams(via_coarse, via_fine=None, embedding: ndarray=None, idx
 
     if embedding is None:
         embedding = via_coarse.embedding
-        if embedding is None: print(f'{datetime.now()}\t ERROR please provide an embedding or compute using via_mds() or run_umap_hnsw()')
+        if embedding is None: print(f'{datetime.now()}\t ERROR please provide an embedding or compute using via_mds() or via_umap()')
     if via_fine is None:
         via_fine = via_coarse
     from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -2079,7 +2389,7 @@ def plot_edgebundle_viagraph(ax=None, hammer_bundle=None, layout:ndarray=None, C
                  seg_p[mid_point + (direction * step), 1] - seg_p[mid_point, 1],
                  lw=0, length_includes_head=False, head_width=headwidth_bundle, color=edge_color,shape='full', alpha= 0.6, zorder=5)
             arrow_coords.append([seg_p[mid_point, 0], seg_p[mid_point, 1]])
-        if plot_clusters:
+        if plot_clusters == True:
             group_pop = np.ones([layout.shape[0], 1])
 
             if via_object is not None:

@@ -911,7 +911,7 @@ class VIA:
 
         weights = csr_matrix((weights, (rows, cols)), shape=(n_cells, n_clus))
         bp_array_sc = weights.dot(bp_array_clus)
-        bp_array_sc /= np.max(bp_array_sc, axis=0)  # divide cell probability by max value in that column
+        bp_array_sc /= np.max(bp_array_sc, axis=0)  # divide cell probability by max value in that column so that rare lineages dont have distortedly low lineage probabilities
 
         for i, label_ts in enumerate(self.terminal_clusters): #list(set(self.terminal_clusters))
 
@@ -1660,7 +1660,7 @@ class VIA:
                 #adjacency_augmented.data.fill(1)
 
                 '''
-                embedding = run_umap_hnsw(self.data, adjacency_augmented, n_epochs=100, min_dist=0.5, spread=1, distance_metric = 'euclidean')
+                embedding = via_umap(self.data, adjacency_augmented, n_epochs=100, min_dist=0.5, spread=1, distance_metric = 'euclidean')
                 plt.scatter(embedding[:, 0], embedding[:, 1], c=self.time_series_labels, cmap='viridis', s=2, alpha=0.3)
                 title = 'euc' + 'k_kseq_pc' + str(self.knn) + '_' + str(
                     self.knn_sequential) + '_' + str(self.data.shape[1])
@@ -1747,7 +1747,7 @@ class VIA:
 
                     distance_metric = 'euclidean' #'cosine'
                     print(f'distance metric {distance_metric} and min_dist {min_dist}')
-                    self.embedding = run_umap_hnsw(X_input=self.data, graph=self.csr_full_graph, n_epochs=100,  spread=1,
+                    self.embedding = via_umap(X_input=self.data, graph=self.csr_full_graph, n_epochs=100,  spread=1,
                                   distance_metric=distance_metric, min_dist=min_dist, saveto='', random_state=self.random_seed) #default min_dist = 0.1
 
                     title_umap='via-umap knn/pc/knnseq:' + str(self.knn) + '/' + str(
@@ -2336,7 +2336,7 @@ class VIA:
             bp_array = df_graph[pd_columnnames_terminal].values
             bp_array[np.isnan(bp_array)] = 1e-8
 
-            bp_array = bp_array / bp_array.sum(axis=1)[:, None]
+            bp_array = bp_array / bp_array.sum(axis=1)[:, None] #row normalization at the cluster level
             bp_array[np.isnan(bp_array)] = 1e-8
 
             for ei, ii in enumerate(loc_compi):
@@ -2367,8 +2367,15 @@ class VIA:
         self.node_degree_list = node_deg_list
         print(f"{datetime.now()}\tBegin projection of pseudotime and lineage likelihood")
         self.single_cell_bp, self.single_cell_pt_markov = self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
-        #print('scmarkov', self.single_cell_pt_markov[0:10])
+        #the single_cell_bp are not re-rownormalized. In fact we scale each column (lineage) by the max value in the lineage (column) to prevent rarer/smaller lineages from being under-represented.
+        # to get a row-normalized results of the single-cell branching probabilities, we offer single_cell_bp_rownormed as an attribute so that the probabilities of each cell sum to 1.
 
+        single_cell_bp_rownormed= np.nan_to_num(self.single_cell_bp, nan=0.0, posinf=0.0, neginf=0.0)
+        # row normalize
+        row_sums = single_cell_bp_rownormed.sum(axis=1)
+        single_cell_bp_rownormed = single_cell_bp_rownormed / row_sums[:, np.newaxis]
+        #print(f'{datetime.now()}\tCheck cell 0 of sc pb rownormed {single_cell_bp_rownormed[0, :]},{single_cell_bp_rownormed.sum(axis=1)}')
+        self.single_cell_bp_rownormed = single_cell_bp_rownormed
         self.dict_terminal_super_sub_pairs = dict_terminal_super_sub_pairs
         hitting_times = self.markov_hitting_times
 
@@ -2445,7 +2452,7 @@ class VIA:
             pt_augmented_adjacency_igraph, adjacency_augmented=self.make_pt_augmented_adjacency_igraph(neighbors=neighbors, distances=distances, k_reverse=10, knn=20)
 
             print(f'{datetime.now()}\tRun via-umap on pt-augmented knn')  # graph=csr_full_graph
-            self.embedding = run_umap_hnsw(X_input=self.data, graph=self.adjacency_pt_augmented, n_epochs=100, spread=1,
+            self.embedding = via_umap(X_input=self.data, graph=self.adjacency_pt_augmented, n_epochs=100, spread=1,
                                        distance_metric='euclidean', min_dist=0.3,
                                        saveto='/home/shobi/Trajectory/Datasets/HumanCD34/pt-aug/not_ptaug_umap_.csv')  # usually min_dist default =0.1, for cd34 0.8
 
@@ -2506,7 +2513,7 @@ class VIA:
                                                                      initial_bandwidth=initial_bandwidth, decay=decay,
                                                                      weighted=True,
                                                                      sc_labels_numeric=self.time_series_labels,
-                                                                     sc_pt=self.single_cell_pt_markov)
+                                                                     sc_pt=self.single_cell_pt_markov, terminal_cluster_list=self.terminal_clusters, single_cell_lineage_prob=self.single_cell_bp)
 
         self.labels = list(self.labels)
 

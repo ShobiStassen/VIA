@@ -240,6 +240,17 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=10, run_palantir_func=False):
              neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1, edgebundle_pruning_twice=True, embedding=tsnem)#, user_defined_terminal_group=['pDC','ERY1', 'ERY3', 'MONO1','mDC (cDC)','PRE_B2'] )# do_compute_embedding=True, embedding_type='via-mds')#,#embedding=adata_counts.obsm['X_umap'])  # *.4 root=1,
     #user_defined_terminal_group=['pDC','MONO1','MEGA1']
     v0.run_VIA()
+    draw_sc_lineage_probability(v0, embedding = tsnem)
+    plt.show()
+    #draw_sc_lineage_probability(v0, embedding=tsnem, marker_lineages=[2])
+    #plt.show()
+    plot_edge_bundle(via_object=v0, lineage_pathway=[2,3,5,6,9,12,16,17], linewidth_bundle=0.5, headwidth_bundle=1)
+
+
+    v0.hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0,
+                                                               n_milestones=100)  # optional, but just showing how to recompute with different n_milestones
+    plot_edge_bundle(via_object=v0, lineage_pathway=[2,3,5,6,9,12,16,17], linewidth_bundle=0.5, headwidth_bundle=1)
+    plt.show()
     print('type of labels', type(v0.labels))
     f, ax, ax1 = draw_piechart_graph(via0=v0, linewidth_edge=3)
     ax1.set_title('pseudotime')
@@ -264,10 +275,7 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=10, run_palantir_func=False):
     df_magic_cluster = df_magic_cluster.groupby('parc', as_index=True).mean()
     print('end magic', df_magic.shape)
     #ad[:,'CD34'].X.flatten().tolist()
-    draw_sc_lineage_probability(v0, embedding = tsnem)
-    plt.show()
-    draw_sc_lineage_probability(v0, embedding=tsnem, marker_lineages=[2])
-    plt.show()
+
 
     plot_edge_bundle(via_object=v0)
     plt.show()
@@ -767,27 +775,54 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
              random_seed=random_seed, piegraph_arrow_head_width=0.2,
              piegraph_edgeweight_scalingfactor=1.0,  resolution_parameter=1, do_compute_embedding=True, embedding_type='via-mds')#, embedding=embedding)  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6'] #embedding_type='via-mds', do_compute_embedding=True,, user_defined_terminal_group=['M6','M8','M2','M7']
     v0.run_VIA()
+
+
+    print('make new edgbune bundle')
+    #v0.embedding = None #testing automatic embedding computation
+    #v0.hammerbundle_milestone_dict = None #testing automatic hammerbundling computation
+    v0.hammerbundle_milestone_dict=make_edgebundle_milestone(via_object=v0, n_milestones=40) #optional, but just showing how to recompute with different n_milestones
+    plot_edge_bundle(via_object=v0, lineage_pathway=[10,5,7,8,9], linewidth_bundle=0.5, headwidth_bundle=2, cmap='plasma', text_labels=True, show_milestones=True, scale_scatter_size_pop=False)
+    plot_edge_bundle(via_object=v0, lineage_pathway=[7,10,9], linewidth_bundle=0.5, headwidth_bundle=2, cmap='plasma',text_labels=True, show_milestones=False, scale_scatter_size_pop=True)
+    plot_edge_bundle(via_object=v0, linewidth_bundle=0.5, headwidth_bundle=2)
+    plot_edge_bundle(via_object=v0, lineage_pathway=[5], linewidth_bundle=0.5, headwidth_bundle=2)
+    plt.show()
+    draw_sc_lineage_probability(v0, embedding=embedding, marker_lineages=[5, 7, 8])  # [10,5,1,0,2]) #Toy3)
+    plt.show()
+    hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1,
+                                                            initial_bandwidth=0.02, decay=0.7, milestone_labels=v0.labels)
+    print(f"{datetime.now()}\tPlot milestone hammer external")
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=0.3, alpha_bundle_factor=2,
+                     cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.5,scale_scatter_size_pop=True,
+                     extra_title_text='VIA graph clusters', headwidth_bundle=2.5)
+
+    plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
+                     linewidth_bundle=0.3, alpha_bundle_factor=2,
+                     cmap='viridis', facecolor='white', size_scatter=15, alpha_scatter=0.5, scale_scatter_size_pop=True,
+                     extra_title_text='Using VIA clusters for lineage pathways', headwidth_bundle=2.5, lineage_pathway=[5,7,9,10,8])
+    plt.show()
     '''
+    via_umap1 = via_umap(via_object = v0)
+    f, ax = plot_scatter(embedding=via_umap1, labels=v0.true_label)
+    plt.show()
+    
     via_mds1 = via_mds(via_object=v0)
     f, ax = plot_scatter(embedding=via_mds1, labels=v0.true_label)
     plt.show()
-    via_umap1 = run_umap_hnsw(X_input=v0.data, graph=v0.csr_full_graph)
+    via_umap1 = via_umap(X_input=v0.data, graph=v0.csr_full_graph)
     f, ax = plot_scatter(embedding=via_umap1, labels=v0.true_label)
     plt.show()
     '''
     print(f'{datetime.now()}\tFor random seed: {random_seed}, the first sc markov pt are', v0.single_cell_pt_markov[0:10])
-    draw_sc_lineage_probability(v0, embedding=embedding, marker_lineages=[3,4,6,9])#[10,5,1,0,2]) #Toy3)
-    plt.show()
+
     #draw_sc_lineage_probability(v0, embedding=embedding,marker_lineages=[5,10])
     #plt.show()
 
     #v0.embedding = embedding
 
 
-
     hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1, initial_bandwidth=0.02, decay=0.7)
 
-    print('hammer bundle dict', hammerbundle_milestone_dict.keys())
     print(f"{datetime.now()}\tPlot milestone hammer external")
     #edges can be colored by time-series numeric labels, pseudotime, or gene expression. If not specificed then time-series is chosen if available, otherwise falls back to pseudotime. to use gene expression the sc_labels_expression is provided as a list
     plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
@@ -825,6 +860,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
 
     plot_edgebundle_viagraph(via_object=v0, plot_clusters=True, title='viagraph with bundling', fontsize=10)
     plt.show()
+
 
     via_streamplot(v0, embedding, scatter_size=20)  # embedding
     plt.show()
@@ -881,7 +917,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     make_edgebundle_viagraph(via_object=v0, edgebundle_pruning=1)
     plot_edgebundle_viagraph(via_object=v0, plot_clusters=True, title='viagraph with bundling', fontsize=10)
     plt.show()
-    #embedding = run_umap_hnsw(X_input=adata_counts.obsm['X_pca'][:, 0:10], graph=(v0.csr_full_graph), n_components=2, spread=1.0, min_dist=0.5,           init_pos='spectral', random_state=1, n_epochs=100)
+    #embedding = via_umap(X_input=adata_counts.obsm['X_pca'][:, 0:10], graph=(v0.csr_full_graph), n_components=2, spread=1.0, min_dist=0.5,           init_pos='spectral', random_state=1, n_epochs=100)
     #mbedding = via_mds(graph = v0.csr_full_graph)
 
 
@@ -890,7 +926,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     #knn_struct =construct_knn_utils(X_pca[idx_sub,:])
     #embedding = mds_milestone_knn_new( X_pca=X_pca,viagraph_full=v0.csr_full_graph, k=10, n_milestones=500)
 
-    #embedding = via.run_umap_hnsw(X_input=v0.data, graph=row_stoch, n_components=2, spread=spread, min_dist=min_dist,   init_pos='spectral', random_state=random_seed_umap, n_epochs=50)
+    #embedding = via.via_umap(X_input=v0.data, graph=row_stoch, n_components=2, spread=spread, min_dist=min_dist,   init_pos='spectral', random_state=random_seed_umap, n_epochs=50)
 
     #embedding = sgd_mds(via_graph=v0.csr_full_graph,X_pca=adata_counts.obsm['X_pca'][:, 0:ncomps], t_diff_op = 3, ndims= 2, random_seed=random_seed)
 
@@ -1642,7 +1678,7 @@ def main_mESC_timeseries(knn=40, cluster_graph_pruning_std = 0.15, random_seed =
     v0.get_gene_expression(gene_exp=df_genes)
     plt.show()
     '''
-    U = run_umap_hnsw(X_input=v0.data, graph=v0.csr_full_graph, n_components=2, spread=1.0, min_dist=0.3,
+    U = via_umap(X_input=v0.data, graph=v0.csr_full_graph, n_components=2, spread=1.0, min_dist=0.3,
                       init_pos='spectral', random_state=1, n_epochs=100)
 
     U_df = pd.DataFrame(U[:, 0:2])
@@ -1899,7 +1935,7 @@ def main_mESC(knn=30, v0_random_seed=42, cluster_graph_pruning_std=.0, run_palan
     plt.show()
 
 
-    U = run_umap_hnsw(X_input=v0.data, graph=v0.csr_full_graph, n_components=2, spread=1.0, min_dist=0.1,
+    U = via_umap(X_input=v0.data, graph=v0.csr_full_graph, n_components=2, spread=1.0, min_dist=0.1,
                            init_pos='spectral', random_state=1, n_epochs=100)
     plt.scatter(U[:, 0], U[:, 1], c=v0.time_series_labels,cmap='jet', s=4, alpha=0.7)
     plt.show()

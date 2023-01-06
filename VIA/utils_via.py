@@ -25,6 +25,7 @@ from collections import Counter
 import scipy
 import pygam as pg
 from scipy.sparse.csgraph import minimum_spanning_tree, connected_components
+
 from matplotlib.animation import FuncAnimation, writers
 
 def func_mode(ll):
@@ -756,7 +757,7 @@ def cosine_sim(A,B):
 
 def make_edgebundle_viagraph(layout=None, graph=None,initial_bandwidth = 0.05, decay=0.9,edgebundle_pruning=0.5, via_object=None):
     '''
-    # Perform Edgebundling of edges in clustergraph to return a hammer bundle. hb.x and hb.y contain all the x and y coords of the points that make up the edge lines.
+    # Perform Edgebundling of edges in clustergraph of VIA to return a hammer bundle. hb.x and hb.y contain all the x and y coords of the points that make up the edge lines.
     # each new line segment is separated by a nan value
     # reference: https://datashader.org/_modules/datashader/bundling.html#hammer_bundle
     :param layout: force-directed layout coordinates of graph
@@ -802,144 +803,18 @@ def make_edgebundle_viagraph(layout=None, graph=None,initial_bandwidth = 0.05, d
     #ax.plot(hb.x, hb.y, 'y', zorder=1, linewidth=3)
     #hb.plot(x="x", y="y",figsize=(9,9))
     #plt.show()
+    '''
     if via_object is not None:
         print(f'{datetime.now()}\tUpdating the hammerbundle and graph layout of via clustergraph')
         via_object.hammerbundle_cluster = hb
         via_object.graph_node_pos = layout.coords
+    '''
     return hb
 
 
-def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=None, sc_pt:list = None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, milestone_labels:list=[], sc_labels_numeric:list=None, weighted:bool=True, global_visual_pruning:float=0.5):
+
+def _make_edgebundle_sc(embedding, sc_graph, initial_bandwidth = 0.05, decay=0.70, sc_clusterlabel:list=[]):
     '''
-    # Perform Edgebundling of edges in a milestone level to return a hammer bundle of milestone-level edges. This is more granular than the original parc-clusters but less granular than single-cell level and hence also less computationally expensive
-    # requires some type of embedding (n_samples x 2) to be available
-
-    :param embedding: embedding single cell. also looks nice when done on via_mds as more streamlined continuous diffused graph structure. Umap is a but "clustery"
-    :param graph: igraph single cell graph level
-    :param sc_graph: igraph graph set as the via attribute self.ig_full_graph (affinity graph)
-    :param initial_bandwidth: increasing bw increases merging of minor edges
-    :param decay: increasing decay increases merging of minor edges #https://datashader.org/user_guide/Networks.html
-    :param milestone_labels: default list=[]. Usually autocomputed. but can provide as single-cell level labels (clusters, groups, which function as milestone groupings of the single cells)
-    :param sc_labels_numeric:list=None (default) automatically selects the sequential numeric time-series values in
-    :return: dictionary containing keys: hb_dict['hammerbundle'] = hb hammerbundle class with hb.x and hb.y containing the coords
-                hb_dict['milestone_embedding'] dataframe with 'x' and 'y' columns for each milestone and hb_dict['edges'] dataframe with columns ['source','target'] milestone for each each and ['cluster_pop'], hb_dict['sc_milestone_labels'] is a list of milestone label for each single cell
-
-    '''
-    if embedding is None:
-        if via_object is not None: embedding = via_object.embedding
-
-    if sc_graph is None:
-        if via_object is not None: sc_graph =via_object.ig_full_graph
-    if embedding is None: print(f'{datetime.now()}\tERROR: Please provide either an embedding (single cell level) or via_object with an embedding attribute!')
-    n_samples = embedding.shape[0]
-    if n_milestones is None:
-        n_milestones = min(n_samples,max(100, int(0.01*n_samples)))
-    #milestone_indices = random.sample(range(n_samples), n_milestones)  # this is sampling without replacement
-    if len(milestone_labels)==0:
-        print(f'{datetime.now()}\tStart finding milestones')
-        from sklearn.cluster import KMeans
-        kmeans = KMeans(n_clusters=n_milestones, random_state=1).fit(embedding)
-        milestone_labels = kmeans.labels_.flatten().tolist()
-        print(f'{datetime.now()}\tEnd milestones')
-        #plt.scatter(embedding[:, 0], embedding[:, 1], c=milestone_labels, cmap='tab20', s=1, alpha=0.3)
-        #plt.show()
-    if sc_labels_numeric is None:
-        if via_object is not None:
-            sc_labels_numeric = via_object.time_series_labels
-        else: print(f'{datetime.now()}\tWill use via-pseudotime for edges, otherwise consider providing a list of numeric labels (single cell level) or via_object')
-    if sc_pt is None:
-        sc_pt =via_object.single_cell_pt_markov
-    '''
-    numeric_val_of_milestone = []
-    if len(sc_labels_numeric)>0:
-        for cluster_i in set(milestone_labels):
-            loc_cluster_i = np.where(np.asarray(milestone_labels)==cluster_i)[0]
-            majority_ = func_mode(list(np.asarray(sc_labels_numeric)[loc_cluster_i]))
-            numeric_val_of_milestone.append(majority_)
-    '''
-    vertex_milestone_graph = ig.VertexClustering(sc_graph, membership=milestone_labels).cluster_graph(combine_edges='sum')
-
-    print(f'{datetime.now()}\tRecompute weights')
-    vertex_milestone_graph = recompute_weights(vertex_milestone_graph, Counter(milestone_labels))
-    print(f'{datetime.now()}\tpruning milestone graph based on recomputed weights')
-    #was at 0.1 global_pruning for 2000+ milestones
-    edgeweights_pruned_milestoneclustergraph, edges_pruned_milestoneclustergraph, comp_labels = pruning_clustergraph(vertex_milestone_graph,
-                                                                                                   global_pruning_std=global_visual_pruning,
-                                                                                                   preserve_disconnected=True,
-                                                                                                   preserve_disconnected_after_pruning=False, do_max_outgoing=False)
-
-    print(f'{datetime.now()}\tregenerate igraph on pruned edges')
-    vertex_milestone_graph = ig.Graph(edges_pruned_milestoneclustergraph,
-                                edge_attrs={'weight': edgeweights_pruned_milestoneclustergraph}).simplify(combine_edges='sum')
-    vertex_milestone_csrgraph = get_sparse_from_igraph(vertex_milestone_graph, weight_attr='weight')
-
-    weights_for_layout = np.asarray(vertex_milestone_csrgraph.data)
-    # clip weights to prevent distorted visual scale
-    weights_for_layout = np.clip(weights_for_layout, np.percentile(weights_for_layout, 20),
-                                 np.percentile(weights_for_layout,
-                                               80))  # want to clip the weights used to get the layout
-    #print('weights for layout', (weights_for_layout))
-    #print('weights for layout std', np.std(weights_for_layout))
-
-    weights_for_layout = weights_for_layout/np.std(weights_for_layout)
-    #print('weights for layout post-std', weights_for_layout)
-    #print(f'{datetime.now()}\tregenerate igraph after clipping')
-    vertex_milestone_graph = ig.Graph(list(zip(*vertex_milestone_csrgraph.nonzero())), edge_attrs={'weight': list(weights_for_layout)})
-
-    #layout = vertex_milestone_graph.layout_fruchterman_reingold()
-    #embedding = np.asarray(layout.coords)
-
-    #print(f'{datetime.now()}\tmake node dataframe')
-    data_node = [node for node in range(embedding.shape[0])]
-    nodes = pd.DataFrame(data_node, columns=['id'])
-    nodes.set_index('id', inplace=True)
-    nodes['x'] = embedding[:, 0]
-    nodes['y'] = embedding[:, 1]
-    nodes['pt'] = sc_pt
-    if sc_labels_numeric is not None:
-        print(f'{datetime.now()}\tSetting numeric label as time_series_labels or other sequential metadata for coloring edges')
-        nodes['numeric label'] = sc_labels_numeric
-    else:
-        print(f'{datetime.now()}\tSetting numeric label as single cell pseudotime for coloring edges')
-        nodes['numeric label'] = sc_pt
-
-    nodes['kmeans'] = milestone_labels
-    group_pop = []
-    for i in sorted(set(milestone_labels)):
-        group_pop.append(milestone_labels.count(i))
-
-
-    nodes_mean = nodes.groupby('kmeans').mean()
-    nodes_mean['cluster population'] = group_pop
-
-    edges = pd.DataFrame([e.tuple for e in vertex_milestone_graph.es], columns=['source', 'target'])
-
-    edges['weight0'] = vertex_milestone_graph.es['weight']
-    edges = edges[edges['source'] != edges['target']]
-
-
-    # seems to work better when allowing the bundling to occur on unweighted representation and later using length of segments to color code significance
-    if weighted ==True: edges['weight'] = edges['weight0']#1  # [1/i for i in edges['weight0']]np.where((edges['source_cluster'] != edges['target_cluster']) , 1,0.1)#[1/i for i in edges['weight0']]#
-    else: edges['weight'] = 1
-    print(f'{datetime.now()}\tMaking smooth edges')
-
-
-    hb = hammer_bundle(nodes_mean, edges, weight='weight', initial_bandwidth=initial_bandwidth,
-                       decay=decay)  # default bw=0.05, dec=0.7
-    # hb.x and hb.y contain all the x and y coords of the points that make up the edge lines.
-    # each new line segment is separated by a nan value
-    # https://datashader.org/_modules/datashader/bundling.html#hammer_bundle
-    #nodes_mean contains the averaged 'x' and 'y' milestone locations based on the embedding
-    hb_dict = {}
-    hb_dict['hammerbundle'] = hb
-    hb_dict['milestone_embedding'] = nodes_mean
-    hb_dict['edges'] = edges[['source','target']]
-    hb_dict['sc_milestone_labels'] = milestone_labels
-    return hb_dict
-
-def make_edgebundle_sc(embedding, sc_graph, initial_bandwidth = 0.05, decay=0.70, sc_clusterlabel:list=[]):
-    '''
-
      initial_bandwidth = 0.30, decay=0.90,
     # Perform Edgebundling of edges in clustergraph to return a hammer bundle of single-cell level edges. hb.x and hb.y contain all the x and y coords of the points that make up the edge lines.
     # each new line segment is separated by a nan value
