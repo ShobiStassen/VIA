@@ -10,6 +10,10 @@ Version 0.1.73
 - 1. set attribute ``via_object.hammerbundle_milestone_dict = None` and then rereun plot_edge_bundle()
 - 2. Or ``via_object.hammerbundle_milestone_dict=make_edgebundle_milestone(via_object=v0, n_milestones=40)`` followed by ``plot_edge_bundle(...)``
 
+- Examine the single-cell lineage probabilities of each cell towards a particular terminal state using: 
+- 1. see ``via_object.single_cell_bp_rownormed``
+- 2. see ``via_object.single_cell_bp`` is actually lineage normalized so that the probabilities along a very rare lineage are not hidden. 
+
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_lineage_path_edgebundle.png?raw=true" width="600px" align="center" </a>
@@ -27,7 +31,7 @@ Version 0.1.68
 -------------
 - improved ``draw_sc_lineage_probability()`` to correctly assign subplots when ``marker_lineages = []`` is given by user as a subset of the terminal_clusters attribute of via. (corrections to the update in 0.1.57)
 - control fontsize
-- New Feature! VIA can autocompute via-umap and via-mds by passing do_compute_embedding = True and embedding_type = 'via-mds' or 'via-umap' when initializing a via object. e.g. ``v0 = via.VIA(X_data....)`` or after doing ``v0.run_via()``
+- New Feature! VIA can autocompute via-umap and via-mds by passing ``do_compute_embedding = True`` and ``embedding_type = 'via-mds' or 'via-umap'`` when initializing a via object. e.g. ``v0 = via.VIA(X_data....)`` or after doing ``v0.run_via()``
 
 Version 0.1.64
 -------------
