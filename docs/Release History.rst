@@ -1,13 +1,27 @@
 Release History
 ===============
 
+Version 0.1.73
+-------------
+- added lineage pathway visualization to improve the existing edge plotting function ``plot_edge_bundle()``
+- for ``plot_edge_bundle``, the parameter ``lineage_pathway:list = []`` can be filled with cluster labels from the list of terminal cluster lineages in in order to see the fine-grained lineage pathways along edges 
+- example:  ``plot_edge_bundle(via_object=v0, lineage_pathway=[7,10,9], linewidth_bundle=0.5, headwidth_bundle=2, cmap='plasma',text_labels=True, show_milestones=True, scale_scatter_size_pop=True)``
+- if you wish to recompute the edge based visualization with different resolution you have two options:
+- 1. set attribute ``via_object.hammerbundle_milestone_dict = None` and then rereun plot_edge_bundle()
+- 2. Or ``via_object.hammerbundle_milestone_dict=make_edgebundle_milestone(via_object=v0, n_milestones=40)`` followed by ``plot_edge_bundle(...)``
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Toy3_lineage_path_edgebundle.png?raw=true" width="600px" align="center" </a>
+
+
 Version 0.1.71
 -------------
 - small bugfixes in plotting functions
 
 Version 0.1.70
 -------------
-- fixed `draw_sc_lineage_probability()` to allow plotting single lineage
+- bugfix ``draw_sc_lineage_probability()`` to allow plotting multiple and single lineages in same plot
 
 Version 0.1.68
 -------------
@@ -41,7 +55,7 @@ Version 0.1.60
 
 Version 0.1.59
 -------------
-- corrected the auto-scaling in draw_sc_lineage_probability() so that each subplot has the same colorbar scale
+- corrected the auto-scaling in ``draw_sc_lineage_probability()`` so that each subplot has the same colorbar scale
 
 Version 0.1.58
 -------------
