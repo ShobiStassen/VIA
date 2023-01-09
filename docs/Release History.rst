@@ -4,10 +4,10 @@ Release History
 Version 0.1.73
 -------------
 - added lineage pathway visualization to improve the existing edge plotting function ``plot_edge_bundle()``
-- for ``plot_edge_bundle``, the parameter ``lineage_pathway:list = []`` can be filled with cluster labels from the list of terminal cluster lineages in in order to see the fine-grained lineage pathways along edges 
+- for ``plot_edge_bundle``, the parameter ``lineage_pathway:list = []`` can be filled with cluster labels from the list of terminal cluster lineages in order to see the fine-grained lineage pathways along edges 
 - example:  ``plot_edge_bundle(via_object=v0, lineage_pathway=[7,10,9], linewidth_bundle=0.5, headwidth_bundle=2, cmap='plasma',text_labels=True, show_milestones=True, scale_scatter_size_pop=True)``
 - if you wish to recompute the edge based visualization with different resolution you have two options:
-- 1. set attribute ``via_object.hammerbundle_milestone_dict = None` and then rereun plot_edge_bundle()
+- 1. set attribute ``via_object.hammerbundle_milestone_dict = None`` and then rereun ``plot_edge_bundle()``
 - 2. Or ``via_object.hammerbundle_milestone_dict=make_edgebundle_milestone(via_object=v0, n_milestones=40)`` followed by ``plot_edge_bundle(...)``
 
 - Examine the single-cell lineage probabilities of each cell towards a particular terminal state using: 
