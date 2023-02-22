@@ -87,9 +87,7 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
 
    Basic tutorial
    Disconnected trajectories
-   Hematopoiesis-scRNAseq
-   Using RNA-velocity
-   Time-series
+   ViaJupyter_scRNA_Hematopoiesis
    Imaging Cytometry (cell cycle)
    mESC_timeseries
    ViaJupyter_Pancreas_RNAvelocity
