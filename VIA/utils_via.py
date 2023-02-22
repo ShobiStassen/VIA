@@ -25,13 +25,31 @@ from collections import Counter
 import scipy
 import pygam as pg
 from scipy.sparse.csgraph import minimum_spanning_tree, connected_components
-
+#import utils_sampling
 from matplotlib.animation import FuncAnimation, writers
+
+import graphtools
+from scipy.spatial.distance import pdist, squareform
+from scipy.stats import spearmanr
+
+
+
+def DEMaP(data, embedding, knn=30, subsample_idx=None):
+    # https://github.com/scottgigante/DEMaP/blob/master/demap/demap.py
+    #geodesic_dist = geodesic_distance(data, knn=knn)
+    if subsample_idx is not None:
+        geodesic_dist = geodesic_dist[subsample_idx, :][:, subsample_idx]
+    geodesic_dist = squareform(geodesic_dist)
+    embedded_dist = pdist(embedding)
+    return spearmanr(geodesic_dist, embedded_dist).correlation
+
+
 
 def func_mode(ll):
     # return MODE of list ll
     # If multiple items are maximal, the function returns the first one encountered.
     return max(set(ll), key=ll.count)
+
 def get_gene_trend(via_object, marker_lineages:list=[], df_gene_exp:pd.DataFrame=None,n_splines:int=10, spline_order:int=4):
     '''
     Get the gene trend vs pseudotime for a lineage (terminal cell fate)
@@ -119,7 +137,6 @@ def pruning_clustergraph(adjacency, global_pruning_std=1, max_outgoing=30, prese
     n_comp, comp_labels = connected_components(csgraph=adjacency, directed=False, return_labels=True)
     print(f"{datetime.now()}\tGraph has {n_comp} connected components before pruning")
 
-
     if do_max_outgoing==True:
         adjacency = scipy.sparse.csr_matrix.todense(adjacency)
         row_list = []
@@ -146,7 +163,6 @@ def pruning_clustergraph(adjacency, global_pruning_std=1, max_outgoing=30, prese
         cluster_graph_csr = csr_matrix((weight_list, (row_list, col_list)), shape=adjacency.shape)
     else: cluster_graph_csr = adjacency.copy()
     n_comp, comp_labels = connected_components(csgraph=adjacency, directed=False, return_labels=True)
-    print(f"{datetime.now()}\tGraph has {n_comp} connected components before pruning")
 
     sources, targets = cluster_graph_csr.nonzero()
     mask = np.zeros(len(sources), dtype=bool)
@@ -161,10 +177,11 @@ def pruning_clustergraph(adjacency, global_pruning_std=1, max_outgoing=30, prese
 
     prev_n_comp, prev_comp_labels = n_comp, comp_labels #before pruning
     n_comp, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True) #n comp after pruning
+    print(f"{datetime.now()}\tGraph has {n_comp} connected components after pruning")
     n_comp_preserve = n_comp if preserve_disconnected_after_pruning else prev_n_comp
 
     # preserve initial disconnected components
-    if preserve_disconnected and n_comp > prev_n_comp:
+    if (preserve_disconnected==True) and (n_comp > prev_n_comp):
         Td = Tcsr.todense()
         Td[Td == 0] = 999.999
         n_comp_ = n_comp
@@ -184,23 +201,54 @@ def pruning_clustergraph(adjacency, global_pruning_std=1, max_outgoing=30, prese
                             x, y = locxy[0][i], locxy[1][i]
 
                     cluster_graph_csr[x, y] = adjacency[x, y]
+                    cluster_graph_csr[y, x] = adjacency[y, x]
+
                     n_comp_, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
                     loc_x = np.where(prev_comp_labels == i)[0]
                     len_i = len(set(comp_labels[loc_x]))
-        print(f"{datetime.now()}\tGraph has {n_comp_} connected components after reconnecting")
 
-    elif not preserve_disconnected and n_comp > 1:
+
+    elif (preserve_disconnected==False) and (n_comp > 1):
         cluster_graph_csr = connect_all_components(Tcsr, cluster_graph_csr, adjacency)
         n_comp, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
 
-    edges = list(zip(*cluster_graph_csr.nonzero()))
+    #print('sum in utils',cluster_graph_csr.sum(axis=1))
+    n_comp_, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+    print(f"{datetime.now()}\tGraph has {n_comp_} connected components after reconnecting")
+    '''
+    for i in range(n_comp_):
+        count_ = comp_labels.tolist().count(i)
+        print(f'number of clusters in component: {i} is {count_}')
+        if count_ <3: print(np.where(comp_labels == i)[0])
+    '''
+    cluster_graph_dense = cluster_graph_csr.todense()
+    sum_degree = cluster_graph_dense.sum(axis=1) #out degree #need to make it dense for proper indexing
+    cluster_graph_dense_transpose = np.transpose(cluster_graph_dense)
+    sum_degree_in0 = cluster_graph_dense_transpose.sum(axis=1)  #out degree
+    where_condition = np.where(sum_degree ==0)[0]
+    where_condition_in0 = np.where(sum_degree_in0 == 0)[0] #out degree of transpose is the same as in-degree of original graph
+
+    intersection_ = [value for value in where_condition_in0 if value in where_condition]
+    if len(intersection_)>0:
+        for i in intersection_:
+            cluster_graph_dense[i, i] = 1.0
+            print(f'handling intersection condition where a singleton cluster {i} without edges exists')
+
+    cluster_graph_csr = csr_matrix(cluster_graph_dense)
+
+    n_comp_, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False, return_labels=True)
+
+
     weights = cluster_graph_csr.data / (np.std(cluster_graph_csr.data))
+
+    edges = list(zip(*cluster_graph_csr.nonzero()))
 
     if do_max_outgoing==True: trimmed_n = (initial_links_n - final_links_n) * 100. / initial_links_n
     trimmed_n_glob = (initial_links_n - len(weights)) * 100. / initial_links_n
     if do_max_outgoing == True: print(f"{datetime.now()}\t{round(trimmed_n, 1)}% links trimmed from local pruning relative to start")
     if global_pruning_std < 0.5:
         print(f"{datetime.now()}\t{round(trimmed_n_glob, 1)}% links trimmed from global pruning relative to start")
+
     return weights, edges, comp_labels
 
 def get_sparse_from_igraph(graph: ig.Graph, weight_attr=None):
@@ -225,7 +273,7 @@ def get_sparse_from_igraph(graph: ig.Graph, weight_attr=None):
 
 
 def recompute_weights(graph: ig.Graph, label_counts: Counter):
-
+    #harmonic weights
     graph = get_sparse_from_igraph(graph, weight_attr='weight')
 
     weights, scale_factor, w_min = [], 1., 0
@@ -266,10 +314,6 @@ def affinity_milestone_knn(data, knn_struct,k:int=10, time_series_labels:list=[]
         neighbor_array = n_augmented
         distance_array = d_augmented
         print('shape neighbor array augmented ', neighbor_array.shape)
-
-
-
-
         msk = np.full_like(distance_array, True, dtype=np.bool_)
         #print('all edges', np.sum(msk))
         # Remove self-loops
@@ -323,7 +367,6 @@ def affinity_milestone_knn(data, knn_struct,k:int=10, time_series_labels:list=[]
     n_neighbors = neighbor_array.shape[1]
     n_cells = neighbor_array.shape[0]
 
-
     affinity_array = affinity_array[msk]
     rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbor_array)])[msk]
     cols = neighbor_array[msk]
@@ -353,7 +396,7 @@ def sgd_mds(via_graph: csr_matrix, X_pca, diff_op: int = 1, ndims: int = 2, rand
     :param ndims:
     :return:
     '''
-    # outlier handling of graph edges
+    # outlier handling of graph edges - handles instabilities at tails of the transition probabilities
     via_graph.data = np.clip(via_graph.data, np.percentile(via_graph.data, 10), np.percentile(via_graph.data, 90))
     row_stoch = normalize(via_graph, norm='l1', axis=1)
     row_stoch = row_stoch ** diff_op
@@ -364,7 +407,7 @@ def sgd_mds(via_graph: csr_matrix, X_pca, diff_op: int = 1, ndims: int = 2, rand
 
     temp_pca = csr_matrix(X_pca)
 
-    X_mds = row_stoch * temp_pca  # matrix multiplication to diffuse the pcs
+    X_mds = row_stoch * temp_pca  # matrix multiplication to diffuse the pcs. This is not the same as using diffusion components which are the eigenvectors of the transition matrix (in our case given by csr_full_graph)
 
 
     X_mds = squareform(pdist(X_mds.todense()))
@@ -376,7 +419,6 @@ def sgd_mds(via_graph: csr_matrix, X_pca, diff_op: int = 1, ndims: int = 2, rand
     #np.fill_diagonal(X_mds,0)
     #X_mds = squareform(pdist(temp_pca.todense()))# testing when no viagraph diffusion
 
-
     print(f'{datetime.now()}\tStarting MDS on milestone')
 
     Y_classic = classic(X_mds, n_components=ndims, random_state=random_seed)
@@ -384,8 +426,6 @@ def sgd_mds(via_graph: csr_matrix, X_pca, diff_op: int = 1, ndims: int = 2, rand
     X_mds = sgd(X_mds, n_components=ndims, random_state=random_seed, init=Y_classic)
     if double_diffusion==True: X_mds = row_stoch*X_mds #added Dec 12 10pm to test diffusion of x-mds after mds
     return X_mds
-
-
 
 
 def sgd(D, n_components=2, random_state=None, init=None):
@@ -495,11 +535,15 @@ def sequential_knn(data: np.ndarray, time_series_labels: list, neighbors: np.nda
 
     for counter, tj in enumerate(time_series_set[1:]):
         ti = time_series_set[counter]
-        #print(f"ti {ti} and tj {tj}")
+
         tj_loc = np.where(time_series_labels == tj)[0]
+
+
         ti_loc = np.where(time_series_labels == ti)[0]
-        tj_data = data[tj_loc, :]
+
         ti_data = data[ti_loc, :]
+        tj_data = data[tj_loc, :]
+
 
 
 
@@ -791,7 +835,9 @@ def make_edgebundle_viagraph(layout=None, graph=None,initial_bandwidth = 0.05, d
 
     print(f'{datetime.now()}\tMake via clustergraph edgebundle')
     data_node = [[node] + layout.coords[node] for node in range(graph.vcount())]
+
     nodes = pd.DataFrame(data_node, columns=['id', 'x', 'y'])
+
     nodes.set_index('id', inplace=True)
 
     edges = pd.DataFrame([e.tuple for e in graph.es], columns=['source', 'target'])
@@ -1355,3 +1401,275 @@ def l2_norm(x: Union[ndarray, spmatrix], axis: int = 1) -> Union[float, ndarray]
         return np.sqrt(np.einsum("ij, ij -> j", x, x))
     elif axis == 1:
         return np.sqrt(np.einsum("ij, ij -> i", x, x))
+
+
+def _median_min_distance(neighbors_distances):
+    """This function computes a graph of nearest-neighbors for each sample point in
+        'data' and returns the median of the distribution of distances between those
+        nearest-neighbors, the distance metric being specified by 'metric'.
+
+    Parameters
+    ----------
+    data : array of shape (n_samples, k_neighbors)
+        The data-set, a fraction of whose sample points will be extracted
+        by density sampling.
+
+
+    Returns
+    -------
+    median_min_dist : float
+        The median of the distribution of distances between nearest-neighbors.
+    """
+
+    median_min_dist = np.median(neighbors_distances, overwrite_input=True)
+    p1 = np.percentile(neighbors_distances, 10)
+    p2 = np.percentile(neighbors_distances, 25)
+    p3 = np.percentile(neighbors_distances, 75)
+    p4 = np.percentile(neighbors_distances, 90)
+    print(f'median, p1 to p4 {round(median_min_dist,4)}, {round(p1,4)}, {round(p2,4)}, {round(p3,4)}, {round(p4,4)}')
+    return round(median_min_dist, 4)
+
+
+def _get_local_densities(neighbors_distances, kernel_mult=1.0):
+    """For each sample point of the data-set 'data', estimate a local density in feature
+        space by counting the number of neighboring data-points within a particular
+        region centered around that sample point.
+
+    Parameters
+    ----------
+    neighbor_distances : array of shape (n_samples, n_features)
+        The data-set, a fraction of whose sample points will be extracted
+        by density sampling.
+
+    kernel_mult : float, optional (default = 2.0)
+        The kernel multiplier, which determine (in terms of the median of the distribution
+        of distances among nearest neighbors) the extent of the regions centered
+        around each sample point to consider for the computation of the local density
+        associated to that particular sample point.
+
+
+    Returns
+    -------
+    local_densities : array of shape (n_samples,)
+        The i-th entry of this vector corresponds to the local density of the i-th sample
+        point in the order of the rows of 'data'.
+    """
+
+    kernel_width = kernel_mult * _median_min_distance(neighbors_distances=neighbors_distances)
+    print('kernel multiplier', kernel_mult)
+    print(f'kernel width {kernel_width}')
+
+    N_samples = neighbors_distances.shape[0]
+
+    # local_densities = np.zeros(N_samples, dtype=int)
+
+    D = (neighbors_distances <= kernel_width)
+
+    local_densities = D.sum(axis=1)
+    print(f'local densities shape and values {local_densities.shape} {local_densities}')
+    return local_densities
+
+
+def density_sampling(neighbors_distances, local_densities=None,
+                      kernel_mult=1.5, outlier_percentile=0.005,
+                      target_percentile=0.05, desired_samples=None):
+    """The i-th sample point of the data-set 'data' is selected by density sampling
+            with a probability given by:
+
+                                          | 0 if outlier_density > LD[i];
+            P(keep the i-th data-point) = | 1 if outlier_density <= LD[i] <= target_density;
+                                          | target_density / LD[i] if LD[i] > target_density.
+
+            Here 'LD[i]' denotes the local density of the i-th sample point of the data-set,
+            whereas 'outlier_density' and 'target_density' are computed as particular percentiles
+            of that distribution of local densities.
+
+        Parameters
+        ----------
+        data : array of shape (n_samples, n_features)
+            The data-set, a fraction of whose sample points will be extracted
+            by density sampling.
+
+        local_densities : array of shape (n_samples,), optional (default = None)
+            The i-th entry of this vector corresponds to the local density of the i-th sample
+            point in the order of the rows of 'data'.
+
+        kernel_mult : float, optional (default = 2.0)
+            The kernel multiplier, which determine (in terms of the median of the distribution
+            of distances among nearest neighbors) the extent of the regions centered
+            around each sample point to consider for the computation of the local density
+            associated to that particular sample point.
+
+        outlier_percentile : float, optional (default = 0.01)
+            Specify the outlier density as a percentile of the distribution of local densities.
+
+        target_percentile : float, optional (default = 0.05)
+            Specifiy the target density as a percentile of the distribution of local densities.
+            Relevant only if 'desired_samples' is left unspecified.
+
+        desired_samples : int, optional (default = None)
+            The number of samples to be selected from the whole data-set such that members
+            of rare populations and members of more common populations are roughly
+            equally represented. To that purpose, a target density is computed that to selects about
+            'desired_samples' data-points.
+
+        Returns
+        -------
+        samples_kept : array of shape (n_selected_samples,)
+            If the 'i'-th sample point of 'data' has been selected by a given instance of
+            density sampling, number 'i' is featured in the array returned by
+            the present function.
+        """
+
+    random_state = np.random.RandomState()
+
+    if local_densities is None:
+        local_densities = _get_local_densities(neighbors_distances, kernel_mult)
+
+    outlier_density = np.percentile(local_densities, outlier_percentile)
+    target_density = np.percentile(local_densities, target_percentile)
+
+    samples_kept = np.where(local_densities > outlier_density)[0]
+    N_kept = samples_kept.size
+    print(f'{N_kept} cells are greater than outlier density')
+
+    local_densities = local_densities[samples_kept]
+
+    if desired_samples is None:
+        probs = np.divide(target_density + 0.0, local_densities)
+        ind = np.where(probs > random_state.uniform(size=N_kept))[0]
+        samples_kept = samples_kept[ind]
+    elif desired_samples <= N_kept:
+        sorted_densities = np.sort(local_densities)
+
+        temp = np.reciprocal(sorted_densities[::-1].astype(float))
+        cdf = np.cumsum(temp)[::-1]
+
+        target_density = (desired_samples + 0.0) / cdf[0]
+        if target_density > sorted_densities[0]:
+            temp = desired_samples - np.arange(1.0, N_kept + 1.0)
+            possible_targets = np.divide(temp, cdf)
+
+            ind = np.argmax(possible_targets < sorted_densities)
+            target_density = possible_targets[ind]
+
+        probs = np.divide(target_density + 0.0, local_densities)
+        ind = np.where(probs > random_state.uniform(size=N_kept))[0]
+        samples_kept = samples_kept[ind]
+    else:
+        print("\nERROR: Density_Sampling: density_sampling: 'desired_samples' has been "
+              "assigned a value of {desired_samples}, larger than {N_kept}, "
+              "the number of samples whose local densities are high enough "
+              "(i.e. excluded are the local densities in the lowest {outlier_percentile} "
+              "percentile).\n".format(**locals()))
+        kernel_mult+=0.25
+        print(f'increasing kernel multiplier by 0.25, {kernel_mult}')
+        samples_kept= density_sampling(neighbors_distances=neighbors_distances, kernel_mult=kernel_mult, desired_samples=desired_samples)
+    print(f'samples_kept are: {samples_kept.shape}, {samples_kept}')
+    return samples_kept
+
+
+def accuracy(onevsall=1, true_label=[], cluster_label=[]):
+
+    true_labels = true_label
+    Index_dict = {}
+    PARC_labels = cluster_label
+    N = len(PARC_labels)
+    n_cancer = list(true_labels).count(onevsall)
+    n_pbmc = N - n_cancer
+
+    for k in range(N):
+        Index_dict.setdefault(PARC_labels[k], []).append(true_labels[k])
+    num_groups = len(Index_dict)
+    sorted_keys = list(sorted(Index_dict.keys()))
+    error_count = []
+    pbmc_labels = []
+    thp1_labels = []
+    fp, fn, tp, tn, precision, recall, f1_score = 0, 0, 0, 0, 0, 0, 0
+
+    for kk in sorted_keys:
+        vals = [t for t in Index_dict[kk]]
+        majority_val = func_mode(vals)
+        # if majority_val == onevsall: print('cluster', kk, ' has majority', onevsall, 'with population', len(vals))
+        if kk == -1:
+            len_unknown = len(vals)
+            # print('len unknown', len_unknown)
+        if (majority_val == onevsall) and (kk != -1):
+            thp1_labels.append(kk)
+            fp = fp + len([e for e in vals if e != onevsall])
+            tp = tp + len([e for e in vals if e == onevsall])
+            list_error = [e for e in vals if e != majority_val]
+            e_count = len(list_error)
+            error_count.append(e_count)
+        elif (majority_val != onevsall) and (kk != -1):
+            pbmc_labels.append(kk)
+            tn = tn + len([e for e in vals if e != onevsall])
+            fn = fn + len([e for e in vals if e == onevsall])
+            error_count.append(len([e for e in vals if e != majority_val]))
+
+    predict_class_array = np.array(PARC_labels)
+    PARC_labels_array = np.array(PARC_labels)
+    number_clusters_for_target = len(thp1_labels)
+    for cancer_class in thp1_labels:
+        predict_class_array[PARC_labels_array == cancer_class] = 1
+    for benign_class in pbmc_labels:
+        predict_class_array[PARC_labels_array == benign_class] = 0
+    predict_class_array.reshape((predict_class_array.shape[0], -1))
+    error_rate = sum(error_count) / N
+    n_target = tp + fn
+    tnr = tn / n_pbmc
+    fnr = fn / n_cancer
+    tpr = tp / n_cancer
+    fpr = fp / n_pbmc
+
+    if tp != 0 or fn != 0: recall = tp / (tp + fn)  # ability to find all positives
+    if tp != 0 or fp != 0: precision = tp / (tp + fp)  # ability to not misclassify negatives as positives
+    if precision != 0 or recall != 0:
+        f1_score = precision * recall * 2 / (precision + recall)
+
+    majority_truth_labels = np.empty((len(true_labels), 1), dtype=object)
+    for cluster_i in set(PARC_labels):
+        cluster_i_loc = np.where(np.asarray(PARC_labels) == cluster_i)[0]
+        true_labels = np.asarray(true_labels)
+        majority_truth = func_mode(list(true_labels[cluster_i_loc]))
+        majority_truth_labels[cluster_i_loc] = majority_truth
+
+    majority_truth_labels = list(majority_truth_labels.flatten())
+    accuracy_val = [error_rate, f1_score, tnr, fnr, tpr, fpr, precision,
+                    recall, num_groups, n_target]
+
+    return accuracy_val, predict_class_array, majority_truth_labels, number_clusters_for_target
+
+def main_accuracy(true_label=[],cluster_label=[],filename = '/home/shobi/Trajectory/df_accuracy.csv'):
+    targets = list(set(true_label))
+    targets.sort()
+    N = len(true_label)
+    f1_accumulated = 0
+    f1_mean = 0
+
+    # self.majority_truth_labels = []
+    list_roc = []
+    if len(targets) > 1:
+        f1_accumulated, f1_acc_noweighting = 0, 0
+        for onevsall_val in targets:
+            # print('target is', onevsall_val)
+            vals_roc, predict_class_array, majority_truth_labels, numclusters_targetval = \
+                accuracy(onevsall=onevsall_val, true_label=true_label, cluster_label=cluster_label)
+            f1_current = vals_roc[1]
+            f1_accumulated = f1_accumulated + f1_current * (list(true_label).count(onevsall_val)) / N
+            f1_acc_noweighting = f1_acc_noweighting + f1_current
+
+            list_roc.append([onevsall_val] +
+                            vals_roc + [vals_roc[-1]/N] +[numclusters_targetval])
+
+        f1_mean = f1_acc_noweighting / len(targets)
+
+        df_accuracy = pd.DataFrame(list_roc,
+                                   columns=[ 'onevsall-target', 'error rate',
+                                            'f1-score', 'tnr', 'fnr',
+                                            'tpr', 'fpr', 'precision', 'recall', 'num_groups',
+                                            'population of target', 'percentage of population','num clusters'])
+        print(df_accuracy.head)
+        print(df_accuracy.shape)
+        df_accuracy.to_csv(filename)
+        return df_accuracy

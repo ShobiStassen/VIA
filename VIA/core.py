@@ -331,6 +331,8 @@ class VIA:
         (default = 'via-mds', other options are 'via-umap' and 'via-force'
     do_compute_embedding: bool
         (default = False) If you want an embedding (n_samples x2) to be computed on the basis of the via sc graph then set this to True
+    do_gaussian_kernel_edgeweights: bool
+        (default = False) Type of edgeweighting on the graph edges
 
 
 
@@ -341,23 +343,31 @@ class VIA:
     single_cell_pt_markov: list
         length n_samples of pseudotime
     single_cell_bp: ndarray
-        [n_lineages x n_samples] array of single cell branching probabilities towards each lineage.
+        [n_lineages x n_samples] array of single cell branching probabilities towards each lineage (lineage normalized).
+        Each column corresponds to a terminal state, in the order presented by the terminal_clusters attribute
+    single_cell_bp_normed: ndarray
+        [n_lineages x n_samples] array of single cell branching probabilities towards each lineage (cell normalized).
         Each column corresponds to a terminal state, in the order presented by the terminal_clusters attribute
     terminal_clusters: list
         list of clusters that are cell fates/ unique lineages
+    cluster_bp: ndarray
+        [n_clusters x n_terminal_states]. Lineage probability of cluster towards a particular terminal cluster state
     CSM: ndarray
         [n_cluster x n_clusters] array of cosine similarity used to weight the cluster graph transition matrix by velocity
     single_cell_transition_matrix: ndarray
         [n_samples x n_samples]
-    super_terminal_clusters:list
-        (default None) list of terminal clusters from a coarser via run
-        :param csr_full_graph:
+    terminal_clusters:list
+        (default None) list of terminal clusters
+    csr_full_graph: csr matrix of single-cell graph (augmented with sequential data when providing time_series information)
     csr_array_locally_pruned: csr matrix
     ig_full_graph:
     full_neighbor_array:
     user_defined_terminal_cell:list=[]
     user_defined_terminal_group:list=[]
     n_milestones: int = None Number of milestones in the via-mds computation (anything more than 10,000 can be computationally heavy and time consuming) Typically auto-determined within the via-mds function
+    embedding: ndarray
+        [n_cells x 2] provided by user or autocomputed with via-mds or via-umap
+
     '''
 
     def __init__(self, data:ndarray, true_label=None, dist_std_local:float=2, jac_std_global=0.15, labels:ndarray=None,
@@ -372,7 +382,11 @@ class VIA:
                  secondary_annotations:list=None, pseudotime_threshold_TS:int=30, cluster_graph_pruning_std:float=0.15,
                  visual_cluster_graph_pruning:float=0.15, neighboring_terminal_states_threshold=3, num_mcmc_simulations=1300,
                  piegraph_arrow_head_width=0.1,
-                 piegraph_edgeweight_scalingfactor=1.5, max_visual_outgoing_edges:int=2, via_coarse=None, velocity_matrix=None, gene_matrix=None, velo_weight=0.5, edgebundle_pruning=None, A_velo = None, CSM = None, edgebundle_pruning_twice=False, pca_loadings = None, time_series=False, time_series_labels:list=None, knn_sequential:int = 10, knn_sequential_reverse:int = 0,t_diff_step:int = 1,single_cell_transition_matrix = None, embedding_type:str='via-mds',do_compute_embedding:bool=False, color_dict:{}=None,user_defined_terminal_cell:list=[], user_defined_terminal_group:list=[]):
+                 piegraph_edgeweight_scalingfactor=1.5, max_visual_outgoing_edges:int=2, via_coarse=None, velocity_matrix=None,
+                 gene_matrix=None, velo_weight=0.5, edgebundle_pruning=None, A_velo = None, CSM = None, edgebundle_pruning_twice=False, pca_loadings = None, time_series=False,
+                 time_series_labels:list=None, knn_sequential:int = 10, knn_sequential_reverse:int = 0,t_diff_step:int = 1,single_cell_transition_matrix = None,
+                 embedding_type:str='via-mds',do_compute_embedding:bool=False, color_dict:{}=None,user_defined_terminal_cell:list=[], user_defined_terminal_group:list=[],
+                 do_gaussian_kernel_edgeweights:bool=False,RW2_mode:bool=False,working_dir_fp:str ='/home/shobi/Trajectory/Datasets/'):
 
 
         self.data = data
@@ -473,6 +487,9 @@ class VIA:
         self.color_dict = color_dict
         self.user_defined_terminal_cell= user_defined_terminal_cell
         self.user_defined_terminal_group = user_defined_terminal_group
+        self.do_gaussian_kernel_edgeweights = do_gaussian_kernel_edgeweights
+        self.RW2_mode = RW2_mode
+        self.working_dir_fp =working_dir_fp
 
     def make_pt_augmented_adjacency_igraph(self, neighbors: ndarray, distances: ndarray, k_reverse: int = 10,
                                            k_seq: int = 0):
@@ -910,6 +927,7 @@ class VIA:
                 weights.append(np.sum(neighboring_clus == c) / knn_sc)
 
         weights = csr_matrix((weights, (rows, cols)), shape=(n_cells, n_clus))
+
         bp_array_sc = weights.dot(bp_array_clus)
         bp_array_sc /= np.max(bp_array_sc, axis=0)  # divide cell probability by max value in that column so that rare lineages dont have distortedly low lineage probabilities
 
@@ -922,7 +940,6 @@ class VIA:
         pt = np.reshape(pt, (n_clus, 1))
         pt_sc = weights.dot(pt)
         pt_sc /= np.amax(pt_sc)
-
         return bp_array_sc, pt_sc.flatten()
 
     def sc_transition_matrix(self,smooth_transition,b=10, use_sequentially_augmented=False):
@@ -997,7 +1014,7 @@ class VIA:
             #print(argwhere.shape)
             #print('bias weight velo is anywhere nan', np.isnan(bias_weight_velo).any(), np.mean(np.array(bias_weight_velo)))
             bias_weight_velo = np.nan_to_num(bias_weight_velo)
-            2.0 * np.asarray(bias_weight_velo) / np.mean(np.array(bias_weight_velo))  # USE THIS
+            bias_weight_velo=2.0 * np.asarray(bias_weight_velo) / np.mean(np.array(bias_weight_velo))  # USE THIS
             #bias_weight_velo = np.asarray(bias_weight_velo)#
             #bias_weight_velo = np.clip(bias_weight_velo, 0, 1) #this approach zeros out negative edges
             #print('pt weight ', bias_weight_pt)
@@ -1163,6 +1180,8 @@ class VIA:
             #print('msk shape', msk.shape)
             # Remove self-loops
             msk &= (neighbors != np.arange(neighbors.shape[0])[:, np.newaxis])
+
+
             #print('msk shape', msk.shape)
         # Inverting the distances outputs values in range [0-1]. This also causes many ``good'' neighbors ending up
         # having a weight near zero (misleading as non-neighbors have a weight of zero). Therefore we scale by the
@@ -1178,17 +1197,13 @@ class VIA:
 
         elif (weights_as_inv_dist==True) & (min_max_scale==False):
 
-
             #weights = (np.mean(distances[msk]) ** 2) / (distances[msk] + distance_factor) #larger weight is a stronger edge
 
 
             #weights = 1 / (distances[msk] + distance_factor)
-            do_exp_weight=False
-            if do_exp_weight==True:
-                #print('distances')
-
-                #print('neighbors')
-
+            #do_exp_weight= True
+            if self.do_gaussian_kernel_edgeweights == True:
+                print('do_exp edge weights true in core_working')
                 stdd = np.std(distances, axis=1)
                 import numpy.ma as ma
                 import umap.umap_ as u
@@ -1200,7 +1215,7 @@ class VIA:
                 sigmas, rhos = u.smooth_knn_dist(
                     distances, k=self.knn, local_connectivity=float(1.0))
 
-                rows, cols, weights = u.compute_membership_strengths(
+                rows, cols, weights, dist_weights = u.compute_membership_strengths(
                     neighbors, distances, sigmas, rhos)
 
                 #print('local connectivity', float(distances.shape[1]))
@@ -1629,10 +1644,6 @@ class VIA:
             plt.title(str_title)
         return
 
-
-
-
-
     def do_impute(self, df_gene, magic_steps=3, gene_list=[]):
         # ad_gene is an ann data object from scanpy
         # normalize across columns to get Transition matrix.
@@ -1649,7 +1660,7 @@ class VIA:
 
             neighbors, distances = self.knn_struct.knn_query(self.data, k=self.knn) #these n, d will be used as a basis for both the clustergraph and graph which we apply community detection. These two graphs are constructed differently because in the community detection we want to emphasize dissimiliarities,
             # but the in the clustergraph we want to enhance connectivity
-            if (self.time_series is not None) and (self.time_series_labels is not None): # refine the graph for clustering (leiden) using time_series labels if available
+            if (self.time_series  == True) and (self.time_series_labels is not None): # refine the graph for clustering (leiden) using time_series labels if available
                 print(f"{datetime.now()}\tUsing time series information to guide knn graph construction ")
 
                 n_augmented, d_augmented = sequential_knn(self.data, self.time_series_labels, neighbors, distances, k_seq=self.knn_sequential, k_reverse=self.knn_sequential_reverse, num_threads=self.num_threads, distance=self.distance)
@@ -1702,9 +1713,15 @@ class VIA:
 
         if self.is_coarse:
             # Construct full graph with no pruning - used for cluster graph edges, not listed in any order of proximity
-            if (self.time_series is not None) and (self.time_series_labels is not None):
+            if (self.time_series == True) and (self.time_series_labels is not None):
 
                 csr_full_graph = adjacency_augmented.copy() #when time_series data is available
+                if self.RW2_mode:
+                    print("saving csr for RW2")
+                    from scipy.sparse import save_npz
+                    str_date = str(str(datetime.now())[-3:])
+                    print(f'Unique ID for RW2 file {str_date}')
+                    save_npz(self.working_dir_fp+'pc'+str(self.ncomp)+'_knn'+str(self.knn)+'kseq'+str(self.knn_sequential)+'krev'+str(self.knn_sequential_reverse)+'RW2_'+str_date+'.npz', csr_full_graph)
 
             # when no time-series data is available, in this iteration of weighting the edges we do not locally prune based on edge-weights becasue we intend to use all neighborhood info towards the edges in the clustergraph and ensuring the clustergraph is connected
             else: csr_full_graph = self._make_csrmatrix_noselfloop(neighbors, distances, auto_=False, min_max_scale=False, time_series=self.time_series, time_series_labels = self.time_series_labels) #no local pruning: auto_ set to false #min_max_scale=True
@@ -1728,109 +1745,16 @@ class VIA:
             # for VIA we local and global prune the vertex cluster graph *after* making the clustergraph
             self.csr_array_locally_pruned = adjacency # this graph has only been locally pruned and in the case of time-series, it is not the augmented knn. it then subsequently in later code will be subject to global pruning, followed by Leiden clustering. saving it here for non-coarse runs
 
-            if self.time_series:
+            if self.time_series == True:
                 self.csr_array_locally_pruned_augmented = adjacency_augmented #t_diff edges removed and is sequentially augmented affinity graph (no Jaccard metric is added)
             else: self.csr_array_locally_pruned_augmented=None
 
             self.csr_full_graph = csr_full_graph #for timeseries, this is the sequentially augmented graph, and later used in sc_transitions. This can also be used for hnsw_umap
-            if (self.embedding is None) & (self.do_compute_embedding==True):
-                if self.embedding_type == 'via-umap':
-                    print(f'{datetime.now()}\tRun via-umap')
-
-                    from sklearn.preprocessing import normalize
-                    #row_stoch = normalize(self.csr_full_graph, norm='l1', axis=1)
-                    ##row_stoch = row_stoch ** 3
-                    #temp_pca = csr_matrix(self.data)
-                    #X_diffused_data = row_stoch * temp_pca  # matrix multiplication to diffuse the pcs
-                    #X_input=self.data
-                    min_dist =0.1
-
-                    distance_metric = 'euclidean' #'cosine'
-                    print(f'distance metric {distance_metric} and min_dist {min_dist}')
-                    self.embedding = via_umap(X_input=self.data, graph=self.csr_full_graph, n_epochs=100,  spread=1,
-                                  distance_metric=distance_metric, min_dist=min_dist, saveto='', random_state=self.random_seed) #default min_dist = 0.1
-
-                    title_umap='via-umap knn/pc/knnseq:' + str(self.knn) + '/' + str(
-                        self.ncomp) + '/' + str(self.knn_sequential) + 'tdiff' + str(
-                        self.t_diff_step) + 'mindist' + str(
-                        min_dist)+'rs'+str(self.random_seed)
-                    if self.time_series_labels is not None:
-                        color_labels=self.time_series_labels
-                        f1, ax = plot_scatter(embedding=self.embedding, labels=color_labels, cmap='plasma', s=5,
-                                              alpha=0.5, edgecolors='None',
-                                              title=title_umap)
-                        f1.set_size_inches(10, 10)
-                        #df_umap = pd.DataFrame(self.embedding)
-                        str_date = str(str(datetime.now())[-3:])
-                        #df_umap.to_csv('/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viaumap_k'+str(self.knn)+'kseq'+str(self.knn_sequential)+'nps'+str(self.ncomp)+'tdiff'+str(self.t_diff_step)+'mindist'+str(min_dist)+'rs'+str(self.random_seed)+'stage'+str_date+".csv")
-                        #savefig_ = '/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viaumap_k'+str(self.knn)+'kseq'+str(self.knn_sequential)+'nps'+str(self.ncomp)+'tdiff'+str(self.t_diff_step)+'mindist'+str(min_dist)+'rs'+str(self.random_seed)+str_date+'stage.png'
-                        #f1.savefig(savefig_,facecolor='white', transparent=False,)
-
-
-                    #savefig_ = '/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viaumap_k'+str(self.knn)+'kseq'+str(self.knn_sequential)+'nps'+str(self.ncomp)+'tdiff'+str(self.t_diff_step)+'mindist'+str(min_dist)+'rs'+str(self.random_seed)+str_date+'celltype.png'
-                    f2, ax =plot_scatter(embedding=self.embedding, labels=self.true_label, title=title_umap, alpha=0.5,  s=5, color_dict=self.color_dict)
-                    f2.set_size_inches(10, 10)
-                    #f2.savefig(savefig_,facecolor='white', transparent=False)
-                    plt.show()
-
-
-                elif self.embedding_type =='via-mds':
-                    str_date = str(str(datetime.now())[-3:])
-                    print(f'{datetime.now()}\tRun via-mds')
-                    #n_milestones = min(self.nsamples, max(10000, int(0.1*self.nsamples)))
-
-                    for diffusion_i in [2]:
-                        for k_seq_i in [5]:
-                            for k_mds_i in [15]:
-                                for rs_i in [self.random_seed]:
-                                    t_difference = 2
-                                    k_project_milestones = 3
-                                    n_milestones_mds = 2000
-
-                                    self.embedding = via_mds(X_pca=self.data, k=k_mds_i, knn_seq=k_seq_i, k_project_milestones=k_project_milestones, diffusion_op=diffusion_i, n_milestones=n_milestones_mds, random_seed=rs_i,  viagraph_full=self.csr_full_graph, t_difference=t_difference, time_series_labels=self.time_series_labels, saveto='', double_diffusion=False)
-
-                                    str_date = str(str(datetime.now())[-3:])
-                                    #save_str = '/home/shobi/Trajectory/Datasets/WagnerZebrafish/2000hvg/mds/singlediffusion_viamds/2000hvg_viamds_singlediffusion_k' + str(self.knn) + '_milestones'+str(3000)+'_kprojectmilestones'+str(k_project_milestones)+'t_step'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_rs'+str(rs_i)+'_'+str_date
-                                    save_str = '/home/shobi/Trajectory/Datasets/Cao_ProtoVert/mds_theseare1000hvg/singlediffusion_viamds/1000hvg_viamds_singlediffusion_k' + str(self.knn) + '_milestones'+str(n_milestones_mds)+'_kprojectmilestones'+str(k_project_milestones)+'t_stepmds'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_rsMds'+str(rs_i)+'_'+str_date
-                                    #df_mds = pd.DataFrame(self.embedding)
-                                    #df_mds.to_csv( save_str+ ".csv")
-                                    '''
-                                    if self.time_series_labels is None: color_labels = self.true_label
-                                    else: color_labels=self.time_series_labels
-                                    if (isinstance(color_labels[0], str)) == True:
-                                        categorical = True
-                                    else:
-                                        categorical = False
-                                    #f1, ax =plot_scatter(embedding=self.embedding,labels=color_labels,title='via-mds', categorical=categorical)
-                                    #savefig_ = save_str+ 'stage.png'
-                                    #f1.set_size_inches(10, 10)
-                                    #f1.savefig(savefig_, facecolor='white', transparent=False)
-                
-                                    #if self.time_series_labels is not None:
-                                        #f2, ax2 = plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-mds', categorical=True)
-                                        #savefig_ = save_str+ 'celltype.png'
-                                        #f2.set_size_inches(10, 10)
-                                        #f2.savefig(savefig_, facecolor='white', transparent=False)
-                                    #plt.show()
-                                    '''
-
-                elif self.embedding_type == 'via-force':
-                    print(f'{datetime.now()}\tRun via-force')
-                    #n_milestone = min(self.nsamples, max(5000, int(0.1*self.nsamples)))
-                    n_milestones = 3000
-                    self.embedding = via_forcelayout(X_pca=self.data, viagraph_full=self.csr_full_graph, k=10, knn_seq=10, n_milestones=n_milestones)
-                    if self.time_series_labels is None: color_labels = self.true_label
-                    else:color_labels = self.time_series_labels
-                    if (isinstance(color_labels[0], str)) == True: categorical = True
-                    else:   categorical = False
-
-                    plot_scatter(embedding=self.embedding, labels=color_labels, title='via-force',categorical=categorical)
-                    plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-mds', categorical=True)
-                    plt.show()
-                else: print(f'{datetime.now()}\tNo embedding will be computed: if you wish to compute a via-embedding specify one of via-force, via-mds or via-umap' )
-
             self.full_neighbor_array = neighbors
             self.full_distance_array = distances
+
+
+
 
             # knn graph used for making trajectory drawing on the visualization
             #self.full_graph_shortpath = self.full_graph_paths(self.data, n_original_comp)
@@ -1916,7 +1840,7 @@ class VIA:
 
 
             print(f"{datetime.now()}\tFinished detecting communities. Found", len(set(self.labels)), 'communities')
-        else:print(f'{datetime.now}\tUsing predfined labels provided by user')
+        else:print(f'{datetime.now()}\tUsing predfined labels provided by user (this must be provided as an array)')
 
         # end community detection
         # do kmeans instead
@@ -1948,41 +1872,223 @@ class VIA:
 
 
         self.connected_comp_labels = comp_labels
+        #ig.graph() creates an undirected graph,in which case get_spare_from_igraph will be symmetric for each edge (u,v) and edge (v,u) is created
+        locallytrimmed_g = ig.Graph(edges_pruned_clustergraph, edge_attrs={'weight': edgeweights_pruned_clustergraph})#.simplify(combine_edges='sum') #forward biasing happens later
 
-        locallytrimmed_g = ig.Graph(edges_pruned_clustergraph, edge_attrs={'weight': edgeweights_pruned_clustergraph}).simplify(combine_edges='sum')
         locallytrimmed_sparse_vc = get_sparse_from_igraph(locallytrimmed_g, weight_attr='weight')
+
         if self.edgebundle_pruning == self.cluster_graph_pruning_std:
+
             weights_for_layout = np.asarray(locallytrimmed_sparse_vc.data)
             #clip weights to prevent distorted visual scale
             weights_for_layout= np.clip(weights_for_layout, np.percentile(weights_for_layout, 10), np.percentile(weights_for_layout, 90)) #want to clip the weights used to get the layout
             weights_for_layout = list(weights_for_layout)
             g_layout = ig.Graph(list(zip(*locallytrimmed_sparse_vc.nonzero())), edge_attrs={'weight': weights_for_layout})
 
+
         #if using a different pruning for visualized edge bundles than the one specified in self.cluster_graph_pruning_std
         else:
+
             edgeweights_layout, edges_layout, comp_labels_layout = pruning_clustergraph(graph,
                                                                                         global_pruning_std=self.edgebundle_pruning,
                                                                                         preserve_disconnected=self.preserve_disconnected,
                                                                                         preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning)
 
             #layout = locallytrimmed_g.layout_fruchterman_reingold(weights='weight') #uses non-clipped weights but this can skew layout due to one or two outlier edges
-            layout_g =ig.Graph(edges_layout, edge_attrs={'weight': edgeweights_layout}).simplify(combine_edges='sum')
+            layout_g =ig.Graph(edges_layout, edge_attrs={'weight': edgeweights_layout})#.simplify(combine_edges='sum') remving the 'combined_edges='sum' as it does not handle diagonal self loops which we require to be retained for singleton clusters that are not connected to other clusters
+
             layout_g_csr =get_sparse_from_igraph(layout_g, weight_attr='weight')
             weights_for_layout = np.asarray(layout_g_csr.data)
+
+            for i in range(weights_for_layout.shape[0]):
+                if weights_for_layout[i]==0: print(i)
             # clip weights to prevent distorted visual scale in layout
             weights_for_layout = np.clip(weights_for_layout, np.percentile(weights_for_layout, 10),  np.percentile(weights_for_layout, 90))
             weights_for_layout = list(weights_for_layout)
+
             g_layout=ig.Graph(list(zip(*layout_g_csr.nonzero())), edge_attrs={'weight': weights_for_layout})
         #the layout of the graph is determine by a pruned clustergraph and the directionality of edges will be based on the final markov pseudotimes
         #the edgeweights of the bundle-edges is determined by the distance based metrics and jaccard similarities and not by the pseudotimes
         #for the transition matrix used in the markov pseudotime and differentiation probability computations, the edges will be further biased by the hittings times and markov pseudotimes
+
         layout = g_layout.layout_fruchterman_reingold(weights='weight')
+
+        if (self.embedding is None) & (self.do_compute_embedding == True):
+            if self.embedding_type == 'via-umap':
+                print(f'{datetime.now()}\tRun via-umap')
+
+                from sklearn.preprocessing import normalize
+                # row_stoch = normalize(self.csr_full_graph, norm='l1', axis=1)
+                ##row_stoch = row_stoch ** 3
+                # temp_pca = csr_matrix(self.data)
+                # X_diffused_data = row_stoch * temp_pca  # matrix multiplication to diffuse the pcs
+                # X_input=self.data
+                for random_state in [self.random_seed]:
+                    for min_dist in [0.1]:
+                        for rw2_comp in [self.ncomp]:
+                            distance_metric = 'euclidean'  # 'cosine'
+                            print(
+                                f'distance metric {distance_metric} and min_dist {min_dist} and randomstate {random_state}')
+                            # input = self.data
+                            # '/home/shobi/Trajectory/Datasets/EB_Phate/RW2_sparse_matrix510Pp1p5_R2Wemd.csv'
+
+                            #r2w_input = pd.read_csv( '/home/shobi/Trajectory/Datasets/Cao_ProtoVert/RW2/RW2_sparse_matrix5094_pc30_knn30_krev15_kseq15_rs0.csv')
+                            #r2w_input = pd.read_csv(                            '/home/shobi/Trajectory/Datasets/Cao_ProtoVert/RW2/RW2_sparse_matrix5820_pc20_knn30_krev15_kseq15_rs0.csv')
+                            #r2w_input = pd.read_csv('/home/shobi/Trajectory/Datasets/WagnerZebrafish/RW2/knn100_pc30_kseq50RW2_sparse_matrix445.csv')
+                            #r2w_input = pd.read_csv(                            '/home/shobi/Trajectory/Datasets/EB_Phate/RW2/RW2_emd5919_knn30,kseq30krev30_pc30_rs24.csv')
+                            #r2w_input = pd.read_csv(                                '/home/shobi/Trajectory/Datasets/Pijuan_Gastrulation/RW2/pc30_knn30kseq15krev15RW2_emd_122.csv')
+                            #r2w_input = pd.read_csv(        '/home/shobi/Trajectory/Datasets/Pijuan_Gastrulation/RW2/pc30_knn30kseq15krev15RW2_emd_122.csv')
+
+                            #r2w_input = pd.read_csv('/home/shobi/Trajectory/Datasets/MouseNeuron/RW2/pc30_knn20kseq0krev0RW2_887_P20Q20.csv')#
+                            #r2w_input = pd.read_csv(                                '/home/shobi/Trajectory/Datasets/MouseNeuron/RW2/pc30_knn50kseq0krev0RW2_gaussTrue_051_P1Q1.csv')  #
+                            #r2w_input = pd.read_csv('/home/shobi/Trajectory/Datasets/MouseNeuron/RW2/pc30_knn20kseq0krev0RW2_887.csv')
+
+                            #r2w_input = pd.read_csv(                                '/home/shobi/Trajectory/Datasets/EB_Phate/RW2/pc20_knn100kseq50krev50RW2_emd029.csv')
+                            #r2w_input = pd.read_csv('/home/shobi/Trajectory/Datasets/EB_Phate/RW2/pc20_knn100kseq50krev50RW2_sparse_matrix029_P1_Q100_numwalk20.csv')
+                            r2w_input = pd.read_csv('/home/shobi/Trajectory/Datasets/MouseNeuron/RW2/pc30_P1_Q10_knn50kseq10krev10RW2_988.csv')
+                            r2w_input = r2w_input.drop(['Unnamed: 0'], axis=1).values
+                            input = r2w_input[:, 0:rw2_comp]
+                            '''
+                            from sklearn.preprocessing import normalize
+                            row_stoch = self.csr_full_graph
+                            row_stoch.data = np.clip(row_stoch.data, np.percentile(row_stoch.data, 10),
+                                                     np.percentile(row_stoch.data, 90))
+                            row_stoch = normalize(row_stoch, norm='l1', axis=1)
+                            row_stoch = row_stoch ** 2  # level of diffusion
+    
+                            temp = csr_matrix(input)
+    
+                            input = row_stoch * temp  # matrix multiplication
+                            '''
+
+                            self.embedding = via_umap(X_input=self.data, graph=self.csr_full_graph, n_epochs=100, spread=1,
+                                                      distance_metric=distance_metric, min_dist=min_dist, saveto='',
+                                                      random_state=random_state)#,init_pos='via',  cluster_membership=self.labels, layout=layout.coords )
+
+                            print(f'{datetime.now()}\tCompleted via-umap')
+                            title_umap = 'via-umap knn/pc/knnseq:' + str(self.knn) + '/' + str(
+                                self.ncomp) + '/' + str(self.knn_sequential) + '_knnreverse' + str(
+                                self.knn_sequential_reverse) + 'tdiff' + str(
+                                self.t_diff_step) + 'mindist' + str(
+                                min_dist) + 'rs' + str(self.random_seed)
+                            if self.time_series_labels is not None:
+                                color_labels = self.time_series_labels
+                                f1, ax = plot_scatter(embedding=self.embedding, labels=color_labels, cmap='plasma', s=5,
+                                                      alpha=0.5, edgecolors='None',
+                                                      title=title_umap)
+                                f1.set_size_inches(10, 10)
+
+                                str_date = str(str(datetime.now())[-3:])
+                                #save_str = '/home/shobi/Trajectory/Datasets/WagnerZebrafish/viaumap_RW2_5820_k' + str(                                self.knn) + 'kseq' + str(self.knn_sequential) + '_knnreverse' + str(                                self.knn_sequential_reverse) + 'npc' + str(self.ncomp) + 'tdiff' + str(                                self.t_diff_step) + 'mindist' + str(min_dist) + '_rsUmap' + str(                                random_state) + '_rsVIA' + str(self.random_seed) + 'doGauss' + str(                                self.do_gaussian_kernel_edgeweights) + 'viaInitLayout' + str_date
+                                # save_str = '/home/shobi/Trajectory/Datasets/MEF_Schiebinger/viaumap_k' + str(                                self.knn) + 'kseq' + str(self.knn_sequential) + 'npc' + str(self.ncomp) + 'tdiff' + str(                                self.t_diff_step) + 'mindist' + str(min_dist) + 'rs' + str(                                self.random_seed) + 'doGauss' + str(                                self.do_gaussian_kernel_edgeweights) + str_date + 'stage'
+                                #
+                                #save_str = '/home/shobi/Trajectory/Datasets/EB_Phate/viaumap_R2W_029_P1_Q100_k' + str( self.knn) + 'kseq' + str(self.knn_sequential) +'_knnreverse'+str(self.knn_sequential_reverse) + 'npc' + str(self.ncomp) + 'tdiff' + str(                                    self.t_diff_step) + 'mindist' + str(min_dist) + 'rs' + str(random_state) + 'doGauss' + str( self.do_gaussian_kernel_edgeweights) + str_date
+                                #save_str = '/home/shobi/Trajectory/Datasets/Cao_ProtoVert/viaumap_RW2_5820_k' + str(                                self.knn) + 'kseq' + str(self.knn_sequential) + '_knnreverse' + str(                                self.knn_sequential_reverse) + 'npc' + str(self.ncomp) + 'tdiff' + str(                                self.t_diff_step) + 'mindist' + str(min_dist) + '_rsUmap' + str(                                random_state) +'_rsVIA'+str(self.random_seed)+ 'doGauss' + str(                                self.do_gaussian_kernel_edgeweights) +'viaInitLayout'+ str_date
+                                #save_str = '/home/shobi/Trajectory/Datasets/Pijuan_Gastrulation/viaumap_RW2_rw2comp'+str(rw2_comp)+'_122_k' + str(                                    self.knn) + 'kseq' + str(self.knn_sequential) +'_knnreverse'+str(self.knn_sequential_reverse) + 'npc' + str(self.ncomp) + 'tdiff' + str(                                    self.t_diff_step) + 'mindist' + str(min_dist) + 'rs' + str(                                    random_state) + 'doGauss' + str(                                    self.do_gaussian_kernel_edgeweights) + str_date + 'stage'
+                                save_str = '/home/shobi/Trajectory/Datasets/MouseNeuron/viaumap_RW2_P1_Q10_rw2comp' + str(rw2_comp) + '_988_P1_Q10_k' + str(self.knn) + 'kseq' + str(                                    self.knn_sequential) + '_knnreverse' + str(                                    self.knn_sequential_reverse) + 'npc' + str(self.ncomp) + 'tdiff' + str(                                    self.t_diff_step) + 'mindist' + str(min_dist) + 'rs' + str(                                    random_state) + 'doGauss' + str(                                    self.do_gaussian_kernel_edgeweights) + str_date + 'stage'
+
+                                # df_umap.to_csv('/home/shobi/Trajectory/Datasets/EB_Phate/viaumap_k'+str(self.knn)+'kseq'+str(self.knn_sequential)+'nps'+str(self.ncomp)+'tdiff'+str(self.t_diff_step)+'mindist'+str(min_dist)+'rs'+str(self.random_seed)+'stage'+str_date+".csv")
+                                # df_umap.to_csv('/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viaumap_k'+str(self.knn)+'kseq'+str(self.knn_sequential)+'nps'+str(self.ncomp)+'tdiff'+str(self.t_diff_step)+'mindist'+str(min_dist)+'rs'+str(self.random_seed)+'stage'+str_date+".csv")
+                                # savefig_ = '/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viaumap_k'+str(self.knn)+'kseq'+str(self.knn_sequential)+'nps'+str(self.ncomp)+'tdiff'+str(self.t_diff_step)+'mindist'+str(min_dist)+'rs'+str(self.random_seed)+str_date+'stage.png'
+                                #df_umap = pd.DataFrame(self.embedding)
+                                #df_umap.to_csv(save_str + '.csv')
+                                #f1.savefig(save_str + 'stage.png', facecolor='white', transparent=False)
+
+                            # savefig_ = '/home/shobi/Trajectory/Datasets/MouseNeuron/2000hvg_viaumap_k'+str(self.knn)+'kseq'+str(self.knn_sequential)+'nps'+str(self.ncomp)+'tdiff'+str(self.t_diff_step)+'mindist'+str(min_dist)+'rs'+str(self.random_seed)+str_date+'celltype.png'
+                            f2, ax = plot_scatter(embedding=self.embedding, labels=self.true_label, title=title_umap,
+                                                  alpha=0.5, s=5, color_dict=self.color_dict)
+                            f2.set_size_inches(10, 10)
+                            #f2.savefig(save_str + 'celltype.png', facecolor='white', transparent=False)
+                            plt.show()
+
+
+
+            elif self.embedding_type == 'via-mds':
+                str_date = str(str(datetime.now())[-3:])
+                print(f'{datetime.now()}\tRun via-mds')
+                # n_milestones = min(self.nsamples, max(10000, int(0.1*self.nsamples)))
+
+                for diffusion_i in [5]:
+                    for k_seq_i in [10]:
+                        for k_mds_i in [10]:
+                            for rs_i in [self.random_seed]:
+                                t_difference = 2  # self.t_diff_step
+                                k_project_milestones = 2
+                                n_milestones_mds = min(3000, self.data.shape[0])
+
+                                self.embedding = via_mds(X_pca=self.data, n_milestones=n_milestones_mds, k=k_mds_i,
+                                                         knn_seq=k_seq_i, k_project_milestones=k_project_milestones,
+                                                         neighbors_distances=self.full_neighbor_array,
+                                                         diffusion_op=diffusion_i, random_seed=rs_i,
+                                                         viagraph_full=self.csr_full_graph, t_difference=t_difference,
+                                                         time_series_labels=self.time_series_labels, saveto='',
+                                                         double_diffusion=False)
+                                shape_data = self.data.shape[1]
+                                str_date = str(str(datetime.now())[-3:])
+                                # save_str = '/home/shobi/Trajectory/Datasets/Pijuan_Gastrulation/mds/viamds_singlediffusion_pcs'+str(shape_data)+'_k' + str(self.knn) + '_milestones'+str(n_milestones_mds)+'_kprojectmilestones'+str(k_project_milestones)+'t_step'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_RsMds'+str(rs_i)+'_'+str_date
+                                # save_str = '/home/shobi/Trajectory/Datasets/WagnerZebrafish/2000hvg/mds/singlediffusion_viamds/2000hvg_viamds_singlediffusion_pcs'+str(shape_data)+'_k' + str(self.knn) + '_milestones'+str(n_milestones_mds)+'_kprojectmilestones'+str(k_project_milestones)+'t_step'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_RsMds'+str(rs_i)+'_'+str_date
+                                # save_str = '/home/shobi/Trajectory/Datasets/Cao_ProtoVert/mds_theseare1000hvg/singlediffusion_viamds/1000hvg_viamds_singlediffusion_doExp'+str(self.do_gaussian_kernel_edgeweights)+'_k' + str(self.knn) + '_milestones'+str(n_milestones_mds)+'_kprojectmilestones'+str(k_project_milestones)+'t_stepmds'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_rsMds'+str(rs_i)+'_'+str_date
+                                save_str = '/home/shobi/Trajectory/Datasets/EB_Phate/viamds_R2W_029_P1_Q10_singlediffusion_prescaled_doExp' + str(
+                                    self.do_gaussian_kernel_edgeweights) + '_k' + str(self.knn) + '_milestones' + str(
+                                    n_milestones_mds) + '_kprojectmilestones' + str(
+                                    k_project_milestones) + 't_stepmds' + str(t_difference) + '_knnmds' + str(
+                                    k_mds_i) + '_kseqmds' + str(k_seq_i) + '_kseq' + str(
+                                    self.knn_sequential) + '_npc' + str(self.ncomp) + '_tdiff' + str(
+                                    self.t_diff_step) + '_randseed' + str(self.random_seed) + '_diffusionop' + str(
+                                    diffusion_i) + '_rsMds' + str(rs_i) + '_' + str_date
+                                # save_str = '/home/shobi/Trajectory/Datasets/MEF_Schiebinger/viamds_singlediffusion_prescaled_doExp'+str(self.do_gaussian_kernel_edgeweights)+'_k' + str(self.knn) + '_milestones'+str(n_milestones_mds)+'_kprojectmilestones'+str(k_project_milestones)+'t_stepmds'+str(t_difference)+'_knnmds' + str(k_mds_i) +'_kseqmds' + str(k_seq_i) +'_kseq'+str(self.knn_sequential)+'_npc' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step)+'_randseed'+str(self.random_seed)+ '_diffusionop'+str(diffusion_i)+'_rsMds'+str(rs_i)+'_'+str_date
+                                print(f'{datetime.now()}\tCompleted via-mds')
+                                #df_mds = pd.DataFrame(self.embedding)
+                                #df_mds.to_csv(save_str + ".csv")
+
+                                if self.time_series_labels is None:
+                                    color_labels = self.true_label
+                                else:
+                                    color_labels = self.time_series_labels
+                                if (isinstance(color_labels[0], str)) == True:
+                                    categorical = True
+                                else:
+                                    categorical = False
+                                f1, ax = plot_scatter(embedding=self.embedding, labels=color_labels, title='via-mds',
+                                                      categorical=categorical, alpha=0.5)
+                                savefig_ = save_str + 'stage.png'
+                                f1.set_size_inches(10, 10)
+                                #f1.savefig(savefig_, facecolor='white', transparent=False)
+
+                                if self.time_series_labels is not None:
+                                    f2, ax2 = plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-mds', categorical=True, alpha=0.5)
+                                    savefig_ = save_str + 'celltype.png'
+                                    f2.set_size_inches(10, 10)
+                                    # f2.savefig(savefig_, facecolor='white', transparent=False)
+
+
+
+            elif self.embedding_type == 'via-force':
+                print(f'{datetime.now()}\tRun via-force')
+                # n_milestone = min(self.nsamples, max(5000, int(0.1*self.nsamples)))
+                n_milestones = 3000
+                self.embedding = via_forcelayout(X_pca=self.data, viagraph_full=self.csr_full_graph, k=10, knn_seq=10,
+                                                 n_milestones=n_milestones)
+                if self.time_series_labels is None:
+                    color_labels = self.true_label
+                else:
+                    color_labels = self.time_series_labels
+                if (isinstance(color_labels[0], str)) == True:
+                    categorical = True
+                else:
+                    categorical = False
+
+                plot_scatter(embedding=self.embedding, labels=color_labels, title='via-force', categorical=categorical)
+                plot_scatter(embedding=self.embedding, labels=self.true_label, title='via-mds', categorical=True)
+                plt.show()
+            else:
+                print(
+                    f'{datetime.now()}\tNo embedding will be computed: if you wish to compute a via-embedding specify one of via-force, via-mds or via-umap')
 
         if self.edgebundle_pruning_twice ==False:
             #print('creating bundle with single round of global pruning at a level of', self.edgebundle_pruning)
             print(f"{datetime.now()}\tStarting make edgebundle viagraph...")
-            self.hammerbundle_cluster =make_edgebundle_viagraph(layout,g_layout)
-
+            self.hammerbundle_cluster = make_edgebundle_viagraph(layout,g_layout)
 
         # globally trimmed link
         self.edgelist_unique = set(tuple(sorted(l)) for l in zip(*locallytrimmed_sparse_vc.nonzero()))  # keep only one of (0,1) and (1,0)
@@ -1992,6 +2098,11 @@ class VIA:
         n_components, labels_cc = connected_components(csgraph=locallytrimmed_sparse_vc, directed=False, return_labels=True)
 
         df_graph = pd.DataFrame(locallytrimmed_sparse_vc.todense())
+
+
+
+
+
         if (self.velocity_matrix is not None) & (self.gene_matrix is not None):
             df_velocity = pd.DataFrame(self.velocity_matrix)
             print('size velocity matrix', len(self.labels), self.velocity_matrix.shape)
@@ -2025,9 +2136,15 @@ class VIA:
         large_components = []
         for comp_i in range(n_components):
             loc_compi = np.where(labels_cc == comp_i)[0]
-            if len(loc_compi) > 1:
+
+            if len(loc_compi) > 1: #need at least 2 nodes in in a component to make edges
                 large_components.append(comp_i)
+            elif len(loc_compi) == 0:
+                df_graph.at[loc_compi[0], 'markov_pt'] = 1#0
+                df_graph.at[loc_compi[0], 'pt'] = 1#0
+
         for comp_i in large_components:  # range(n_components):
+            print(f'{datetime.now()}\tcomponent number', comp_i, 'out of ', large_components)
             loc_compi = np.where(labels_cc == comp_i)[0]
 
             a_i = df_graph.iloc[loc_compi][loc_compi].values #transition matrix of relevant component
@@ -2068,10 +2185,16 @@ class VIA:
 
 
             elif (self.dataset in ['toy','faced','mESC','iPSC','group']) and (self.root_user is not None):#((self.dataset == 'toy') | (self.dataset == 'faced')):
-
+                root_user_=None
                 for ri in self.root_user:
-                    if ri in sc_truelabels_subi: root_user_ = ri
-                if self.super_cluster_labels: #entering a fine-grained iteration of via - therefore using information from coarse via iteration
+                    print('group root method')
+                    if ri in sc_truelabels_subi:
+                        root_user_ = ri
+                        print(f'for component {comp_i}, the root is {root_user_} and ri {ri}')
+                if root_user_ is None:
+                        root_user_=sc_truelabels_subi[0]
+                        print('setting a dummy root')
+                if self.super_cluster_labels == True: #entering a fine-grained iteration of via - therefore using information from coarse via iteration
                     # find which sub-cluster has the super-cluster root
 
                     super_labels_subi = [self.super_cluster_labels[i] for i in range(len(PARC_labels_leiden)) if
@@ -2108,14 +2231,16 @@ class VIA:
 
             # when root_user is given as a cell index
             else:
-
-                if (comp_i > len(self.root_user) - 1): root_user_ = 0
+                root_user_ = None
+                if (comp_i > len(self.root_user) - 1):
+                    root_user_ = 0
 
                 else:
                     for ri in self.root_user:
                         if PARC_labels_leiden[ri] in cluster_labels_subi:
                             root_user_ = ri
                             print(f"{datetime.now()}\tThe root index, {ri} provided by the user belongs to cluster number {PARC_labels_leiden[ri]} and corresponds to cell type {self.true_label[ri]}")
+                if root_user_ is None: root_user_=0
                 graph_node_label, majority_truth_labels, node_deg_list_i, root_i = self.find_root(a_i,
                                                                                                         PARC_labels_leiden,
                                                                                                         root_user_,
@@ -2298,8 +2423,8 @@ class VIA:
                             dict_terminal_super_sub_pairs.update({i: most_likely_sub_terminal})
                             super_terminal_clus_revised.append(i)
                             terminal_clus.append(most_likely_sub_terminal)
-                            terminal_clus_ai.append(
-                                np.where(np.asarray(cluster_labels_subi) == most_likely_sub_terminal)[0][0])  # =i
+                            terminal_clus_ai.append(np.where(np.asarray(cluster_labels_subi) == most_likely_sub_terminal)[0][0])
+
 
                             #print('the sub terminal cluster that best captures the super terminal', i, 'is', most_likely_sub_terminal)
                         else:
@@ -2366,7 +2491,25 @@ class VIA:
         print(f"{datetime.now()}\tTerminal clusters corresponding to unique lineages are {dict_ts_mode}")#{self.terminal_clusters} ")
         self.node_degree_list = node_deg_list
         print(f"{datetime.now()}\tBegin projection of pseudotime and lineage likelihood")
+        self.cluster_bp = bp_array
+
+
+        df_graph['markov_pt'] = df_graph['markov_pt'].fillna(10) #0
+        #nan_count = df_graph['markov_pt'].isna().sum()
+        #print('df graph markov pt nan count', nan_count)
         self.single_cell_bp, self.single_cell_pt_markov = self.project_branch_probability_sc(bp_array, df_graph['markov_pt'].values)
+
+        self.single_cell_pt_markov =  [item for item in self.single_cell_pt_markov if not (math.isnan(item)) == True]
+        if self.time_series_labels is not None:
+            df_ = pd.DataFrame()
+            df_['via_pt'] = self.single_cell_pt_markov
+            df_['true_time'] = self.time_series_labels
+            df_['via_pt'] = df_['via_pt'].fillna(0)
+
+
+            correlation = df_['via_pt'].corr(df_['true_time'])
+            print(f'correlation via pt, {correlation}')
+
         #the single_cell_bp are not re-rownormalized. In fact we scale each column (lineage) by the max value in the lineage (column) to prevent rarer/smaller lineages from being under-represented.
         # to get a row-normalized results of the single-cell branching probabilities, we offer single_cell_bp_rownormed as an attribute so that the probabilities of each cell sum to 1.
 
@@ -2532,13 +2675,16 @@ class VIA:
 
             tsi_list.append(labelsq[0][0])
 
+
         if self.embedding is not None:
+            
             plot_scatter(embedding=self.embedding, labels = self.single_cell_pt_markov, sc_index_terminal_states = tsi_list, title='pseudotime and terminal states', cmap='plasma', true_labels=self.true_label )
 
             plot_scatter(embedding=self.embedding, labels=self.true_label,
                          sc_index_terminal_states=tsi_list, title='lineage and terminal states', cmap='rainbow',
                          true_labels=self.labels)
             plt.show()
+
         return
 
     def draw_piechart_graph_nobundle(self, type_data='pt', gene_exp='', title='', cmap=None, ax_text=True,dpi=150):
@@ -2980,7 +3126,9 @@ class VIA:
         run_time = time.time() - st
         print(f'{datetime.now()}\tTime elapsed {round(run_time,1)} seconds')
 
-        targets = set(self.true_label)
+        targets = list(set(self.true_label))
+        targets.sort()
+
         N = len(self.true_label)
         self.f1_accumulated = 0
         self.f1_mean = 0
@@ -3008,6 +3156,7 @@ class VIA:
                                                 'f1-score', 'tnr', 'fnr',
                                                 'tpr', 'fpr', 'precision', 'recall', 'num_groups',
                                                 'population of target', 'num clusters', 'clustering runtime'])
+            #df_accuracy.to_csv('/home/shobi/Trajectory/Datasets/Cao_ProtoVert/df_accuracy_.csv')
 
             self.f1_accumulated = f1_accumulated
             self.f1_mean = f1_mean

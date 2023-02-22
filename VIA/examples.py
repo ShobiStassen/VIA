@@ -16,6 +16,7 @@ import seaborn as sns
 
 from pyVIA.core import *
 #from core_working_ import *
+
 import pyVIA.datasets_via as datasets
 import matplotlib as mpl
 #import pyVIA.core as via
@@ -232,14 +233,25 @@ def main_Human(ncomps=80, knn=30, v0_random_seed=10, run_palantir_func=False):
     # Xin = adata_counts_raw.X.todense()
     print(time.ctime())
 
+    #phate_op = phate.PHATE(n_pca=None)
+    #embedding = phate_op.fit_transform(adata_counts.obsm['X_pca'][:, 0:ncomps])
+    #plot_scatter(embedding=embedding,labels=true_label,title='phate' )
+    plt.show()
     print(time.ctime())
     v0 = VIA(Xin, true_label, jac_std_global=0.15, dist_std_local=1, knn=30,
              too_big_factor=0.3,
              root_user=root_user, dataset=dataset, preserve_disconnected=True, random_seed=v0_random_seed,
               is_coarse=True, pseudotime_threshold_TS=10,
-             neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1, edgebundle_pruning_twice=True, embedding=tsnem)#, user_defined_terminal_group=['pDC','ERY1', 'ERY3', 'MONO1','mDC (cDC)','PRE_B2'] )# do_compute_embedding=True, embedding_type='via-mds')#,#embedding=adata_counts.obsm['X_umap'])  # *.4 root=1,
+             neighboring_terminal_states_threshold=3, piegraph_arrow_head_width=0.1, edgebundle_pruning_twice=True)#, embedding=tsnem)#, user_defined_terminal_group=['pDC','ERY1', 'ERY3', 'MONO1','mDC (cDC)','PRE_B2'] )# do_compute_embedding=True, embedding_type='via-mds')#,#embedding=adata_counts.obsm['X_umap'])  # *.4 root=1,
     #user_defined_terminal_group=['pDC','MONO1','MEGA1']
     v0.run_VIA()
+    via_mds1 = via_mds(via_object=v0, double_diffusion=True, n_milestones=3000)
+    f, ax = plot_scatter(embedding=via_mds1, labels=v0.true_label,title='dens sampling')
+
+    via_mds1 = via_mds(via_object=v0, double_diffusion=False, n_milestones=3000)
+    f, ax = plot_scatter(embedding=via_mds1, labels=v0.true_label, title='dens sampling')
+    plt.show()
+
     draw_sc_lineage_probability(v0, embedding = tsnem)
     plt.show()
     #draw_sc_lineage_probability(v0, embedding=tsnem, marker_lineages=[2])
@@ -723,7 +735,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
         #df_ids = pd.read_csv(foldername + "toy_disconnected_M9_n1000d1000_ids_with_truetime.csv", delimiter=",")
         adata_counts = datasets.toy_disconnected()
         #root_user, dataset =  [136,4], ''
-        root_user, dataset = ['T1_M1', 'T2_M1'],'group' #alternative root settings:   None, '' OR [136,4],''
+        root_user, dataset = ['T2_M1','T1_M1'],'group'#  #alternative root settings:   None, '' OR [136,4],''
         paga_root = 'T1_M1'
         dataset_name = 'Toy4'
     #df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
@@ -740,7 +752,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     adata_counts.uns['iroot'] = np.flatnonzero(adata_counts.obs['group_id'] == paga_root)[0]  # 'T1_M1'#'M1'
 
     if dataset == 'Toy4':
-        jac_std_global = 0.05#0.15  # 1
+        jac_std_global = 0.15#0.15  # 1
     else:
         jac_std_global = 0.05#0.15#0.15
     import umap
@@ -765,7 +777,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     #kmeans = KMeans(n_clusters=20, random_state=1).fit(X_pca)
     #labels=kmeans.labels_
 
-    #self.labels = kmeans.labels_.flatten().tolist()
+    #self.labels = kmeans.labels_.flatten()
 
     v0 = VIA(X_pca, true_label, jac_std_global=jac_std_global, dist_std_local=1,
              knn=knn,
@@ -773,20 +785,36 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
              too_big_factor=0.3, root_user=root_user, preserve_disconnected=True, dataset=dataset,
              visual_cluster_graph_pruning=1, max_visual_outgoing_edges=2,
              random_seed=random_seed, piegraph_arrow_head_width=0.2,
-             piegraph_edgeweight_scalingfactor=1.0,  resolution_parameter=1, do_compute_embedding=True, embedding_type='via-mds')#, embedding=embedding)  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6'] #embedding_type='via-mds', do_compute_embedding=True,, user_defined_terminal_group=['M6','M8','M2','M7']
+             piegraph_edgeweight_scalingfactor=1.0,  resolution_parameter=1)#, do_compute_embedding=True, embedding_type='via-umap') #, embedding=embedding)  # *.4 root=2,embedding=embedding user_defined_terminal_group=['M8','M6'] #embedding_type='via-mds', do_compute_embedding=True,, user_defined_terminal_group=['M6','M8','M2','M7']
     v0.run_VIA()
 
+    e1=via_umap(via_object=v0, init_pos='via', random_state=v0.random_seed)#, n_epochs=100, spread=1,                                                      distance_metric='euclidean', min_dist=0.1, saveto='',                                                      random_state=v0.random_seed)
+    plot_scatter(e1, labels=v0.labels, title='via init')
+    e2 = via_umap(via_object=v0)  # , n_epochs=100, spread=1,                                                      distance_metric='euclidean', min_dist=0.1, saveto='',                                                      random_state=v0.random_seed)
+    plot_scatter(e1, labels=v0.labels, title='spectral init')
+    plt.show()
+    draw_trajectory_gams(via_object=v0, embedding=embedding)
+    plt.show()
+
+    draw_sc_lineage_probability(v0, embedding=embedding)
+    plt.show()
+    via_mds1 = via_mds(via_object=v0)
+    f, ax = plot_scatter(embedding=via_mds1, labels=v0.true_label, title='viamds')
+    plt.show()
+    via_mds1 = via_mds(via_object=v0)
+    f, ax = plot_scatter(embedding=via_mds1, labels=v0.single_cell_pt_markov,title='viamds')
+    plt.show()
 
     print('make new edgbune bundle')
     #v0.embedding = None #testing automatic embedding computation
     #v0.hammerbundle_milestone_dict = None #testing automatic hammerbundling computation
     v0.hammerbundle_milestone_dict=make_edgebundle_milestone(via_object=v0, n_milestones=40) #optional, but just showing how to recompute with different n_milestones
-    plot_edge_bundle(via_object=v0, lineage_pathway=[10,5,7,8,9], linewidth_bundle=0.5, headwidth_bundle=2, cmap='plasma', text_labels=True, show_milestones=True, scale_scatter_size_pop=False)
-    plot_edge_bundle(via_object=v0, lineage_pathway=[7,10,9], linewidth_bundle=0.5, headwidth_bundle=2, cmap='plasma',text_labels=True, show_milestones=False, scale_scatter_size_pop=True)
+    plot_edge_bundle(via_object=v0, lineage_pathway=v0.terminal_clusters, linewidth_bundle=0.5, headwidth_bundle=1, cmap='plasma', text_labels=True, show_milestones=True, scale_scatter_size_pop=False)
+    plot_edge_bundle(via_object=v0, lineage_pathway=v0.terminal_clusters[0:2], linewidth_bundle=0.5, headwidth_bundle=1, cmap='plasma',text_labels=True, show_milestones=False, scale_scatter_size_pop=True, fontsize_labels=4)
     plot_edge_bundle(via_object=v0, linewidth_bundle=0.5, headwidth_bundle=2)
-    plot_edge_bundle(via_object=v0, lineage_pathway=[5], linewidth_bundle=0.5, headwidth_bundle=2)
+    plot_edge_bundle(via_object=v0, lineage_pathway=[v0.terminal_clusters[0]], linewidth_bundle=0.5, headwidth_bundle=1)
     plt.show()
-    draw_sc_lineage_probability(v0, embedding=embedding, marker_lineages=[5, 7, 8])  # [10,5,1,0,2]) #Toy3)
+    draw_sc_lineage_probability(v0, embedding=embedding, marker_lineages=v0.terminal_clusters[0:2])  # [10,5,1,0,2]) #Toy3)
     plt.show()
     hammerbundle_milestone_dict = make_edgebundle_milestone(via_object=v0, global_visual_pruning=1,
                                                             initial_bandwidth=0.02, decay=0.7, milestone_labels=v0.labels)
@@ -799,7 +827,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     plot_edge_bundle(hammerbundle_dict=hammerbundle_milestone_dict,
                      linewidth_bundle=0.3, alpha_bundle_factor=2,
                      cmap='viridis', facecolor='white', size_scatter=15, alpha_scatter=0.5, scale_scatter_size_pop=True,
-                     extra_title_text='Using VIA clusters for lineage pathways', headwidth_bundle=2.5, lineage_pathway=[5,7,9,10,8])
+                     extra_title_text='Using VIA clusters for lineage pathways', headwidth_bundle=2.5, lineage_pathway=v0.terminal_clusters)
     plt.show()
     '''
     via_umap1 = via_umap(via_object = v0)
@@ -842,7 +870,7 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     df_genes = pd.DataFrame(adata_counts.obsm['X_pca'][:, 0:5], columns=['Gene0', 'Gene1', 'Gene2', 'Gene3', 'Gene4'])
 
     if dataset_name=='Toy3':
-        f, axlist = plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_genes, marker_lineages=[5,7,8,9,10])
+        f, axlist = plot_gene_trend_heatmaps(via_object=v0, df_gene_exp=df_genes, marker_lineages=v0.terminal_clusters)
         axlist[-1].set_xlabel("pseudotime", fontsize=20)
         plt.show()
     if dataset_name=='Toy4':
@@ -853,16 +881,14 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
     plt.show()
 
     print('draw piechart graph')
-    draw_piechart_graph(via0=v0)
+    draw_piechart_graph(via_object=v0)
     plt.show()
-    draw_trajectory_gams(v0, embedding=embedding)
-    plt.show()
+
 
     plot_edgebundle_viagraph(via_object=v0, plot_clusters=True, title='viagraph with bundling', fontsize=10)
     plt.show()
 
-
-    via_streamplot(v0, embedding, scatter_size=20)  # embedding
+    via_streamplot(via_object=v0, embedding=embedding, scatter_size=20)  # embedding
     plt.show()
     print('making animated stream plot. This may take a few minutes when the streamline count is high')
     animated_streamplot(v0, embedding, scatter_size=800, scatter_alpha=0.15, density_grid=1,
@@ -903,7 +929,6 @@ def main_Toy(ncomps=10, knn=30, random_seed=41, dataset='Toy3', root_user=['M1']
                      linewidth_bundle=1.5, alpha_bundle_factor=2,
                      cmap='rainbow', facecolor='white', size_scatter=15, alpha_scatter=0.2,
                      extra_title_text='edgebundle plot', headwidth_bundle=0.15)
-
 
     plt.show()
 
@@ -1302,6 +1327,39 @@ def plot_EB():
 
 def main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, cluster_graph_pruning_std=.15,
                   foldername='/home/shobi/Trajectory/Datasets/EB_Phate/'):
+
+    true_time_labels = pd.read_csv(foldername+'EB_true_time_labels.csv')
+    true_time_labels = true_time_labels.drop(['Unnamed: 0'], axis=1)
+    true_time_labels = true_time_labels['true_time_labels']
+    print('true time labels len', len(true_time_labels))
+
+    #embedding_filename = 'viamds_singlediffusion_doExpTrue_k20_milestones5000_kprojectmilestones2t_stepmds2_knnmds50_kseqmds10_kseq10_nps30_tdiff1_randseed24_diffusionop5_rsMds42_615.csv' #geo corr k10 0.58348163 # euc corr 0.7580 #k5 geo corr 0.5724 # geocorr k3 -0.02
+    #embedding_filename='viamds_singlediffusion_prescaled_doExpFalse_k10_milestones3000_kprojectmilestones2t_stepmds2_knnmds50_kseqmds5_kseq10_npc30_tdiff1_randseed24_diffusionop5_rsMds42_217.csv' #geocorr k10 #euc corr 0.6658 #: geo corr k15 0.5819
+    embedding_filename='phate_scaled_npcphate_npc30_knn50.csv' #euc corr  0.6756920 #geo corr k15 0.58356
+    #embedding_filename = 'phate_npcphate_npc50_knn20.csv' # geo corr 0.57782 k10 #euc corr 0.7508 #k5 geo corr: 0.5347 #=0.3
+    #embedding_filename = 'viaumap_k50kseq10nps30tdiff1mindist0.1rs24stage087.csv' #euc corr 0.7403  #k5 geo corr:0.5174 #geocorr k3: -0.17
+    #embedding_filename= 'umap_pc10_knn15.csv' #euc corr 0.63585 #geo corr k5 -0.287622 # geo corr k10 -0.3266 #geo corr k3 -0.0632
+    print('embedding filename', embedding_filename)
+    embedding = pd.read_csv(foldername+embedding_filename)
+    embedding = embedding.drop(['Unnamed: 0'], axis=1)
+    embedding=embedding.values
+    print(embedding.shape)
+    root_index = 1
+    root_coords = np.array([[embedding[root_index,0], embedding[root_index,1]]])
+    from scipy.spatial.distance import cdist
+    U_distances_ = cdist(root_coords, embedding, metric='euclidean')
+    print(f'U_distance {U_distances_.shape}')  # ,U_distances_.flatten().tolist())
+    df_ = pd.DataFrame()
+    df_['Udistances'] = U_distances_.flatten().tolist()
+    df_['Udistances'] = df_['Udistances'].fillna(0)
+    df_['true_time'] = true_time_labels
+
+    correlation = df_['Udistances'].corr(df_['true_time'])
+    print(f'correlation euclidean distances, {correlation}')
+    geo_k = 15
+    corr_val = corr_geodesic_distance_lowdim(embedding = embedding , knn=geo_k, time_labels=true_time_labels, root=root_index)
+    print(f'geodesic distance corr val {corr_val} geo_knn {geo_k}')
+
     marker_genes_dict = {'Hermang': ['TAL1', 'HOXB4', 'SOX17', 'CD34', 'PECAM1'],
                          'NP': ['NES', 'MAP2'],
                          'NS': ['KLF7', 'ISL1', 'DLX1', 'ONECUT1', 'ONECUT2', 'OLIG1', 'NPAS1', 'LHX2', 'NR2F1',
@@ -1320,12 +1378,9 @@ def main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, cluster_graph_pruning_st
         for item in marker_genes_dict[key]:
             marker_genes_list.append(item)
 
-    v0_too_big = 0.3
-    v1_too_big = 0.05
 
     n_var_genes = 'no filtering for HVG'  # 15000
-    print('ncomps, knn, n_var_genes, v0big, p1big, randomseed, time', ncomps, knn, n_var_genes, v0_too_big, v1_too_big,
-          v0_random_seed, time.ctime())
+
 
     # TI_pcs = pd.read_csv(foldername+'PCA_TI_200_final.csv')
     # TI_pcs is PCA run on data that has been: filtered (remove cells with too large or small library count - can directly use all cells in EBdata.mat), library normed, sqrt transform, scaled to unit variance/zero mean
@@ -1340,7 +1395,8 @@ def main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, cluster_graph_pruning_st
     loc_ = np.where((data < 1) & (data > 0))
     temp = data[(data < 1) & (data > 0)]
     # print('temp non int', temp)
-
+    print('annots', annots)
+    print('annots', annots.keys())
     time_labels = annots['cells'].flatten().tolist()
     # df_timelabels = pd.DataFrame(time_labels, columns=['true_time_labels'])
     # df_timelabels.to_csv(foldername+'EB_true_time_labels.csv')
@@ -1358,10 +1414,12 @@ def main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, cluster_graph_pruning_st
     adata.X = sc.pp.normalize_total(adata, inplace=False)['X']  # normalize by library after filtering
     adata.X = np.sqrt(adata.X)  # follow Phate paper which doesnt take log1() but instead does sqrt() transformation
 
-    Y_phate = pd.read_csv(foldername + 'EB_phate_embedding.csv')
-    Y_phate = Y_phate.values
-    phate_operator = phate.PHATE(n_jobs=-1)
-    Y_phate = phate_operator.fit_transform(adata.X)  # before scaling. as done in PHATE
+    #Y_phate = pd.read_csv(foldername + 'EB_phate_embedding.csv')
+    #Y_phate = Y_phate.values
+
+
+
+    #Y_phate = phate_operator.fit_transform(adata.X)  # before scaling. as done in PHATE
 
     scale = False  # scaling mostly improves the cluster-graph heatmap of genes vs clusters. doesnt sway VIA performance
     if scale == True:  # we scale before VIA. scaling not needed for PHATE
@@ -1373,17 +1431,38 @@ def main_EB_clean(ncomps=30, knn=20, v0_random_seed=24, cluster_graph_pruning_st
         print('not pp scaled')
     sc.tl.pca(adata, svd_solver='arpack', n_comps=200, random_state=0)
 
+    v0_too_big = 0.15
+    v1_too_big = 0.05
+    print('ncomps, knn, n_var_genes, v0big, p1big, randomseed, time', ncomps, knn, n_var_genes, v0_too_big, v1_too_big,
+          v0_random_seed, time.ctime())
     # adata.obsm['X_pca'] = TI_pcs
+    for knn in [10,20,50]:
+        for ncomps in [100]:
+            input_data = adata.obsm['X_pca'][:, 0:ncomps]
+            do_phate=False
+            if do_phate:
+                print('do phate')
+                phate_operator = phate.PHATE(n_jobs=-1, n_pca=None,knn=knn)
+                embedding_phate = phate_operator.fit_transform(input_data)
+                df_phate = pd.DataFrame(embedding_phate)
+                save_str = 'phate_npc'+str(ncomps)+'_knn'+str(knn)
+                df_phate.to_csv('/home/shobi/Trajectory/Datasets/EB_Phate/phate_scaled_npc'+save_str+'.csv')
+                f1, ax=plot_scatter(embedding=embedding_phate, labels=time_labels, title=save_str)
+                f1.savefig('/home/shobi/Trajectory/Datasets/EB_Phate/phate_npc'+save_str+'.png', facecolor='white', transparent=False, )
+                plt.show()
 
-    input_data = adata.obsm['X_pca'][:, 0:ncomps]
+            print('do v0')
+            root_user = [1]
+            v0 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
+                     cluster_graph_pruning_std=cluster_graph_pruning_std, resolution_parameter=2,
+                     too_big_factor=v0_too_big, root_user=root_user, dataset='EB', random_seed=v0_random_seed,
+                      is_coarse=True, preserve_disconnected=True, do_compute_embedding=True, embedding_type='via-mds', time_series=True, time_series_labels=time_labels, do_gaussian_kernel_edgeweights=False, t_diff_step=1)  # *.4 root=1,
+            v0.run_VIA()
 
-    print('do v0')
-    root_user = [1]
-    v0 = VIA(input_data, time_labels, jac_std_global=0.15, dist_std_local=1, knn=knn,
-             cluster_graph_pruning_std=cluster_graph_pruning_std,
-             too_big_factor=v0_too_big, root_user=root_user, dataset='EB', random_seed=v0_random_seed,
-              is_coarse=True, preserve_disconnected=True)  # *.4 root=1,
-    v0.run_VIA()
+            draw_piechart_graph(via_object = v0)
+            plt.show()
+
+
 
     via_streamplot(v0, Y_phate)
 
@@ -1462,6 +1541,7 @@ def main_EB(ncomps=30, knn=20, v0_random_seed=24):
     # print('temp non int', temp)
 
     time_labels = annots['cells'].flatten().tolist()
+    print('time labels set', set(time_labels))
 
     import scprep
 
@@ -1637,7 +1717,7 @@ def main_EB(ncomps=30, knn=20, v0_random_seed=24):
 def main_mESC_timeseries(knn=40, cluster_graph_pruning_std = 0.15, random_seed = 0, knn_sequential=15,jac_std_global=0.5):
     root = [0.0]
 
-    U= pd.read_csv('/home/shobi/Trajectory/Datasets/mESC/mESC_7000perDay_noscaling_meso_timeseries_umap_knn40_knnseq15_locallypruned.csv')
+    U= pd.read_csv('/home/shobi/Trajectory/Datasets/mESC/mESC_7000perDay_noscaling_meso_timeseries_viaumap_knn40_knnseq15_locallypruned.csv')
     U = U.values[:,1:]
     plt.scatter(U[:, 0], U[:,1], s=4, alpha=0.7)
     plt.show()
@@ -2180,6 +2260,7 @@ def main_scATAC_zscores(knn=20, ncomps=30, cluster_graph_pruning_std=.15):
              too_big_factor=0.3, root_user=root, dataset='scATAC', random_seed=random_seed,
              visual_cluster_graph_pruning=.15, max_visual_outgoing_edges=2,is_coarse=True, preserve_disconnected=False)  # *.4 root=1,
     v0.run_VIA()
+
 
     df['via0'] = v0.labels
     # df_v0 = pd.DataFrame(v0.labels)

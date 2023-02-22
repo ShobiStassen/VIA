@@ -27,11 +27,82 @@ import random
 from scipy.spatial.distance import pdist, squareform
 from sklearn.preprocessing import StandardScaler
 
+def geodesic_distance(data:ndarray, knn:int=10, root:int=0, mst_mode:bool=False, cluster_labels:ndarray=None):
+    n_samples = data.shape[0]
+    #make knn graph on low dimensional data "data"
+    knn_struct = construct_knn_utils(data, knn=knn)
+    neighbors, distances = knn_struct.knn_query(data, k=knn)
+    msk = np.full_like(distances, True, dtype=np.bool_)
+    #https://igraph.org/python/versions/0.10.1/tutorials/shortest_paths/shortest_paths.html
+    # Remove self-loops
+    msk &= (neighbors != np.arange(neighbors.shape[0])[:, np.newaxis])
+    rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
+    cols = neighbors[msk]
+    weights = distances[msk] #we keep the distances as the weights here will actually be edge distances
+    result = csr_matrix((weights, (rows, cols)), shape=(len(neighbors), len(neighbors)), dtype=np.float32)
+
+    if mst_mode:
+        print(f'MST geodesic mode')
+        from scipy.sparse.csgraph import minimum_spanning_tree
+        MST_ = minimum_spanning_tree(result)
+        result = result+MST_
+    result.eliminate_zeros()
+    sources, targets = result.nonzero()
+    edgelist = list(zip(sources.tolist(), targets.tolist()))
+
+    G = ig.Graph(edgelist, edge_attrs={'weight': result.data.tolist()})
+    if cluster_labels is not None:
+        graph = ig.VertexClustering(G, membership=cluster_labels).cluster_graph(combine_edges='sum')
+
+        graph = recompute_weights(graph, Counter(cluster_labels)) #returns csr matrix
+
+        weights = graph.data / (np.std(graph.data))
+
+        edges = list(zip(*graph.nonzero()))
+
+        G= ig.Graph(edges, edge_attrs={'weight': weights})
+        root = cluster_labels[root]
+    #get shortest distance from root to each point
+    geo_distance_list = []
+    print(f'start computing shortest paths')
+    for i in range(G.vcount()):
+        if cluster_labels is None:
+            if i%1000==0: print(f'{datetime.now()}\t{i} out of {n_samples} complete')
+        shortest_path = G.get_shortest_paths(root,to=i, weights=G.es["weight"],  output="epath")
+
+        if len(shortest_path[0]) > 0:
+            # Add up the weights across all edges on the shortest path
+            distance = 0
+            for e in shortest_path[0]:
+                distance += G.es[e]["weight"]
+            geo_distance_list.append(distance)
+            #print("Shortest weighted distance is: ", distance)
+        else: geo_distance_list.append(0)
+    return geo_distance_list
+
+def corr_geodesic_distance_lowdim(embedding, knn=10, time_labels:list=[],root:int=0, saveto='/home/shobi/Trajectory/Datasets/geodesic_distance.csv', mst_mode:bool=False,cluster_labels:ndarray=None):
+
+    geodesic_dist = geodesic_distance(embedding, knn=knn, root=root, mst_mode = mst_mode,cluster_labels=cluster_labels)
+    df_ = pd.DataFrame()
+
+    df_['true_time'] =time_labels
+    if cluster_labels is not None:
+        df_['cluster_labels'] = cluster_labels
+        df_ = df_.sort_values(['cluster_labels'], ascending=True).groupby('cluster_labels').mean()
+        print('df_groupby', df_.head())
+    df_['geo'] = geodesic_dist
+    df_['geo'] = df_['geo'].fillna(0)
+
+    correlation = df_['geo'].corr(df_['true_time'])
+    print(f'{datetime.now()}\tcorrelation geo 2d and true time, {correlation}')
+    df_.to_csv(saveto)
+    return correlation
+
 
 def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=None, sc_pt:list = None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, milestone_labels:list=[], sc_labels_numeric:list=None, weighted:bool=True, global_visual_pruning:float=0.5, terminal_cluster_list:list=[], single_cell_lineage_prob:ndarray=None, random_state:int=0):
     '''
-    # Perform Edgebundling of edges in a milestone level to return a hammer bundle of milestone-level edges. This is more granular than the original parc-clusters but less granular than single-cell level and hence also less computationally expensive
-    # requires some type of embedding (n_samples x 2) to be available
+    Perform Edgebundling of edges in a milestone level to return a hammer bundle of milestone-level edges. This is more granular than the original parc-clusters but less granular than single-cell level and hence also less computationally expensive
+    requires some type of embedding (n_samples x 2) to be available
 
     :param embedding: optional (not required if via_object is provided) embedding single cell. also looks nice when done on via_mds as more streamlined continuous diffused graph structure. Umap is a but "clustery"
     :param graph: optional (not required if via_object is provided) igraph single cell graph level
@@ -40,8 +111,8 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
     :param initial_bandwidth: increasing bw increases merging of minor edges
     :param decay: increasing decay increases merging of minor edges #https://datashader.org/user_guide/Networks.html
     :param milestone_labels: default list=[]. Usually autocomputed. but can provide as single-cell level labels (clusters, groups, which function as milestone groupings of the single cells)
-    :param sc_labels_numeric:list=None (default) automatically selects the sequential numeric time-series values in
-    :param terminal_cluster_list: list (default []) set to via_object.terminal_clusters
+    :param sc_labels_numeric: default is None which automatically chooses via_object's pseudotime or time_series_labels (when available). otherwise set to a list of numerical values representing some sequential/chronological information
+    :param terminal_cluster_list: default list [] and automatically uses all terminal clusters. otherwise set to any of the terminal cluster numbers within a list
     :return: dictionary containing keys: hb_dict['hammerbundle'] = hb hammerbundle class with hb.x and hb.y containing the coords
                 hb_dict['milestone_embedding'] dataframe with 'x' and 'y' columns for each milestone and hb_dict['edges'] dataframe with columns ['source','target'] milestone for each each and ['cluster_pop'], hb_dict['sc_milestone_labels'] is a list of milestone label for each single cell
 
@@ -254,6 +325,7 @@ def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3,
 
         for key in color_dict:
             loc_key = np.where(np.asarray(labels) == key)[0]
+
             ax.scatter(embedding[loc_key, 0], embedding[loc_key, 1], color=cmap_[color_dict[key]], label=key, s=s,
                        alpha=alpha, edgecolors=edgecolors)
             x_mean = embedding[loc_key, 0].mean()
@@ -399,7 +471,7 @@ def via_forcelayout(X_pca, viagraph_full: csr_matrix=None, k: int = 10,
 
 def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None, k: int = 15,
             random_seed: int = 0, diffusion_op: int = 1, n_milestones=2000, time_series_labels: list = [],
-            knn_seq: int = 5, k_project_milestones:int = 3, t_difference:int=2, saveto='', embedding_type:str='mds', double_diffusion:bool=False) -> ndarray:
+            knn_seq: int = 5, k_project_milestones:int = 3, t_difference:int=2, saveto='', embedding_type:str='mds', double_diffusion:bool=False,neighbors_distances:ndarray=None) -> ndarray:
     '''
 
     Fast computation of a 2D embedding
@@ -410,15 +482,17 @@ def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None,
     :param via_object:
     :param X_pca: dimension reduced (only if via_object is not passed)
     :param viagraph_full: optional. if calling before or without via, then None and a milestone graph will be computed. if calling after or from within via, then we can use the via-graph to reinforce the layout of the milestone graph
-    :param k:(int) number of knn for the via_mds reinforcement graph on milestones. 5-20 are reasonable
-    :param random_seed: int
-    :param t_diffusion: int default 1 higher values generate more smoothing
-    :param n_milestones: int
-    :param time_series_labels: list numerical values representing some sequentual information
-    :param knn_seq: int if time-series data is available, augment the knn with sequential neighbors (2-10 are reasonable values)
-    :param embedding_type: str default = 'mds' or set to 'umap'
-    :param double_diffusion: bool default is False. To achieve sharper strokes/lineages, set to True
-    :param k_project_milestones: int number of milestones in the milestone-knngraph used to compute the single-cell projection
+    :param k: number of knn for the via_mds reinforcement graph on milestones. default =15. integers 5-20 are reasonable
+    :param random_seed: randomseed integer
+    :param t_diffusion: default integer value = 1 with higher values generate more smoothing
+    :param n_milestones: number of milestones used to generate the initial embedding
+    :param time_series_labels: numerical values in list form representing some sequentual information
+    :param knn_seq: if time-series data is available, this will augment the knn with sequential neighbors (2-10 are reasonable values) default =5
+    :param embedding_type: default = 'mds' or set to 'umap'
+    :param double_diffusion: default is False. To achieve sharper strokes/lineages, set to True
+    :param k_project_milestones: number of milestones in the milestone-knngraph used to compute the single-cell projection
+    :param n_iterations: number of iterations to run
+    :param neighbors_distances: array of distances of each neighbor for each cell (n_cells x knn) used when called from within via.run() for autocompute via-mds
     :return: numpy array of size n_samples x 2
     '''
 
@@ -432,6 +506,9 @@ def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None,
         if X_pca is None: X_pca = via_object.data
         if viagraph_full is None: viagraph_full=via_object.csr_full_graph
     n_samples = X_pca.shape[0]
+    final_full_mds = np.zeros((n_samples, 2))
+
+
 
     if n_milestones is None:
         n_milestones = min(n_samples,max(2000, int(0.01*n_samples)))
@@ -439,13 +516,21 @@ def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None,
         n_milestones = min(n_samples, max(2000, int(0.01 * n_samples)))
         print(f"{datetime.now()}\tResetting n_milestones to {n_milestones} as n_samples > original n_milestones")
 
+    '''
+    if n_milestones < n_samples:
+        if via_object is not None: milestone_indices = density_sampling(neighbors_distances= via_object.full_neighbor_array, desired_samples = n_milestones)
+        else: milestone_indices = density_sampling(neighbors_distances= neighbors_distances, desired_samples = n_milestones)
+        print(f'number of milestone indices from density sampling {milestone_indices.shape}')
+        print('exp=True, dens sampling')
+    '''
     np.random.seed(random_seed)
-
+    print('exp=True, randomsampling') #in the fourth run, exp is =False
     milestone_indices = random.sample(range(X_pca.shape[0]), n_milestones) #this is sampling without replacement
+
     if viagraph_full is not None:
         milestone_knn = viagraph_full[milestone_indices]  #
         milestone_knn = milestone_knn[:, milestone_indices]
-        milestone_knn = normalize(milestone_knn, axis=1)
+        milestone_knn = normalize(milestone_knn, axis=1) #using these effectively emphasises the edges that are pass an even more stringent requirement on Nearest neighbors (since they are selected from the full set of cells, rather than a subset of milestones)
 
     knn_struct = construct_knn_utils(X_pca[milestone_indices, :], knn=k)
     # we need to add the new knn (milestone_knn_new) built on the subsampled indices to ensure connectivity. o/w graph is fragmented if only relying on the subsampled graph
@@ -460,7 +545,8 @@ def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None,
 
 
     # build a knn to project the input n_samples based on milestone knn
-    neighbor_array, distance_array = knn_struct.knn_query(X_pca, k=k_project_milestones)
+
+    neighbor_array, distance_array = knn_struct.knn_query(X_pca, k=k_project_milestones) #[n_samples x n_milestones]
 
     row_mean = np.mean(distance_array, axis=1)
     row_var = np.var(distance_array, axis=1)
@@ -484,6 +570,14 @@ def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None,
     csr_knn = csr_matrix((list_affinity, (row_list, col_list)),
                          shape=(n_cells, len(milestone_indices)))  # n_samples*n_milestones
     print(f"{datetime.now()}\tStart computing with diffusion power:{diffusion_op}")
+    '''
+    r2w_input = pd.read_csv(
+        '/home/shobi/Trajectory/Datasets/EB_Phate/RW2/pc20_knn100kseq50krev50RW2_sparse_matrix029_P1_Q10.csv')
+    r2w_input = r2w_input.drop(['Unnamed: 0'], axis=1).values
+    input = r2w_input[:, 0:30]
+    input = input[milestone_indices, :]
+    print('USING RW2 COMPS')
+    '''
 
     if embedding_type == 'mds': milestone_mds = sgd_mds(via_graph=milestone_knn, X_pca=X_pca[milestone_indices, :], diff_op=diffusion_op, ndims=2,
                             random_seed=random_seed, double_diffusion=double_diffusion)  # returns an ndarray
@@ -505,14 +599,16 @@ def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None,
     #plt.title('full')
     #plt.show()
     full_mds = np.reshape(full_mds, (n_cells, 2))
-    if len(saveto)>0:
+
+    if len(saveto) > 0:
         U_df = pd.DataFrame(full_mds)
         U_df.to_csv(saveto)
+
     return full_mds
 
 def via_umap(via_object = None, X_input: ndarray = None, graph:csr_matrix=None, n_components:int=2, alpha: float = 1.0, negative_sample_rate: int = 5,
                   gamma: float = 1.0, spread:float=1.0, min_dist:float=0.1, init_pos:Union[str, ndarray]='spectral', random_state:int=0,
-                    n_epochs:int=0, distance_metric: str = 'euclidean', layout:Optional[list]=None, cluster_membership:list=[], saveto='')-> ndarray:
+                    n_epochs:int=100, distance_metric: str = 'euclidean', layout:Optional[list]=None, cluster_membership:Optional[list]=None, saveto='')-> ndarray:
     '''
 
     Run dimensionality reduction using the VIA modified HNSW graph
@@ -530,15 +626,16 @@ def via_umap(via_object = None, X_input: ndarray = None, graph:csr_matrix=None, 
     :param random_state:
     :param n_epochs: The number of training epochs to be used in optimizing the low dimensional embedding. Larger values result in more accurate embeddings. If 0 is specified a value will be selected based on the size of the input dataset (200 for large datasets, 500 for small).
     :param distance_metric:
-    :param layout: ndarray This is required if the init_pos is set to 'via'. layout should then = via0.graph_node_pos (which is a list of lists)
-    :param cluster_membership:
+    :param layout: ndarray This is required if the init_pos is set to 'via'. layout should then = via0.graph_node_pos (which is a list of lists, of length n_clusters)
+    :param cluster_membership: v0.labels (cluster level labels of length n_samples corresponding to the layout)
     :return: ndarray of shape (nsamples,n_components)
     '''
     if via_object is None:
         if (X_input is None) or (graph is None):
             print(f"{datetime.now()}\tERROR: please provide both X_input and graph")
-    else:
+    if via_object is not None:
         X_input = via_object.data
+        print('X-input', X_input.shape)
         graph = via_object.csr_full_graph
     #X_input = via0.data
     n_cells = X_input.shape[0]
@@ -551,14 +648,23 @@ def via_umap(via_object = None, X_input: ndarray = None, graph:csr_matrix=None, 
     #weight all edges as 1 in order to prevent umap from pruning weaker edges away
     layout_array = np.zeros(shape=(n_cells,2))
 
-    if init_pos=='via':
+    if (init_pos=='via') and (via_object is None):
         #list of lists [[x,y], [x1,y1], []]
+        if (layout is None) or (cluster_membership is None): print('please provide via object or values for arguments: layout and cluster_membership')
+        else:
+            for i in range(n_cells):
+                layout_array[i,0]=layout[cluster_membership[i]][0]
+                layout_array[i, 1] = layout[cluster_membership[i]][1]
+            init_pos = layout_array
+            print(f'{datetime.now()}\tusing via cluster graph to initialize embedding')
+    elif (init_pos == 'via') and (via_object is not None):
+        layout = via_object.graph_node_pos
+        cluster_membership = via_object.labels
         for i in range(n_cells):
-            layout_array[i,0]=layout[cluster_membership[i]][0]
+            layout_array[i, 0] = layout[cluster_membership[i]][0]
             layout_array[i, 1] = layout[cluster_membership[i]][1]
         init_pos = layout_array
-        print('using via cluster graph to initialize embedding')
-
+        print(f'{datetime.now()}\tusing via cluster graph to initialize embedding')
     a, b = find_ab_params(spread, min_dist)
     #print('a,b, spread, dist', a, b, spread, min_dist)
     t0 = time.time()
@@ -573,11 +679,11 @@ def via_umap(via_object = None, X_input: ndarray = None, graph:csr_matrix=None, 
 
     #prod_matrix = graph.multiply(transpose)
     #graph = graph + transpose - prod_matrix
-    X_umap = simplicial_set_embedding(data=X_input, graph=graph, n_components=n_components, initial_alpha=alpha,
+    X_umap, aux_data = simplicial_set_embedding(data=X_input, graph=graph, n_components=n_components, initial_alpha=alpha,
                                       a=a, b=b, n_epochs=n_epochs, metric_kwds={}, gamma=gamma, metric=distance_metric,
                                       negative_sample_rate=negative_sample_rate, init=init_pos,
                                       random_state=np.random.RandomState(random_state),
-                                      verbose=1)
+                                      verbose=1, output_dens=False, densmap_kwds={}, densmap=False)
     if len(saveto)>0:
         U_df = pd.DataFrame(X_umap)
         U_df.to_csv(saveto)
@@ -598,15 +704,15 @@ def run_umap_hnsw(via_object=None, X_input: ndarray = None, graph: csr_matrix = 
                     n_epochs=n_epochs, distance_metric=distance_metric, layout=layout,
                     cluster_membership=cluster_membership, saveto=saveto)
 
-def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=None, idx:list=None, cmap_name='plasma', dpi=150, scatter_size =None,marker_lineages = [], fontsize:int=8):
+def draw_sc_lineage_probability(via_object, via_fine=None, embedding:ndarray=None, idx:list=None, cmap_name='plasma', dpi=150, scatter_size =None,marker_lineages = [], fontsize:int=8):
     '''
 
     G is the igraph knn (low K) used for shortest path in high dim space. no idx needed as it's made on full sample
     knn_hnsw is the knn made in the embedded space used for query to find the nearest point in the downsampled embedding
     that corresponds to the single cells in the full graph
 
-    :param via_coarse:
-    :param via_fine: usually just set to same as via_coarse unless you ran a refined run and want to link it to via_coarse's terminal clusters
+    :param via_object:
+    :param via_fine: usually just set to same as via_coarse unless you ran a refined run and want to link it to initial via_coarse's terminal clusters
     :param embedding: n_samples x 2. embedding is either the full or downsampled 2D representation of the full dataset.
     :param idx: if one uses a downsampled embedding of the original data, then idx is the selected indices of the downsampled samples used in the visualization
     :param cmap_name:
@@ -617,24 +723,24 @@ def draw_sc_lineage_probability(via_coarse, via_fine=None, embedding:ndarray=Non
     '''
 
     if via_fine is None:
-        via_fine = via_coarse
+        via_fine = via_object
     if len(marker_lineages) == 0:
         marker_lineages = via_fine.terminal_clusters
 
     else: marker_lineages = [i for i in marker_lineages if i in via_fine.terminal_clusters]
     print(f'{datetime.now()}\tMarker_lineages: {marker_lineages}')
     if embedding is None:
-        if via_coarse.embedding is None:
+        if via_object.embedding is None:
             print('ERROR: please provide a single cell embedding or run re-via with do_compute_embedding==True using either embedding_type = via-umap OR via-mds')
             return
         else:
-            print(f'automatically setting embedding to {via_coarse.embedding_type}')
-            embedding = via_coarse.embedding
+            print(f'automatically setting embedding to {via_object.embedding_type}')
+            embedding = via_object.embedding
 
-    if idx is None: idx = np.arange(0, via_coarse.nsamples)
-    #G = via_coarse.full_graph_shortpath
-    n_original_comp, n_original_comp_labels = connected_components(via_coarse.csr_full_graph, directed=False)
-    G = via_coarse.full_graph_paths(via_coarse.data, n_original_comp)
+    if idx is None: idx = np.arange(0, via_object.nsamples)
+    #G = via_object.full_graph_shortpath
+    n_original_comp, n_original_comp_labels = connected_components(via_object.csr_full_graph, directed=False)
+    G = via_object.full_graph_paths(via_object.data, n_original_comp)
     knn_hnsw = _make_knn_embeddedspace(embedding)
     y_root = []
     x_root = []
@@ -855,7 +961,7 @@ def draw_clustergraph(via_object, type_data='gene', gene_exp='', gene_list='', a
         ax_i.axis('off')
     fig.patch.set_visible(False)
     return fig, axs
-def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '',size_scatter:int=3, alpha_scatter:float = 0.3 ,headwidth_bundle:float=0.1, headwidth_alpha:float=0.8, arrow_frequency:float=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False, lineage_pathway:list = [], dpi:int = 300, fontsize:int=6):
+def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '',size_scatter:int=3, alpha_scatter:float = 0.3 ,headwidth_bundle:float=0.1, headwidth_alpha:float=0.8, arrow_frequency:float=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False, lineage_pathway:list = [], dpi:int = 300, fontsize_title:int=6, fontsize_labels:int=6):
 
     '''
 
@@ -1135,9 +1241,9 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                                        alpha=alpha_scatter, edgecolors='None', label=mode_label)
                             if fig_nrows == 1:
                                 if fig_ncols == 1:
-                                    ax.text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=6, color="black")
-                                else:ax[c].text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=6, color="black")
-                            else: ax[r,c].text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=6, color="black")
+                                    ax.text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=fontsize_labels, color="black")
+                                else:ax[c].text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=fontsize_labels, color="black")
+                            else: ax[r,c].text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=fontsize_labels, color="black")
                 time = datetime.now()
                 time = time.strftime("%H:%M")
                 if len(lineage_pathway)==0: title_ = extra_title_text + ' n_milestones = ' + str(int(layout.shape[0])) #+ ' time: ' + time
@@ -1150,16 +1256,16 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                         ax.spines['top'].set_visible(False)
                         ax.spines['right'].set_visible(False)
                         ax.set_facecolor(facecolor)
-                        ax.set_title(label=title_, color='black',fontsize=fontsize)
+                        ax.set_title(label=title_, color='black',fontsize=fontsize_title)
                         divider = make_axes_locatable(ax)
                         cax = divider.append_axes('right', size='5%', pad=0.05)
                         cb = fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
                         ax_cb = cb.ax
                         text = ax_cb.yaxis.label
                         font = matplotlib.font_manager.FontProperties(
-                            size=fontsize)  # family='times new roman', style='italic',
+                            size=fontsize_title)  # family='times new roman', style='italic',
                         text.set_font_properties(font)
-                        ax_cb.tick_params(labelsize=int(fontsize * 0.8))
+                        ax_cb.tick_params(labelsize=int(fontsize_title * 0.8))
                         cb.outline.set_visible(False)
 
                     else:
@@ -1168,7 +1274,7 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                         ax[c].spines['top'].set_visible(False)
                         ax[c].spines['right'].set_visible(False)
                         ax[c].set_facecolor(facecolor)
-                        ax[c].set_title(label=title_, color='black',fontsize=fontsize)
+                        ax[c].set_title(label=title_, color='black',fontsize=fontsize_title)
 
 
                         divider = make_axes_locatable(ax[c])
@@ -1177,9 +1283,9 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                         ax_cb = cb.ax
                         text = ax_cb.yaxis.label
                         font = matplotlib.font_manager.FontProperties(
-                            size=fontsize)  # family='times new roman', style='italic',
+                            size=fontsize_title)  # family='times new roman', style='italic',
                         text.set_font_properties(font)
-                        ax_cb.tick_params(labelsize=int(fontsize * 0.8))
+                        ax_cb.tick_params(labelsize=int(fontsize_title * 0.8))
                         cb.outline.set_visible(False)
 
                 else:
@@ -1189,7 +1295,7 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                     ax[r, c].spines['top'].set_visible(False)
                     ax[r, c].spines['right'].set_visible(False)
                     ax[r, c].set_facecolor(facecolor)
-                    ax[r,c].set_title(label=title_, color='black', fontsize=fontsize)
+                    ax[r,c].set_title(label=title_, color='black', fontsize=fontsize_title)
 
                     divider = make_axes_locatable(ax[r, c])
                     cax = divider.append_axes('right', size='5%', pad=0.05)
@@ -1198,9 +1304,9 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                     ax_cb = cb.ax
                     text = ax_cb.yaxis.label
                     font = matplotlib.font_manager.FontProperties(
-                        size=fontsize)  # family='times new roman', style='italic',
+                        size=fontsize_title)  # family='times new roman', style='italic',
                     text.set_font_properties(font)
-                    ax_cb.tick_params(labelsize=int(fontsize * 0.8))
+                    ax_cb.tick_params(labelsize=int(fontsize_title * 0.8))
                     cb.outline.set_visible(False)
 
                 counter_ +=1
@@ -1456,13 +1562,13 @@ def animate_edge_bundle(hammerbundle_dict=None,  via_object=None, linewidth_bund
     plt.show()
     return
 
-def animated_streamplot(via_coarse, embedding , density_grid=1,
+def animated_streamplot(via_object, embedding , density_grid=1,
  linewidth=0.5,min_mass = 1, cutoff_perc = None,scatter_size=500, scatter_alpha=0.2,marker_edgewidth=0.1, smooth_transition=1, smooth_grid=0.5, color_scheme = 'annotation', other_labels=[] , b_bias=20, n_neighbors_velocity_grid=None, fontsize=8, alpha_animate=0.7,
                         cmap_scatter = 'rainbow', cmap_stream='Blues', segment_length=1, saveto='/home/shobi/Trajectory/Datasets/animation.gif',use_sequentially_augmented=False, facecolor_='white', random_seed=0):
     '''
     Draw Animated vector plots. the Saved .gif file saved at the saveto address, is the best for viewing the animation as the fig, ax output can be slow
 
-    :param via_coarse: viaobject
+    :param via_object: viaobject
     :param embedding: ndarray (nsamples,2) umap, tsne, via-umap, via-mds
     :param density_grid:
     :param linewidth:
@@ -1500,9 +1606,9 @@ def animated_streamplot(via_coarse, embedding , density_grid=1,
 
     #import cartopy.crs as ccrs
     if embedding is None:
-        embedding = via_coarse.embedding
+        embedding = via_object.embedding
         if embedding is None: print(f'ERROR: please provide input parameter embedding of ndarray with shape (nsamples, 2)')
-    V_emb = via_coarse._velocity_embedding(embedding, smooth_transition, b=b_bias, use_sequentially_augmented=use_sequentially_augmented)
+    V_emb = via_object._velocity_embedding(embedding, smooth_transition, b=b_bias, use_sequentially_augmented=use_sequentially_augmented)
 
     V_emb *= 10 #the velocity of the samples has shape (n_samples x 2).*100
 
@@ -1535,11 +1641,11 @@ def animated_streamplot(via_coarse, embedding , density_grid=1,
     fig = plt.figure(figsize=(10, 6))
     ax = plt.subplot(1, 1, 1)
     fig.patch.set_visible(False)
-    if color_scheme == 'time': ax.scatter(embedding[:, 0], embedding[:, 1], c=via_coarse.single_cell_pt_markov, alpha=scatter_alpha, zorder=0,
+    if color_scheme == 'time': ax.scatter(embedding[:, 0], embedding[:, 1], c=via_object.single_cell_pt_markov, alpha=scatter_alpha, zorder=0,
                s=scatter_size, linewidths=marker_edgewidth, cmap=cmap_scatter)
     else:
-        if color_scheme == 'annotation': color_labels = via_coarse.true_label
-        if color_scheme == 'cluster': color_labels = via_coarse.labels
+        if color_scheme == 'annotation': color_labels = via_object.true_label
+        if color_scheme == 'cluster': color_labels = via_object.labels
         if color_scheme == 'other': color_labels = other_labels
 
         n_true = len(set(color_labels))
@@ -1681,12 +1787,12 @@ def animated_streamplot(via_coarse, embedding , density_grid=1,
     return fig, ax
 
 
-def via_streamplot(via_coarse, embedding:ndarray=None , density_grid:float=0.5, arrow_size:float=0.7, arrow_color:str = 'k',
+def via_streamplot(via_object, embedding:ndarray=None , density_grid:float=0.5, arrow_size:float=0.7, arrow_color:str = 'k',
 arrow_style="-|>",  max_length:int=4, linewidth:float=1,min_mass = 1, cutoff_perc:int = 5,scatter_size:int=500, scatter_alpha:float=0.5,marker_edgewidth:float=0.1, density_stream:int = 2, smooth_transition:int=1, smooth_grid:float=0.5, color_scheme:str = 'annotation', add_outline_clusters:bool=False, cluster_outline_edgewidth = 0.001,gp_color = 'white', bg_color='black' , dpi=300 , title='Streamplot', b_bias=20, n_neighbors_velocity_grid=None, other_labels:list = None,use_sequentially_augmented=False, cmap_str:str='rainbow'):
     '''
     Construct vector streamplot on the embedding to show a fine-grained view of inferred directions in the trajectory
 
-    :param via_coarse:
+    :param via_object:
     :param embedding:  np.ndarray of shape (n_samples, 2) umap or other 2-d embedding on which to project the directionality of cells
     :param density_grid:
     :param arrow_size:
@@ -1735,11 +1841,11 @@ arrow_style="-|>",  max_length:int=4, linewidth:float=1,min_mass = 1, cutoff_per
 
     import matplotlib.patheffects as PathEffects
     if embedding is None:
-        embedding = via_coarse.embedding
+        embedding = via_object.embedding
         if embedding is None:
-            print(f'{datetime.now()}\tWARNING: please assign ambedding attribute to via_coarse as v0.embedding = ndarray of [n_cells x 2]')
+            print(f'{datetime.now()}\tWARNING: please assign ambedding attribute to via_object as v0.embedding = ndarray of [n_cells x 2]')
 
-    V_emb = via_coarse._velocity_embedding(embedding, smooth_transition,b=b_bias, use_sequentially_augmented=use_sequentially_augmented)
+    V_emb = via_object._velocity_embedding(embedding, smooth_transition,b=b_bias, use_sequentially_augmented=use_sequentially_augmented)
 
     V_emb *=20 #5
 
@@ -1779,10 +1885,10 @@ arrow_style="-|>",  max_length:int=4, linewidth:float=1,min_mass = 1, cutoff_per
         ax.scatter(embedding[:, 0], embedding[:, 1], s=gp_size, marker=".", c=gp_color, zorder=-1)
 
     if color_scheme == 'time':
-        ax.scatter(embedding[:,0],embedding[:,1], c=via_coarse.single_cell_pt_markov,alpha=scatter_alpha,  zorder = 0, s=scatter_size, linewidths=marker_edgewidth, cmap = 'viridis_r')
+        ax.scatter(embedding[:,0],embedding[:,1], c=via_object.single_cell_pt_markov,alpha=scatter_alpha,  zorder = 0, s=scatter_size, linewidths=marker_edgewidth, cmap = 'viridis_r')
     else:
-        if color_scheme == 'annotation':color_labels = via_coarse.true_label
-        if color_scheme == 'cluster': color_labels= via_coarse.labels
+        if color_scheme == 'annotation':color_labels = via_object.true_label
+        if color_scheme == 'cluster': color_labels= via_object.labels
         if other_labels is not None: color_labels = other_labels
 
         cmap_ = plt.get_cmap(cmap_str)
@@ -1907,7 +2013,7 @@ def get_gene_expression(via0, gene_exp:pd.DataFrame, cmap:str='jet', dpi:int=150
                     axs[c].grid(False)
     return fig, axs
 
-def draw_trajectory_gams(via_coarse, via_fine=None, embedding: ndarray=None, idx:Optional[list]=None,
+def draw_trajectory_gams(via_object, via_fine=None, embedding: ndarray=None, idx:Optional[list]=None,
                          title_str:str= "Pseudotime", draw_all_curves:bool=True, arrow_width_scale_factor:float=15.0,
                          scatter_size:float=50, scatter_alpha:float=0.5,
                          linewidth:float=1.5, marker_edgewidth:float=1, cmap_pseudotime:str='viridis_r',dpi:int=150,highlight_terminal_states:bool=True, use_maxout_edgelist:bool =False):
@@ -1915,8 +2021,8 @@ def draw_trajectory_gams(via_coarse, via_fine=None, embedding: ndarray=None, idx
 
     projects the graph based coarse trajectory onto a umap/tsne embedding
 
-    :param via_coarse: via object
-    :param via_fine: via object suggest to use via_coarse unless you found that running via_fine gave better pathways
+    :param via_object: via object
+    :param via_fine: via object suggest to use via_object only unless you found that running via_fine gave better pathways
     :param embedding: 2d array [n_samples x 2] with x and y coordinates of all n_samples. Umap, tsne, pca OR use the via computed embedding via_object.embedding
     :param idx: default: None. Or List. if you had previously computed a umap/tsne (embedding) only on a subset of the total n_samples (subsampled as per idx), then the via objects and results will be indexed according to idx too
     :param title_str: title of figure
@@ -1933,18 +2039,18 @@ def draw_trajectory_gams(via_coarse, via_fine=None, embedding: ndarray=None, idx
     '''
 
     if embedding is None:
-        embedding = via_coarse.embedding
+        embedding = via_object.embedding
         if embedding is None: print(f'{datetime.now()}\t ERROR please provide an embedding or compute using via_mds() or via_umap()')
     if via_fine is None:
-        via_fine = via_coarse
+        via_fine = via_object
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-    if idx is None: idx = np.arange(0, via_coarse.nsamples)
+    if idx is None: idx = np.arange(0, via_object.nsamples)
     cluster_labels = list(np.asarray(via_fine.labels)[idx])
-    super_cluster_labels = list(np.asarray(via_coarse.labels)[idx])
-    super_edgelist = via_coarse.edgelist
+    super_cluster_labels = list(np.asarray(via_object.labels)[idx])
+    super_edgelist = via_object.edgelist
     if use_maxout_edgelist==True:
-        super_edgelist =via_coarse.edgelist_maxout
+        super_edgelist =via_object.edgelist_maxout
     true_label = list(np.asarray(via_fine.true_label)[idx])
     knn = via_fine.knn
     ncomp = via_fine.ncomp
@@ -1954,13 +2060,13 @@ def draw_trajectory_gams(via_coarse, via_fine=None, embedding: ndarray=None, idx
 
     sub_terminal_clusters = via_fine.terminal_clusters
 
+    
+    sc_pt_markov = list(np.asarray(via_fine.single_cell_pt_markov)[idx])
+    super_root = via_object.root[0]
 
-    sc_pt_markov = list(np.asarray(via_fine.single_cell_pt_markov[idx]))
-    super_root = via_coarse.root[0]
 
 
-
-    sc_supercluster_nn = sc_loc_ofsuperCluster_PCAspace(via_coarse, via_fine, np.arange(0, len(cluster_labels)))
+    sc_supercluster_nn = sc_loc_ofsuperCluster_PCAspace(via_object, via_fine, np.arange(0, len(cluster_labels)))
     # draw_all_curves. True draws all the curves in the piegraph, False simplifies the number of edges
     # arrow_width_scale_factor: size of the arrow head
     X_dimred = embedding * 1. / np.max(embedding, axis=0)
@@ -2470,14 +2576,14 @@ def _slow_sklearn_mds(via_graph: csr_matrix, X_pca:ndarray, t_diff_op:int=1):
     # X_mds = squareform(pdist(adata_counts.obsm['X_pca'][:, 0:ncomps+20])) #no diffusion makes is less streamlined and compact. more fuzzy
     return X_mds
 
-def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:str=None, ax_text=True, dpi=150,headwidth_arrow = 0.1, alpha_edge=0.4, linewidth_edge=2, edge_color='darkblue',reference=None, show_legend:bool=True, pie_size_scale:float=0.8, fontsize:float=8):
+def draw_piechart_graph(via_object, type_data='pt', gene_exp:list=[], title='', cmap:str=None, ax_text=True, dpi=150,headwidth_arrow = 0.1, alpha_edge=0.4, linewidth_edge=2, edge_color='darkblue',reference=None, show_legend:bool=True, pie_size_scale:float=0.8, fontsize:float=8):
     '''
     plot two subplots with a clustergraph level representation of the viagraph showing true-label composition (lhs) and pseudotime/gene expression (rhs)
     Returns matplotlib figure with two axes that plot the clustergraph using edge bundling
-             left axis shows the clustergraph with each node colored by annotated ground truth membership.
-             right axis shows the same clustergraph with each node colored by the pseudotime or gene expression
+    left axis shows the clustergraph with each node colored by annotated ground truth membership.
+    right axis shows the same clustergraph with each node colored by the pseudotime or gene expression
 
-    :param via0: is class VIA (the same function also exists as a method of the class and an external plotting function
+    :param via_object: is class VIA (the same function also exists as a method of the class and an external plotting function
     :param type_data: string  default 'pt' for pseudotime colored nodes. or 'gene'
     :param gene_exp: list of values (column of dataframe) corresponding to feature or gene expression to be used to color nodes at CLUSTER level
     :param title: string
@@ -2493,30 +2599,30 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:s
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     f, ((ax, ax1)) = plt.subplots(1, 2, sharey=True, dpi=dpi)
 
-    node_pos = via0.graph_node_pos
+    node_pos = via_object.graph_node_pos
 
     node_pos = np.asarray(node_pos)
     if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'viridis_r'
 
     if type_data == 'pt':
-        pt = via0.scaled_hitting_times  # these are the final MCMC refined pt then slightly scaled at cluster level
+        pt = via_object.scaled_hitting_times  # these are the final MCMC refined pt then slightly scaled at cluster level
         title_ax1 = "Pseudotime"
 
     if type_data == 'gene':
         pt = gene_exp
         title_ax1 = title
-    if reference is None: reference_labels=via0.true_label
+    if reference is None: reference_labels=via_object.true_label
     else: reference_labels = reference
-    n_groups = len(set(via0.labels))
+    n_groups = len(set(via_object.labels))
     n_truegroups = len(set(reference_labels))
     group_pop = np.zeros([n_groups, 1])
     group_frac = pd.DataFrame(np.zeros([n_groups, n_truegroups]), columns=list(set(reference_labels)))
-    via0.cluster_population_dict = {}
-    for group_i in set(via0.labels):
-        loc_i = np.where(via0.labels == group_i)[0]
+    via_object.cluster_population_dict = {}
+    for group_i in set(via_object.labels):
+        loc_i = np.where(via_object.labels == group_i)[0]
 
         group_pop[group_i] = len(loc_i)  # np.sum(loc_i) / 1000 + 1
-        via0.cluster_population_dict[group_i] = len(loc_i)
+        via_object.cluster_population_dict[group_i] = len(loc_i)
         true_label_in_group_i = list(np.asarray(reference_labels)[loc_i])
         for ii in set(true_label_in_group_i):
             group_frac[ii][group_i] = true_label_in_group_i.count(ii)
@@ -2529,8 +2635,8 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:s
 
     bboxes = getbb(sct, ax)
 
-    ax = plot_edgebundle_viagraph(ax, via0.hammerbundle_cluster, layout=via0.graph_node_pos, CSM=via0.CSM,
-                            velocity_weight=via0.velo_weight, pt=pt, headwidth_bundle=headwidth_arrow,
+    ax = plot_edgebundle_viagraph(ax, via_object.hammerbundle_cluster, layout=via_object.graph_node_pos, CSM=via_object.CSM,
+                            velocity_weight=via_object.velo_weight, pt=pt, headwidth_bundle=headwidth_arrow,
                             alpha_bundle=alpha_edge,linewidth_bundle=linewidth_edge, edge_color=edge_color)
 
     trans = ax.transData.transform
@@ -2547,8 +2653,8 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:s
 
     for node_i in range(n_groups):
 
-        cluster_i_loc = np.where(np.asarray(via0.labels) == node_i)[0]
-        majority_true = via0.func_mode(list(np.asarray(reference_labels)[cluster_i_loc]))
+        cluster_i_loc = np.where(np.asarray(via_object.labels) == node_i)[0]
+        majority_true = via_object.func_mode(list(np.asarray(reference_labels)[cluster_i_loc]))
         pie_size = pie_size_ar[node_i][0] *pie_size_scale
 
         x1, y1 = trans(node_pos[node_i])  # data coordinates
@@ -2574,10 +2680,10 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:s
     labels = list(set(reference_labels))
     if show_legend ==True: plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon=False)
 
-    if via0.time_series==True:
-        ti = 'Cluster Composition. K=' + str(via0.knn) + '. ncomp = ' + str(via0.ncomp)  +'knnseq_'+str(via0.knn_sequential)# "+ is_sub
+    if via_object.time_series==True:
+        ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(via_object.ncomp)  +'knnseq_'+str(via_object.knn_sequential)# "+ is_sub
     else:
-        ti = 'Cluster Composition. K=' + str(via0.knn) + '. ncomp = ' + str(via0.ncomp)
+        ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(via_object.ncomp)
     ax.set_title(ti)
     ax.grid(False)
     ax.set_xticks([])
@@ -2585,11 +2691,11 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:s
 
     title_list = [title_ax1]
     for i, ax_i in enumerate([ax1]):
-        pt = via0.markov_hitting_times if type_data == 'pt' else gene_exp
+        pt = via_object.markov_hitting_times if type_data == 'pt' else gene_exp
 
         c_edge, l_width = [], []
         for ei, pti in enumerate(pt):
-            if ei in via0.terminal_clusters:
+            if ei in via_object.terminal_clusters:
                 c_edge.append('red')
                 l_width.append(1.5)
             else:
@@ -2599,7 +2705,7 @@ def draw_piechart_graph(via0, type_data='pt', gene_exp:list=[], title='', cmap:s
         gp_scaling = 1000 / max(group_pop)
 
         group_pop_scale = group_pop * gp_scaling * 0.5
-        ax_i=plot_edgebundle_viagraph(ax_i, via0.hammerbundle_cluster, layout=via0.graph_node_pos,CSM=via0.CSM, velocity_weight=via0.velo_weight, pt=pt,headwidth_bundle=headwidth_arrow, alpha_bundle=alpha_edge, linewidth_bundle=linewidth_edge, edge_color=edge_color)
+        ax_i=plot_edgebundle_viagraph(ax_i, via_object.hammerbundle_cluster, layout=via_object.graph_node_pos,CSM=via_object.CSM, velocity_weight=via_object.velo_weight, pt=pt,headwidth_bundle=headwidth_arrow, alpha_bundle=alpha_edge, linewidth_bundle=linewidth_edge, edge_color=edge_color)
 
         im1 = ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale, c=pt, cmap=cmap,
                            edgecolors=c_edge,
