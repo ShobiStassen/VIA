@@ -1,6 +1,12 @@
 Release History
 ===============
 
+Version 0.1.77
+-------------
+- updated for compatibilty with umap-learn >=0.5.0
+- bugfix of argument ``labels`` (predetermined cluster labels, overrides via's clustering): edited the api to clarify that this needs to be of type and size ``ndarray (nsamples, )``
+- updated function via_umap() to run with simply ``via_umap(via_object = v0)`` or ``via_umap(via_object = v0, init='via')``
+
 Version 0.1.73
 -------------
 - added lineage pathway visualization to improve the existing edge plotting function ``plot_edge_bundle()``
@@ -48,6 +54,11 @@ Version 0.1.62
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/milestoneplot_withannots.png?raw=true" width="600px" align="center" </a>
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/gene_pt_heatmap_example.png?raw=true" width="600px" align="center" </a>
+
 
 Version 0.1.61
 -------------
