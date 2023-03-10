@@ -12,6 +12,13 @@ Please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" width="600px" align="center" </a>
 
+**VIA plots hi-res edge graph for Mouse Gastrulation (Pijuan Sala) human hematopoiesis**
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/milestoneplot_withannots.png?raw=true" width="600px" align="center" </a>
+
+
 |:eight_spoked_asterisk:| **Fine-grained vector field without using RNA-velocity**
 
 .. raw:: html
