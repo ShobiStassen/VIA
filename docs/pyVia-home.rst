@@ -19,7 +19,13 @@ Please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" width="600px" align="center" </a>
 
-**VIA plots hi-res edge graph for human hematopoiesis**
+**VIA plots hi-res edge graph for Mouse Gastrulation (Pijuan Sala) human hematopoiesis**
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/milestoneplot_withannots.png?raw=true" width="600px" align="center" </a>
+
+**VIA plots hi-res edge graph for human hematopoiesis (Setty)**
 
 .. raw:: html
 
@@ -32,7 +38,6 @@ There are several `Jupyter Notebooks <https://github.com/ShobiStassen/VIA/tree/m
 
 
 **scATAC-seq Human Hematopoiesis** `(click to open interactive VIA graph) <https://shobistassen.github.io/toggle_data.html>`_
-
 
 .. raw:: html
 
