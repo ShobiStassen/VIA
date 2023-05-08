@@ -1,6 +1,10 @@
 Release History
 ===============
 
+Version 0.1.82
+-------------
+- minor bugs in parameter naming conventions for gene trend plotting function
+
 Version 0.1.77
 -------------
 - updated for compatibilty with umap-learn >=0.5.0
