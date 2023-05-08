@@ -530,7 +530,7 @@ def sequential_knn(data: np.ndarray, time_series_labels: list, neighbors: np.nda
     all_new_nn = np.ones((data.shape[0], k_seq + k_reverse))
     all_new_nn_data = np.ones((data.shape[0], k_seq + k_reverse))
     time_series_set = sorted(list(set(time_series_labels)))  # values sorted in ascending order
-    print(f"{datetime.now()}\tTime series ordered set{time_series_set}")
+    print(f"{datetime.now()}\tTime series ordered set {time_series_set}")
     time_series_labels = np.asarray(time_series_labels)
 
     for counter, tj in enumerate(time_series_set[1:]):
@@ -708,7 +708,7 @@ def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
     # print('new_superclust_index_ds',new_superclust_index_ds)
     return new_superclust_index_ds
 
-def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_size=None, vmax=99, fontsize:int=10):
+def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_size=None, vmax=99, fontsize:int=10, alpha_factor=0.9):
     '''
     This is a helper function called by draw_sc_lineage_probability which plots the single-cell lineage probabilities
 
@@ -728,8 +728,8 @@ def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_s
     cmap = matplotlib.cm.get_cmap(cmap_name)
     #norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
     if scatter_size is None:
-        size_point = 10 if embedding.shape[0] > 10000 else 30
-    else: size_point = scatter_size
+        scatter_size = 7 if embedding.shape[0] > 10000 else 15
+
     # changing the alpha transparency parameter for plotting points
 
     c = cmap(prob).reshape(-1, 4)
@@ -750,17 +750,17 @@ def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_s
 
     #c = cmap(norm(prob)).reshape(-1, 4)
     loc_c = np.where(prob <= 0.3)[0]
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none',alpha=0.2, cmap=cmap_name,vmin=0, vmax=vmax)
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=scatter_size, edgecolors='none',alpha=0.2*alpha_factor, cmap=cmap_name,vmin=0, vmax=vmax)
     c[loc_c, 3] = 0.2
     loc_c = np.where((prob > 0.3) & (prob <= 0.5))[0]
     c[loc_c, 3] = 0.5
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.5, cmap=cmap_name,vmin=0, vmax=vmax)
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=scatter_size, edgecolors='none', alpha=0.5*alpha_factor, cmap=cmap_name,vmin=0, vmax=vmax)
     loc_c = np.where((prob > 0.5) & (prob <= 0.7))[0]
-    c[loc_c, 3] = 0.8
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name,vmin=0, vmax=vmax)
+    c[loc_c, 3] = 0.8 #changing the alpha
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=scatter_size, edgecolors='none', alpha=0.8*alpha_factor, cmap=cmap_name,vmin=0, vmax=vmax)
     loc_c = np.where((prob > 0.7))[0]
     c[loc_c, 3] = 0.8
-    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=size_point, edgecolors='none', alpha=0.8, cmap=cmap_name,vmin=0, vmax=vmax)
+    ax.scatter(embedding[loc_c, 0], embedding[loc_c, 1], c=prob[loc_c], s=scatter_size, edgecolors='none', alpha=0.8*alpha_factor, cmap=cmap_name,vmin=0, vmax=vmax)
 
 from datashader.bundling import connect_edges, hammer_bundle
 def sigmoid_func(X):
@@ -933,13 +933,13 @@ def infer_direction_piegraph(start_node, end_node, CSM, velocity_weight,pt, tanh
     if CSM is None:
         velocity_weight=csm_es= csm_se=0
     else:
-        csm_se = CSM[start_node,end_node] #cosine similarity from start-to-end
-        csm_es = CSM[end_node, start_node] #cosine similarity from end-to-start
-        '''
+        csm_se = 3*CSM[start_node,end_node] #cosine similarity from start-to-end
+        csm_es = 3*CSM[end_node, start_node] #cosine similarity from end-to-start
+
         print('csm_start', csm_se)
         print('csm_end', -1 * csm_es)
         print('csm', csm_se + -1 * csm_es)
-        '''
+
         # Note csm_es does not equal -csm_se because the velocity vector used in the dot product refers to the originating cell
 
     mpt=max(pt)
@@ -1067,11 +1067,11 @@ def stationary_probability_(A_velo):
 
     print(f"{datetime.now()}\tStationary distribution normed {np.round(pi,3)}")
     sorted_pi = np.argsort(pi)
-    velo_root_top3 = sorted_pi[0:10]
+    velo_root_top10 = sorted_pi[0:10]
     print(f"{datetime.now()}\tTop 5 candidates for root: {np.round(sorted_pi[0:10],2)} with stationary prob (%) {np.round(pi[sorted_pi[0:10]]*100,3)}")
     print(f"{datetime.now()}\tTop 5 candidates for terminal: {np.flip(sorted_pi)[0:5]}")
 
-    return pi, velo_root_top3
+    return pi, velo_root_top10
 
 
 
@@ -1111,9 +1111,9 @@ def velocity_transition(A,V,G, slope =4):
     A_velo = np.multiply(A_velo,A) #multiply element-wise the edge-weight of the transition matrix A by the velocity-factor
 
     print(f"{datetime.now()}\tLooking for initial states")
-    pi, velo_root_top3 = stationary_probability_(A_velo)
+    pi, velo_root_top10 = stationary_probability_(A_velo)
 
-    return A_velo, CSM, velo_root_top3
+    return A_velo, CSM, velo_root_top10
 
 def sc_CSM(A, V, G):
     '''
