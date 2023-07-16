@@ -22,7 +22,7 @@ import pygam as pg
 from sklearn.preprocessing import normalize
 from typing import Optional, Union
 #from utils_via import *
-from pyVIA.utils_via import * 
+from pyVIA.utils_via import * #
 import random
 from scipy.spatial.distance import pdist, squareform
 from sklearn.preprocessing import StandardScaler
@@ -139,7 +139,7 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
         from sklearn.cluster import KMeans
         kmeans = KMeans(n_clusters=n_milestones, random_state=random_state).fit(embedding)
         milestone_labels = kmeans.labels_.flatten().tolist()
-        print(f'{datetime.now()}\tEnd milestones')
+        print(f'{datetime.now()}\tEnd milestones with {n_milestones}')
         #plt.scatter(embedding[:, 0], embedding[:, 1], c=milestone_labels, cmap='tab20', s=1, alpha=0.3)
         #plt.show()
     if sc_labels_numeric is None:
@@ -283,7 +283,7 @@ def plot_gene_trend_heatmaps(via_object, df_gene_exp:pd.DataFrame, marker_lineag
     b.set_xlabel("pseudotime", fontsize=int(fontsize*1.3))
     return fig, ax_list
 
-def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3, edgecolors='None',title:str='', text_labels:bool=True, color_dict=None, categorical:bool=None, via_object=None,sc_index_terminal_states:list=None,true_labels:list=[]):
+def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3, edgecolors='None',title:str='', text_labels:bool=True, color_dict=None, via_object=None,sc_index_terminal_states:list=None,true_labels:list=[], show_legend:bool=True):
     '''
     General scatter plotting tool for numeric and categorical labels on the single-cell level
 
@@ -319,7 +319,9 @@ def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3,
 
     elif categorical==True:
         color_dict = {}
-        for index, value in enumerate(set(labels)):
+        set_labels = list(set(labels))
+        set_labels.sort(reverse=True)
+        for index, value in enumerate(set_labels):
             color_dict[value] = index
         palette = cm.get_cmap(cmap, len(color_dict.keys()))
         cmap_ = palette(range(len(color_dict.keys())))
@@ -334,7 +336,7 @@ def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3,
             if text_labels==True: ax.text(x_mean, y_mean, key, style='italic', fontsize=10, color="black")
     else:
         im=ax.scatter(embedding[:, 0], embedding[:, 1], c=labels,
-                        cmap=cmap, s=3, alpha=0.5)
+                        cmap=cmap, s=s, alpha=alpha)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='5%', pad=0.05)
         fig.colorbar(im, cax=cax, orientation='vertical',
@@ -364,7 +366,7 @@ def plot_scatter(embedding:ndarray, labels:list, cmap='rainbow', s=5, alpha=0.3,
 
     if len(title)==0: ax.set_title(label='scatter plot', color= 'blue')
     else:    ax.set_title(label=title, color= 'blue')
-    ax.legend(fontsize=6, frameon=False)
+    if show_legend: ax.legend(fontsize=12, frameon=False)
     ax.grid(False)
     # Hide axes ticks
     ax.set_xticks([])
@@ -630,13 +632,15 @@ def via_umap(via_object = None, X_input: ndarray = None, graph:csr_matrix=None, 
     if via_object is None:
         if (X_input is None) or (graph is None):
             print(f"{datetime.now()}\tERROR: please provide both X_input and graph")
+
     if via_object is not None:
         X_input = via_object.data
         print('X-input', X_input.shape)
         graph = via_object.csr_full_graph
+        if cluster_membership is None: cluster_membership=via_object.labels
     #X_input = via0.data
     n_cells = X_input.shape[0]
-    print(f'n cell {n_cells} and len clustermembership {len(cluster_membership)}')
+    print(f'n cell {n_cells}')
     #graph = graph+graph.T
     #graph = via0.csr_full_graph
     print(f"{datetime.now()}\tComputing umap on sc-Viagraph")
@@ -733,7 +737,7 @@ def draw_sc_lineage_probability(via_object, via_fine=None, embedding:ndarray=Non
             print('ERROR: please provide a single cell embedding or run re-via with do_compute_embedding==True using either embedding_type = via-umap OR via-mds')
             return
         else:
-            print(f'automatically setting embedding to {via_object.embedding_type}')
+            print(f'automatically setting embedding to via_object.embedding')
             embedding = via_object.embedding
 
     if idx is None: idx = np.arange(0, via_object.nsamples)
@@ -961,7 +965,7 @@ def draw_clustergraph(via_object, type_data='gene', gene_exp='', gene_list='', a
         ax_i.axis('off')
     fig.patch.set_visible(False)
     return fig, axs
-def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '',size_scatter:int=3, alpha_scatter:float = 0.3 ,headwidth_bundle:float=0.1, headwidth_alpha:float=0.8, arrow_frequency:float=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False, lineage_pathway:list = [], dpi:int = 300, fontsize_title:int=6, fontsize_labels:int=6,global_visual_pruning=0.5,use_sc_labels_sequential_for_direction:bool = False,lineage_alpha_threshold:float=50):
+def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '',size_scatter:int=1, alpha_scatter:float = 0.3 ,headwidth_bundle:float=0.1, headwidth_alpha:float=0.8, arrow_frequency:float=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False, lineage_pathway:list = [], dpi:int = 300, fontsize_title:int=6, fontsize_labels:int=6,global_visual_pruning=0.5,use_sc_labels_sequential_for_direction:bool = False,sc_scatter_size=3,sc_scatter_alpha:float=0.4):
 
     '''
 
@@ -977,6 +981,7 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
     :param alpha_bundle: alpha when drawing lines
     :param linewidth_bundle: linewidth of bundled lines
     :param edge_color:
+    :param size_scatter: scatter size of the milestones (use sc_size_scatter to control single cell scatter when using in conjunction with lineage probs)
     :param arrow_frequency: min dist between arrows (bundled edges otherwise have overcrowding of arrows)
     :param show_direction: True will draw arrows along the lines to indicate direction
     :param milestone_edges: pandas DataFrame milestoone_edges[['source','target']]
@@ -993,10 +998,14 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
     :param lineage_pathway: list of terminal states to plot lineage pathways
     :param use_sc_labels_sequential_for_direction: use the sequential data (timeseries labels or other provided by user) to direct the arrows
     :param lineage_alpha_threshold number representing the percentile (0-100) of lineage likelikhood in a particular lineage pathway, below which edges will be drawn with lower alpha transparency factor
+    :param sc_scatter_alpha transparency of the background singlecell scatter when plotting lineages
     :return: fig, axis with bundled edges plotted
     '''
+    sc_scatter_alpha=1-sc_scatter_alpha
     cmap_name = cmap
     headwidth_alpha_og= headwidth_alpha
+    linewidth_bundle_og = linewidth_bundle
+    alpha_bundle_factor_og =alpha_bundle_factor
     if hammerbundle_dict is None:
         if via_object is None: print('if hammerbundle_dict is not provided, then you must provide via_object')
         else:
@@ -1050,6 +1059,8 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
         #fig, ax = plt.subplots(facecolor=facecolor)
         fig_nrows, fig_ncols = 1,1
     else:
+        lineage_pathway_temp = [i for i in lineage_pathway if i in via_object.terminal_clusters] #checking the clusters are actually in terminal_clusters
+        lineage_pathway=lineage_pathway_temp
         n_terminal_clusters = len(lineage_pathway)
         fig_ncols = min(3, n_terminal_clusters)
         fig_nrows, mod = divmod(n_terminal_clusters, fig_ncols)
@@ -1067,6 +1078,17 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                 if len(lineage_pathway) > 0:
                     milestone_numeric_values = hammerbundle_dict['milestone_embedding'][
                         'sc_lineage_probability_' + str(lineage_pathway[counter_])]
+                    p1_sc_bp = np.nan_to_num(via_object.single_cell_bp, nan=0.0, posinf=0.0, neginf=0.0) #single cell lineage probabilities sc pb
+                    # row normalize
+                    row_sums = p1_sc_bp.sum(axis=1)
+                    p1_sc_bp = p1_sc_bp / row_sums[:,np.newaxis]  # make rowsums a column vector where i'th entry is sum of i'th row in p1-sc-bp
+                    ts_cluster_number = lineage_pathway[counter_]
+                    ts_array_original = np.asarray(via_object.terminal_clusters)
+                    loc_ts_current = np.where(ts_array_original == ts_cluster_number)[0][0]
+                    print(f'location of {lineage_pathway[counter_]} is at {np.where(ts_array_original == ts_cluster_number)[0]} and {loc_ts_current}')
+                    p1_sc_bp = p1_sc_bp[:, loc_ts_current]
+
+                    #print(f'{datetime.now()}\tCheck sc pb {p1_sc_bp[0, :].sum()} ')
                     if via_object is not None:
                         ts_current = lineage_pathway[counter_]
                         loc_labels = np.where(np.asarray(via_object.labels) == ts_current)[0]
@@ -1107,6 +1129,50 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                     max_numerical_value = max(milestone_numeric_values)
                     min_numerical_value = min(milestone_numeric_values)
 
+
+                ##inserting edits here
+
+                from matplotlib.patches import Rectangle
+                sc_embedding = via_object.embedding
+                max_r = np.max(via_object.embedding[:, 0]) + 1
+                max_l = np.min(via_object.embedding[:, 0]) - 1
+
+                max_up = np.max(via_object.embedding[:, 1]) + 1
+                max_dw = np.min(via_object.embedding[:, 1]) - 1
+
+                if len(lineage_pathway)>0:
+                    if fig_nrows == 1:
+                        if fig_ncols == 1:
+                            plot_sc_pb(ax, fig, embedding=via_object.embedding, prob=p1_sc_bp,
+                                       ti=str(ts_current) + '-' + str(majority_composition), cmap_name=cmap_name,
+                                       scatter_size=sc_scatter_size, fontsize=4, alpha_factor=1, show_legend=False)
+                            ax.add_patch(
+                                Rectangle((max_l, max_dw), max_r - max_l, max_up - max_dw, facecolor="white",
+                                          alpha=sc_scatter_alpha))
+                            #ax.scatter(via_object.embedding[:, 0], via_object.embedding[:, 1], alpha=0.05, c='white',                                             s=5)
+
+                        else:
+
+                            plot_sc_pb(ax[c], fig, embedding=sc_embedding, prob=p1_sc_bp,
+                                   ti=str(ts_current) + '-' + str(majority_composition), cmap_name=cmap_name,
+                                   scatter_size=sc_scatter_size, fontsize=4, alpha_factor=1, show_legend=False)
+                            ax[c].add_patch(
+                                Rectangle((max_l, max_dw), max_r - max_l, max_up - max_dw, facecolor="white",
+                                          alpha=sc_scatter_alpha))
+                            #ax[c].scatter(via_object.embedding[:, 0], via_object.embedding[:, 1], alpha=0.1, c='white', s=4)
+
+                    else:
+
+                        plot_sc_pb(ax[r, c], fig, embedding=sc_embedding, prob=p1_sc_bp,
+                                   ti=str(ts_current) + '-' + str(majority_composition), cmap_name=cmap_name,
+                                   scatter_size=sc_scatter_size, fontsize=4, alpha_factor=1, show_legend=False)
+
+                        ax[r,c].add_patch(Rectangle((max_l, max_dw), max_r-max_l, max_up-max_dw, facecolor="white", alpha=sc_scatter_alpha)) #0.7
+                        #ax[r, c].scatter(layout[:, 0], layout[:, 1], s=40,                                         c='white', cmap=cmap_name,                                         alpha=0.5, edgecolors='none')  # vmax=1)
+                        #ax[r, c].scatter(via_object.embedding[:, 0], via_object.embedding[:, 1], alpha=0.1, c='white', s=4,edgecolors='none')
+
+
+                #end white edits
                 seg_count = 0
 
                 for seg in segments[::step]:
@@ -1133,17 +1199,25 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                     target_milestone_numerical_value = milestone_numeric_values[target_milestone]
                     #print('source milestone', source_milestone_numerical_value)
                     #print('target milestone', target_milestone_numerical_value)
-                    min_source_target_numerical_value = min(source_milestone_numerical_value,target_milestone_numerical_value)
+                    min_source_target_numerical_value = min(source_milestone_numerical_value,target_milestone_numerical_value) #ORIGINALLY USING MIN()
+                    #min_source_target_numerical_value =(source_milestone_numerical_value+       target_milestone_numerical_value)/2
                     max_source_target_numerical_value = max(source_milestone_numerical_value,
                                                             target_milestone_numerical_value)
                     # consider using the max value for lineage pathways to better highlight the high probabilties near the cell fate
                     if len(lineage_pathway) > 0:
                         #rgba = cmap((min_source_target_numerical_value - min_numerical_value) / (max_numerical_value - min_numerical_value))
 
-                        if min_source_target_numerical_value <= np.percentile(milestone_numeric_values,lineage_alpha_threshold):
-                            alpha_bundle=0.2
-                            headwidth_alpha = 0.2
-                        else: headwidth_alpha=headwidth_alpha_og
+                        if min_source_target_numerical_value <= 0.3*np.max(milestone_numeric_values):# 0.1:#np.percentile(milestone_numeric_values,lineage_alpha_threshold):
+                            alpha_bundle=0.01#0.2
+                            headwidth_alpha = 0.01#0.2
+                            linewidth_bundle = 0.1*linewidth_bundle_og
+                        elif ((min_source_target_numerical_value >0.3*np.max(milestone_numeric_values)) & (min_source_target_numerical_value <0.7*np.max(milestone_numeric_values))):# 0.1:#np.percentile(milestone_numeric_values,lineage_alpha_threshold):
+                            alpha_bundle=0.05#max(min_source_target_numerical_value/np.max(milestone_numeric_values) *alpha_bundle,0.01)
+                            headwidth_alpha = 0.01#0.2
+                            linewidth_bundle =min_source_target_numerical_value/np.max(milestone_numeric_values)*linewidth_bundle_og
+                        else:
+                            headwidth_alpha=headwidth_alpha_og
+                            linewidth_bundle =  linewidth_bundle_og*1.4
                     rgba = cmap((min_source_target_numerical_value - min_numerical_value) / (max_numerical_value - min_numerical_value))
 
                     #else: rgba = cmap(min(seg_weight,0.95))#cmap(seg.shape[0]/(max_seg_length-min_seg_length))
@@ -1154,9 +1228,14 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
 
                     if fig_nrows == 1:
 
-                        if fig_ncols == 1: ax.plot(seg_p[:, 0], seg_p[:, 1],linewidth=linewidth_bundle*seg_weight, alpha=alpha_bundle, color=rgba)#edge_color )
-                        else:  ax[c].plot(seg_p[:, 0], seg_p[:, 1],linewidth=linewidth_bundle*seg_weight, alpha=alpha_bundle, color=rgba)#edge_color )
-                    else: ax[r,c].plot(seg_p[:, 0], seg_p[:, 1],linewidth=linewidth_bundle*seg_weight, alpha=alpha_bundle, color=rgba)#edge_color )
+                        if fig_ncols == 1:
+                            ax.plot(seg_p[:, 0], seg_p[:, 1],linewidth=linewidth_bundle*seg_weight, alpha=alpha_bundle, color=rgba)#edge_color )
+                        else:
+                            ax[c].plot(seg_p[:, 0], seg_p[:, 1],linewidth=linewidth_bundle*seg_weight, alpha=alpha_bundle, color=rgba)#edge_color )
+                    else:
+
+                        ax[r, c].plot(seg_p[:, 0], seg_p[:, 1], linewidth=linewidth_bundle * seg_weight,
+                                      alpha=alpha_bundle, color=rgba)  # edge_color )
 
                     if (show_arrow) & (seg_p.shape[0]>3):
                         mid_point = math.floor(seg_p.shape[0] / 2)
@@ -1223,19 +1302,47 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                             im = ax.scatter(layout[:, 0], layout[:, 1], s=0.01,
                                        c=milestone_numeric_values_normed, cmap=cmap_name,
                                        edgecolors='None') #without alpha parameter which otherwise gets passed onto the colorbar
+
                             ax.scatter(layout[:,0], layout[:,1], s=size_scatter_scaled, c=milestone_numeric_values_normed, cmap= cmap_name, alpha=alpha_scatter, edgecolors='None')
+
                         else:
-                            im = ax[c].scatter(layout[:, 0], layout[:, 1], s=size_scatter_scaled,
-                                               c=milestone_numeric_values_normed, cmap=cmap_name,
+                            im = ax[c].scatter(layout[:, 0], layout[:, 1],     s=0.01,                                       c=milestone_numeric_values_normed, cmap=cmap_name,
                                             edgecolors='None') #without alpha parameter which otherwise gets passed onto the colorbar
+
                             ax[c].scatter(layout[:,0], layout[:,1], s=size_scatter_scaled, c=milestone_numeric_values_normed,cmap= cmap_name, alpha=alpha_scatter, edgecolors='None')
                     else:
+                        '''
+                       
+                        ax[r, c].scatter(layout[:, 0], layout[:, 1], s=size_scatter_scaled*3,
+                                         c=milestone_numeric_values_normed, cmap=cmap_name,
+                                         alpha=alpha_scatter*0.5, edgecolors='none', vmin=min_numerical_value)  # vmax=1)
+                        
+                        
+                        '''
+                        im = ax[r, c].scatter(layout[:, 0], layout[:, 1], c=milestone_numeric_values_normed, s=0.01,
+                                              cmap=cmap_name, edgecolors='none', vmin=min_numerical_value)
+                        ax[r, c].scatter(layout[:, 0], layout[:, 1], s=size_scatter_scaled*1.5,
+                                        c=milestone_numeric_values_normed, cmap=cmap_name,
+                                        alpha=alpha_scatter, edgecolors='none', vmin=min_numerical_value)  # vmax=1)
 
-                        im = ax[r, c].scatter(layout[:,0], layout[:,1], c=milestone_numeric_values_normed, s=0.01, cmap=cmap_name,  edgecolors='none', vmin= min_numerical_value)
-                        ax[r, c].scatter(layout[:, 0], layout[:, 1], s=size_scatter_scaled,
-                                              c=milestone_numeric_values_normed, cmap=cmap_name,
-                                              alpha=alpha_scatter, edgecolors='None', vmin=min_numerical_value)#  vmax=1)
 
+                        ''''
+                        if len(lineage_pathway)>0:
+                            #accentuate the scatter size for nodes significant to a lineage
+                            for j in range(layout.shape[0]):
+                                if milestone_numeric_values_normed[j] > 0.5*max_numerical_value:
+                                    if scale_scatter_size_pop:
+                                        ax[r, c].scatter(layout[j, 0], layout[j, 1], s=size_scatter_scaled[j] * 1.5,
+                                             c=milestone_numeric_values_normed[j], cmap=cmap_name,
+                                             alpha=alpha_scatter * 1.5, edgecolors='None',
+                                             vmin=min_numerical_value)  # vmax=1)
+                                    else:
+                                        print(f'node {j} {milestone_numeric_values_normed[j]}')
+                                        ax[r, c].scatter(layout[j, 0], layout[j, 1], s=size_scatter_scaled*1.5,
+                                                     c=milestone_numeric_values_normed[j], cmap=cmap_name,
+                                                     alpha=alpha_scatter*1.5, edgecolors='None',
+                                                     vmin=min_numerical_value)  # vmax=1)
+                        '''
                     if text_labels == True:
 
                         #if text labels is true but user has not provided any labels at the sc level from which to create milestone categorical labels
@@ -1289,7 +1396,8 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
                         ax.set_title(label=title_, color='black',fontsize=fontsize_title)
                         divider = make_axes_locatable(ax)
                         cax = divider.append_axes('right', size='5%', pad=0.05)
-                        cb = fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
+                        if len(lineage_pathway) > 0: cb = fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
+                        else:cb = fig.colorbar(im, cax=cax, orientation='vertical', label='pseudotime')
                         ax_cb = cb.ax
                         text = ax_cb.yaxis.label
                         font = matplotlib.font_manager.FontProperties(
@@ -1309,7 +1417,9 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
 
                         divider = make_axes_locatable(ax[c])
                         cax = divider.append_axes('right', size='5%', pad=0.05)
-                        cb = fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
+                        if len(lineage_pathway) > 0: cb = fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
+                        else: cb = fig.colorbar(im, cax=cax, orientation='vertical', label='pseudotime')
+
                         ax_cb = cb.ax
                         text = ax_cb.yaxis.label
                         font = matplotlib.font_manager.FontProperties(
@@ -1329,8 +1439,11 @@ def plot_edge_bundle(hammerbundle_dict=None, via_object=None, alpha_bundle_facto
 
                     divider = make_axes_locatable(ax[r, c])
                     cax = divider.append_axes('right', size='5%', pad=0.05)
-                    cb = fig.colorbar(im, cax=cax, orientation='vertical', label='Lineage likelihood',
-                                      cmap='plasma')
+                    if len(lineage_pathway) > 0:
+                        cb = fig.colorbar(im, cax=cax, orientation='vertical', label='Lineage likelihood')
+                    else:
+                        cb = fig.colorbar(im, cax=cax, orientation='vertical', label='pseudotime')
+
                     ax_cb = cb.ax
                     text = ax_cb.yaxis.label
                     font = matplotlib.font_manager.FontProperties(
@@ -1940,7 +2053,7 @@ arrow_style="-|>",  max_length:int=4, linewidth:float=1,min_mass = 1, cutoff_per
     ax.set_title(title)
     return fig, ax
 
-def get_gene_expression(via_object, gene_exp:pd.DataFrame, cmap:str='jet', dpi:int=150, marker_genes:list = [], linewidth:float = 2.0,n_splines:int=10, spline_order:int=4, fontsize_:int=8, marker_lineages=[]):
+def get_gene_expression(via_object, gene_exp:pd.DataFrame, cmap:str='jet', dpi:int=150, marker_genes:list = [], linewidth:float = 2.0,n_splines:int=10, spline_order:int=4, fontsize_:int=8, marker_lineages=[],optional_title_text:str='', cmap_dict:dict=None):
     '''
     :param via_object: via object
     :param gene_exp: dataframe where columns are features (gene) and rows are single cells
@@ -1948,21 +2061,26 @@ def get_gene_expression(via_object, gene_exp:pd.DataFrame, cmap:str='jet', dpi:i
     :param dpi: default:150
     :param marker_genes: Default is to use all genes in gene_exp. other provide a list of marker genes that will be used from gene_exp.
     :param linewidth: default:2
-    :param n_slines: default:10
-    :param spline_order: default:4
+    :param n_slines: default:10 Note n_splines must be > spline_order.
+    :param spline_order: default:4 n_splines must be > spline_order.
     :param marker_lineages: Default is to use all lineage pathways. other provide a list of lineage number (terminal cluster number).
+    :param cmap_dict: {lineage number: 'color'}
     :return: fig, axs
     '''
+    sc_bp_original = via_object.single_cell_bp
 
-    if len(marker_lineages)==0: marker_lineages=via_object.terminal_clusters
+    if len(marker_lineages)==0:
+        marker_lineages=via_object.terminal_clusters
+        n_terminal_states = len(via_object.terminal_clusters)
 
+    else: n_terminal_states = len(marker_lineages)
     if len(marker_genes) >0: gene_exp=gene_exp[marker_genes]
     sc_pt = via_object.single_cell_pt_markov
-    sc_bp_original = via_object.single_cell_bp
-    n_terminal_states = sc_bp_original.shape[1]
 
-    palette = cm.get_cmap(cmap, n_terminal_states)
-    cmap_ = palette(range(n_terminal_states))
+    if cmap_dict is None:
+        palette = cm.get_cmap(cmap, n_terminal_states)
+        cmap_ = palette(range(n_terminal_states))
+    else: cmap_ = cmap_dict
     n_genes = gene_exp.shape[1]
 
     fig_nrows, mod = divmod(n_genes, 4)
@@ -1979,9 +2097,22 @@ def get_gene_expression(via_object, gene_exp:pd.DataFrame, cmap:str='jet', dpi:i
     for r in range(fig_nrows):
         for c in range(fig_ncols):
             if (i_gene < n_genes):
-                for i_terminal in range(n_terminal_states):
-                    sc_bp = sc_bp_original.copy()
-                    if (via_object.terminal_clusters[i_terminal] in marker_lineages and len(np.where(sc_bp[:, i_terminal] > 0.9)[ 0]) > 0): # check if terminal state is in marker_lineage and in case this terminal state i cannot be reached (sc_bp is all 0)
+                for enum_i_lineage, i_lineage in enumerate(marker_lineages):
+                    valid_scbp = False
+                    if  i_lineage in via_object.terminal_clusters:
+                        i_terminal = np.where(np.asarray(via_object.terminal_clusters) == i_lineage)[0]
+                        if len(i_terminal) >0:
+                            sc_bp = sc_bp_original.copy()
+                            valid_scbp = len(np.where(sc_bp[:, i_terminal] > 0.9)[0]) > 0
+                            i_terminal = i_terminal[0]
+
+
+
+                    #if (via_object.terminal_clusters[i_terminal] in marker_lineages and len(np.where(sc_bp[:, i_terminal] > 0.8)[ 0]) > 0): # check if terminal state is in marker_lineage and in case this terminal state i cannot be reached (sc_bp is all 0)
+                    if (i_lineage in via_object.terminal_clusters) and (valid_scbp):
+                        cluster_i_loc = np.where(np.asarray(via_object.labels) == via_object.terminal_clusters[i_terminal])[0]
+                        majority_true = via_object.func_mode(list(np.asarray(via_object.true_label)[cluster_i_loc]))
+
                         gene_i = gene_exp.columns[i_gene]
                         loc_i = np.where(sc_bp[:, i_terminal] > 0.9)[0]
                         val_pt = [sc_pt[pt_i] for pt_i in loc_i]  # TODO,  replace with array to speed up
@@ -2007,10 +2138,11 @@ def get_gene_expression(via_object, gene_exp:pd.DataFrame, cmap:str='jet', dpi:i
 
                         else:
                             print(f'{datetime.now()}\tLineage {i_terminal} cannot be reached. Exclude this lineage in trend plotting')
-
+                        if cmap_dict is None: color_ = cmap_[enum_i_lineage]
+                        else: color_ = cmap_[i_lineage]
                         if fig_nrows >1:
-                            axs[r,c].plot(xval, yg, color=cmap_[i_terminal], linewidth=linewidth, zorder=3, label=f"Lineage:{via_object.terminal_clusters[i_terminal]}")
-                            axs[r, c].set_title(gene_i,fontsize=fontsize_)
+                            axs[r,c].plot(xval, yg, color=color_, linewidth=linewidth, zorder=3, label=f"Lineage:{majority_true} {via_object.terminal_clusters[i_terminal]}")
+                            axs[r, c].set_title(gene_i+optional_title_text,fontsize=fontsize_)
                             # Set tick font size
                             for label in (axs[r,c].get_xticklabels() + axs[r,c].get_yticklabels()):
                                 label.set_fontsize(fontsize_-1)
@@ -2022,8 +2154,8 @@ def get_gene_expression(via_object, gene_exp:pd.DataFrame, cmap:str='jet', dpi:i
                             axs[r,c].spines['right'].set_visible(False)
                             axs[r, c].grid(False)
                         else:
-                            axs[c].plot(xval, yg, color=cmap_[i_terminal], linewidth=linewidth, zorder=3,   label=f"Lineage:{via_object.terminal_clusters[i_terminal]}")
-                            axs[c].set_title(gene_i, fontsize=fontsize_)
+                            axs[c].plot(xval, yg, color=color_, linewidth=linewidth, zorder=3,   label=f"Lineage:{majority_true} {via_object.terminal_clusters[i_terminal]}")
+                            axs[c].set_title(gene_i+optional_title_text, fontsize=fontsize_)
                             # Set tick font size
                             for label in (axs[c].get_xticklabels() + axs[c].get_yticklabels()):
                                 label.set_fontsize(fontsize_-1)
@@ -2622,7 +2754,7 @@ def draw_piechart_graph(via_object, type_data='pt', gene_exp:list=[], cmap_piech
     :param cmap: default None. automatically chooses coolwarm for gene expression or viridis_r for pseudotime
     :param ax_text: Bool default= True. Annotates each node with cluster number and population of membership
     :param dpi: int default = 150
-    :param headwidth_bundle: default = 0.1. width of arrowhead used to directed edges
+    :param headwidth_arrow: default = 0.1. width of arrowhead used to directed edges
     :param reference_labels: None or list. list of categorical (str) labels for cluster composition of the piecharts (LHS subplot) length = n_samples.
     :param pie_size_scale: float default=0.8 scaling factor of the piechart nodes
     :param pt_visual_threshold: int (percentage) default = 95 corresponding to rescaling the visual color scale by clipping outlier cluster pseudotimes
@@ -2662,16 +2794,27 @@ def draw_piechart_graph(via_object, type_data='pt', gene_exp:list=[], cmap_piech
         sorted_col_=sorted(list(set(reference_labels)))
 
         group_frac = pd.DataFrame(np.zeros([n_groups, n_truegroups]), columns=sorted_col_)
-    else: group_frac = pd.DataFrame(np.zeros([n_groups, n_truegroups]), columns=list(set(reference_labels)))
+    else:
+        sorted_col_ = list(set(reference_labels))
+        sorted_col_.sort()
+
+        group_frac = pd.DataFrame(np.zeros([n_groups, n_truegroups]), columns=sorted_col_)#list(set(reference_labels))
 
     via_object.cluster_population_dict = {}
-    for group_i in set(via_object.labels):
+
+
+    set_labels = list(set(via_object.labels))
+    set_labels.sort()
+
+    for group_i in set_labels:
         loc_i = np.where(via_object.labels == group_i)[0]
 
         group_pop[group_i] = len(loc_i)  # np.sum(loc_i) / 1000 + 1
         via_object.cluster_population_dict[group_i] = len(loc_i)
         true_label_in_group_i = list(np.asarray(reference_labels)[loc_i])
-        for ii in set(true_label_in_group_i):
+        ll_temp = list(set(true_label_in_group_i))
+
+        for ii in ll_temp:
             group_frac[ii][group_i] = true_label_in_group_i.count(ii)
 
     line_true = np.linspace(0, 1, n_truegroups)
@@ -2727,6 +2870,7 @@ def draw_piechart_graph(via_object, type_data='pt', gene_exp:list=[], cmap_piech
 
     patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
     labels = list(set(reference_labels))
+    labels.sort()
     if show_legend ==True: plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon=False)
 
     if via_object.time_series==True:

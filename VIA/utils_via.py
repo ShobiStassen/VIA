@@ -50,7 +50,7 @@ def func_mode(ll):
     # If multiple items are maximal, the function returns the first one encountered.
     return max(set(ll), key=ll.count)
 
-def get_gene_trend(via_object, marker_lineages:list=[], df_gene_exp:pd.DataFrame=None,n_splines:int=10, spline_order:int=4):
+def get_gene_trend(via_object, marker_lineages:list=[], df_gene_exp=None,n_splines:int=10, spline_order:int=4):
     '''
     Get the gene trend vs pseudotime for a lineage (terminal cell fate)
     :param via_object:
@@ -708,7 +708,7 @@ def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
     # print('new_superclust_index_ds',new_superclust_index_ds)
     return new_superclust_index_ds
 
-def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_size=None, vmax=99, fontsize:int=10, alpha_factor=0.9):
+def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_size=None, vmax=99, fontsize:int=10, alpha_factor=0.9, show_legend:bool = True):
     '''
     This is a helper function called by draw_sc_lineage_probability which plots the single-cell lineage probabilities
 
@@ -735,17 +735,22 @@ def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str ='plasma', scatter_s
     c = cmap(prob).reshape(-1, 4)
     im =ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=0.01, cmap=cmap_name,    edgecolors = 'none',vmin=0, vmax=vmax) #prevent auto-normalization of colors
     #im = ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=0.01,  edgecolors='none')
-    ax.set_title('Lineage: ' + str(ti), fontsize=int(fontsize*1.2))
 
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    cb = fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
 
-    ax_cb = cb.ax
-    text = ax_cb.yaxis.label
-    font = matplotlib.font_manager.FontProperties( size=fontsize)#family='times new roman', style='italic',
-    text.set_font_properties(font)
-    ax_cb.tick_params(labelsize=int(fontsize*0.8))
+
+    if show_legend:
+
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        ax.set_title('Lineage: ' + str(ti), fontsize=int(fontsize * 1.2))
+        cb = fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
+
+        ax_cb = cb.ax
+        text = ax_cb.yaxis.label
+        font = matplotlib.font_manager.FontProperties( size=fontsize)#family='times new roman', style='italic',
+        text.set_font_properties(font)
+        ax_cb.tick_params(labelsize=int(fontsize*0.8))
+
     c = cmap(prob).reshape(-1, 4)
 
     #c = cmap(norm(prob)).reshape(-1, 4)
@@ -936,9 +941,9 @@ def infer_direction_piegraph(start_node, end_node, CSM, velocity_weight,pt, tanh
         csm_se = 3*CSM[start_node,end_node] #cosine similarity from start-to-end
         csm_es = 3*CSM[end_node, start_node] #cosine similarity from end-to-start
 
-        print('csm_start', csm_se)
-        print('csm_end', -1 * csm_es)
-        print('csm', csm_se + -1 * csm_es)
+        #print('csm_start', csm_se)
+        #print('csm_end', -1 * csm_es)
+        #print('csm', csm_se + -1 * csm_es)
 
         # Note csm_es does not equal -csm_se because the velocity vector used in the dot product refers to the originating cell
 
@@ -1673,3 +1678,26 @@ def main_accuracy(true_label=[],cluster_label=[],filename = '/home/shobi/Traject
         print(df_accuracy.shape)
         df_accuracy.to_csv(filename)
         return df_accuracy
+'''
+def rw2_emb(filename='/home/user/Trajectory/Datasets/'):
+    from pecanpy import pecanpy as node2vec
+    #https://pecanpy.readthedocs.io/en/latest/pecanpy.html#pecanpy.pecanpy.Base.embed
+    # initialize node2vec object, similarly for SparseOTF and DenseOTF
+    g = node2vec.SparseOTF(p=0.5, q=1, workers=4, verbose=True, extend=True)
+    # alternatively, can specify ``extend=True`` for using node2vec+
+
+    # load graph from edgelist file
+    g.read_npz(filename+'.npz', weighted=True)
+
+
+    # generate random walks, which could then be used to train w2v
+    #walks = g.simulate_walks(num_walks=10, walk_length=80)
+
+    # alternatively, generate the embeddings directly using ``embed``
+    print(f'{datetime.now()}\tStart g.embed')
+    emd = g.embed(num_walks=20, walk_length=80, dim=64) #dim default = 128
+    print(f'{datetime.now()}\tEnd g.embed and save csv')
+    df=pd.DataFrame(emd)
+    df.to_csv(filename+'csv')
+    return
+'''
