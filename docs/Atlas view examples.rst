@@ -7,4 +7,4 @@ Via2.0 Atlas views
 
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/zebrahub.png?raw=true" width="600px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/zebrahub.png?raw=true" width="1000px" align="center" </a>
