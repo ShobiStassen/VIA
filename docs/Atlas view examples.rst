@@ -37,6 +37,15 @@ Via2.0 Atlas views
 | 
 |
 
+**Atlas view of C. Elegans (Packer 2018) colored by major tissue type and stage**
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/packer_elegans.png?raw=true" width="1000px" align="center" </a>
+
+
+| 
+|
 
 **Atlas view of Mouse Gastrulation (Sala 2019) colored by stage** 
 
