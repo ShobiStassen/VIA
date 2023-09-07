@@ -9,7 +9,8 @@ Via2.0 Atlas views
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/zebrahub.png?raw=true" width="1000px" align="center" </a>
 
-
+| 
+| 
 **Atlas view of Ascidian Protovert (Cao 2019) colored by stage**
 
 .. raw:: html
