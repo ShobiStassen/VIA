@@ -1,5 +1,6 @@
 # VIA 
 ### For the most updated tutorials please visit **[Readthedocs](https://pyvia.readthedocs.io/en/latest/)**
+### Via 2.0 [Atlas view gallery](https://pyvia.readthedocs.io/en/latest/Atlas%20view%20examples.html)
 VIA is a single-cell Trajectory Inference method that offers topology construction, pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. VIA combines lazy-teleporting random walks and Monte-Carlo Markov Chain simulations to overcome common challenges such as 1) accurate terminal state and lineage inference, 2) ability to capture combination of cyclic, disconnected and tree-like structures, 3) scalability in feature and sample space. 4) Generalizability to multi-omic analysis. In addition to transcriptomic data, VIA works on scATAC-seq, flow and imaging cytometry data. 
 Please refer to our  **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** for the latest tutorials and **[videos](https://pyvia.readthedocs.io/en/latest/Tutorial%20Video.html)** or our **[paper](https://www.nature.com/articles/s41467-021-25773-3)** for more details. [![DOI](https://zenodo.org/badge/212254929.svg)](https://zenodo.org/badge/latestdoi/212254929). 
 
