@@ -26,18 +26,23 @@ Via2.0 Atlas views
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/mouseGastr_both_nolabels2.png?raw=true" width="1000px" align="center" </a>
 |
 |
+
+**Atlas view of Zebrafish Gastrulation (Wagner 2018) colored by major tissue type and stage**
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/wagner_zebrafish2.png?raw=true" width="1000px" align="center" </a>
+
+
+|
+|
+
+
 **Atlas view of Mouse Gastrulation (Sala 2019) colored by stage** 
 
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/mouseGastrSala.png?raw=true" width="800px" align="center" </a>
 
-|
-|
-**Atlas view of Zebrafish Gastrulation (Wagner 2018) colored by major tissue type and stage**
-
-.. raw:: html
-
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/wagner_zebrafish2.png?raw=true" width="800px" align="center" </a>
 
 
