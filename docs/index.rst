@@ -100,6 +100,15 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
    ViaJupyter_Pancreas_RNAvelocity
    ViaJupyter_scRNAVelocity_hematopoiesis
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Atlas Gallery:
+   :hidden:
+
+   Atlas view examples
+   Zebrahub
+   Mouse Gastrulation
+   C.Elegans 
 
 .. |DOI| image:: https://zenodo.org/badge/212254929.svg
     :target: https://zenodo.org/badge/latestdoi/212254929
