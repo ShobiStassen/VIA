@@ -7,7 +7,7 @@ Via2.0 Atlas views
 
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/eb_atlas_nmilestones800_ibw0.05_decay0.7_globvisprun0.7_777_1.png?raw=true" width="600px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/zebrahub_celltype.png?raw=true" width="600px" align="center" </a>
 
 .. raw:: html
 
