@@ -9,11 +9,20 @@ Via2.0 Atlas views
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/zebrahub.png?raw=true" width="1000px" align="center" </a>
 
+
 **Atlas view of Ascidian Protovert (Cao 2019) colored by stage**
 
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/cao_protovert.png?raw=true" width="1000px" align="center" </a>
 
+
 **Atlas view of Mouse Gastrulation (Sala 2019) colored by stage** 
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/mouseGastrSala.png?raw=true" width="1000px" align="center" </a>
+
+
+
 
