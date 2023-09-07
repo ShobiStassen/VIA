@@ -23,7 +23,7 @@ Via2.0 Atlas views
 
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/mouseGastr_both_nolabels.png?raw=true" width="1000px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/mouseGastr_both_nolabels2.png?raw=true" width="1000px" align="center" </a>
 |
 |
 **Atlas view of Mouse Gastrulation (Sala 2019) colored by stage** 
