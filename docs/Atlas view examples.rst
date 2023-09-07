@@ -6,6 +6,6 @@ Via2.0 Atlas views
 **Atlas view of Zebrahub colored by major tissue type and pseudotime**
 
 .. raw:: html
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/zebrahub_celltype.png?raw=true" width="45%"</a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/zebrahub_celltype.png?raw=true" width="45%">
 .. raw:: html
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/atlas_eb_nolabels_u449.png?raw=true" width="45%" </a>
