@@ -34,7 +34,7 @@ Via2.0 Atlas views
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/wagner_zebrafish2.png?raw=true" width="1000px" align="center" </a>
 
 
-|
+| 
 |
 
 
