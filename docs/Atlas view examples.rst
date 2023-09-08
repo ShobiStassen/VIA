@@ -5,6 +5,7 @@ Via2.0 Atlas views
 
 **Atlas view of Zebrahub (Lange 2023) colored by major tissue type and stage**
 | 
+| 
 
 .. raw:: html
 
@@ -37,12 +38,20 @@ Via2.0 Atlas views
 | 
 |
 
-**Atlas view of C. Elegans (Packer 2018) colored by major tissue type and stage**
+**Atlas view of C. Elegans (Packer 2019) colored by major tissue type and stage**
 
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/packer_elegans.png?raw=true" width="1000px" align="center" </a>
 
+| 
+|
+
+**Atlas view of Lateral Plate Mesoderm (Qiu 2023 - 750K cells) colored by major tissue type and stage**
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/qiu2023_mouse_lateralPlateMeso.png?raw=true" width="1000px" align="center" </a>
 
 | 
 |
