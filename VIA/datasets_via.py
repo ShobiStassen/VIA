@@ -5,15 +5,13 @@ import gdown
 import os
 from scipy.io import loadmat
 
-
-
 def toy_multifurcating(foldername="./"):
     """Load Toy_Multifurcating data as AnnData object
 
     To access obs (label) as list, use AnnData.obs['group_id'].values.tolist()
 
     Args:
-        foldername (string): Directory to save dataset. './' current directory is default
+        foldername (string): foldername (string): path to directory where you want to store the dataset './' current directory is default
 
     Returns:
         AnnData object
@@ -38,13 +36,13 @@ def toy_multifurcating(foldername="./"):
 
     # rearrange df_ids in ascending order of cell_id
     df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
-    df_counts = df_counts.drop('Unnamed: 0', 1)
+    df_counts = df_counts.drop('Unnamed: 0', axis=1)
     df_ids = df_ids.sort_values(by=['cell_id_num'])
     df_ids = df_ids.reset_index(drop=True)
     true_label = df_ids[['group_id', 'true_time']]
 
     # create AnnData object
-    adata = sc.AnnData(df_counts, obs=true_label)
+    adata = sc.AnnData(df_counts, obs=true_label)#, dtype='float32')
     return adata
 
 def toy_disconnected(foldername="./"):
@@ -53,7 +51,7 @@ def toy_disconnected(foldername="./"):
     To access obs (label) as list, use AnnData.obs['group_id'].values.tolist()
 
     Args:
-        foldername (string): Directory of dataset
+        foldername (string): Default current directory. path to directory where you want to store the dataset
 
     Returns:
         AnnData object
@@ -78,15 +76,33 @@ def toy_disconnected(foldername="./"):
 
     # rearrange df_ids in ascending order of cell_id
     df_ids['cell_id_num'] = [int(s[1::]) for s in df_ids['cell_id']]
-    df_counts = df_counts.drop('Unnamed: 0', 1)
+    df_counts = df_counts.drop('Unnamed: 0', axis=1)
     df_ids = df_ids.sort_values(by=['cell_id_num'])
     df_ids = df_ids.reset_index(drop=True)
     true_label = df_ids[['group_id', 'true_time']]
 
     # create AnnData object
-    adata = sc.AnnData(df_counts, obs=true_label)
+    adata = sc.AnnData(df_counts, obs=true_label)#, dtype='float32')
     return adata
 
+def cell_cycle_cyto_data(foldername="./"):
+    '''
+    Load cell cycle imagine based flow-cyto features
+    AnnData object with n_obs × n_vars = 2036 × 38
+    obs: 'cell_cycle_phase'
+    :param foldername (string) Default current directory. path to directory where you want to store the dataset
+
+    :return: anndata
+    '''
+
+    data_path = foldername + "cell_cycle_cyto.h5ad"
+    if not os.path.isfile(data_path):
+        ids_url = "https://raw.githubusercontent.com/ShobiStassen/VIA/master/Datasets/cell_cycle_cyto.h5ad"
+        wget.download(ids_url, data_path)
+
+    adata=sc.read_h5ad(filename=data_path)
+    print(adata)
+    return adata
 
 def scRNA_hematopoiesis(foldername="./"):
     """Load scRNA seq Hematopoiesis data as AnnData object
