@@ -1,7 +1,7 @@
 API
 ===
 
-pyvia api (under construction)
+pyvia api 
 -------------------------------
 
 .. autoclass:: VIA.core.VIA
@@ -17,5 +17,14 @@ Plotting
     :members:
     :inherited-members:
     :show-inheritance:
+
+Datasets
+--------
+
+.. automodule:: VIA.datasets_via
+    :members:
+    :inherited-members:
+    :show-inheritance:
+
 
 
