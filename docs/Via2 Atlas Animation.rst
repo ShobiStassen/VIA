@@ -14,9 +14,10 @@ Via 2.0 Atlas Animations
 
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/mouseGastr_both_nolabels2.png?raw=true" width="1000px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" width="1000px" align="center" </a>
 |
 |
+
 **Via Atlas Animation of connectivity for human hematopoiesis (Setty)**
 
 .. raw:: html
