@@ -1,4 +1,4 @@
-Via2.0 Atlas views
+Via 2.0 Atlas Animations
 ===================
 
 **Via 2.0** Animations to view the developmental progression of cell connectivity and differentiation flow
@@ -17,4 +17,8 @@ Via2.0 Atlas views
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/mouseGastr_both_nolabels2.png?raw=true" width="1000px" align="center" </a>
 |
 |
+**Via Atlas Animation of connectivity for human hematopoiesis (Setty)**
 
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/human_edgebundle_test.gif?raw=true" width="600px" align="center" </a>
