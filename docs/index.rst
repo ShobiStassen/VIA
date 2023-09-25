@@ -107,7 +107,9 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
 
    Atlas view examples
    Via 2.0 Cartographic Mouse Gastrualation
+   Zebrahub TI tutorial   
    Zebrahub_tutorial_visualization
+   
 
 
 .. |DOI| image:: https://zenodo.org/badge/212254929.svg
