@@ -60,7 +60,7 @@ Via2.0 Atlas views
 
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/qiu_renal2023.png?raw=true" width="800px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/qiu_renal2023.png?raw=true" width="1000px" align="center" </a>
 
 
 | 
