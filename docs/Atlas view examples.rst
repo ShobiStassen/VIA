@@ -62,6 +62,14 @@ Via2.0 Atlas views
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/qiu_renal2023.png?raw=true" width="1000px" align="center" </a>
 
+| 
+|
+
+**Atlas view of Mouse Retinal Development (Qiu 2023 - 160K cells) colored by major tissue type and stage**
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/qiu_retinal2023.png?raw=true" width="1000px" align="center" </a>
 
 | 
 |
