@@ -102,7 +102,7 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
 
 .. toctree::
    :maxdepth: 1
-   :caption: Atlas Gallery:
+   :caption: Via 2.0 Atlas View Gallery:
    :hidden:
 
    Atlas view examples
