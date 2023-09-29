@@ -44,6 +44,7 @@ extensions = ['sphinxemoji.sphinxemoji', 'sphinx_rtd_theme','nbsphinx',"sphinx.e
 autosummary_generate = True
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
+autodoc_member_order = "alphabetical"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
