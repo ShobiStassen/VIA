@@ -9,4 +9,5 @@ nbsphinx==0.8.9
 sphinx-autodoc-typehints==1.19.2
 myst_nb
 furo
+sphinx_tippy
 pyVIA
