@@ -7,4 +7,6 @@ sphinxemoji==0.2.0
 myst-parser==0.18.0
 nbsphinx==0.8.9
 sphinx-autodoc-typehints==1.19.2
+myst_nb
+furo
 pyVIA
