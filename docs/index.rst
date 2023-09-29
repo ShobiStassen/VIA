@@ -38,15 +38,6 @@ Via 2.0 extends the lazy-teleporting walks to higher order random walks with **m
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/milestoneplot_withannots.png?raw=true" width="600px" align="center" </a>
 
 
-|:eight_spoked_asterisk:| **Fine-grained vector field without using RNA-velocity**
-
-.. raw:: html
-
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" width="600px" align="center" </a>
-
-
-
-
 scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://shobistassen.github.io/toggle_data.html>`_
 -------------------------------------------------------------------------------------------------------------------------------
 
