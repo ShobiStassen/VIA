@@ -29,7 +29,7 @@ copyright = '2022, shobana stassen'
 author = 'shobana stassen'
 
 # The full version, including alpha/beta/rc tags
-release = 'pyvia 2022'
+#release = 'pyvia 2022'
 
 
 # -- General configuration ---------------------------------------------------
