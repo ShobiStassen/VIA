@@ -5,15 +5,20 @@ pyVIA - Multi-Omic Single-Cell Cartography
 
 **Via 2.0** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal studies** enabled by:
 
+#. **Graph augmentation using metadata for (temporal) studies:** Using sequential metadata (temporal labels, hierarchical information, spatial distances) to guide the cartography
 #. **Higher Order Random Walks:** Leveraging higher order random walks with **memory** to highlight key end-to-end differentiation pathways along the atlas 
 #. **Atlas View:** Via 2.0 offers a unique visualization of the predicted trajectory by intuitively merging the cell-cell graph connectivity with the high-resolution of single-cell embeddings.
-#. **Temporal Metadata:** Using sequential metadata (temporal labels, hierarchical information, spatial distances) to guide the cartography
 
 
-Via 2.0 still offers all the functionality of Via 1.0 in terms of various types of topology construction (disconnected, cyclic), pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. Via 2.0 extends the lazy-teleporting walks to higher order random walks with **memory** to allow better lineage detection, pathway recovery and preservation of global features in terms of computation and visualization. Via 2.0 is generalizable to multi-omic analysis: in addition to transcriptomic data, VIA works on scATAC-seq, flow and imaging cytometry data. 
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/rtd_fig1.png?raw=true" width="850px" align="center", class="only-light" </a>
+
+Via 2.0 still offers all the functionality of Via 1.0 in terms of various types of topology construction (disconnected, cyclic), pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages, for details please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`_ . 
+
+Via 2.0 extends the lazy-teleporting walks to higher order random walks with **memory** to allow better lineage detection, pathway recovery and preservation of global features in terms of computation and visualization. Via 2.0 is generalizable to multi-omic analysis: in addition to transcriptomic data, VIA works on scATAC-seq, flow and imaging cytometry data. 
 
 
-For details on Via 1.0, please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`_ for more details. 
 
 **Try out the following with Via 2.0:**
 
