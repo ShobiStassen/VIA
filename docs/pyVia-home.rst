@@ -1,23 +1,35 @@
 |DOI|
 
-pyVIA 1.0
-======
+pyVIA - Multi-Omic Single-Cell Cartography 
+====================================================
 
-**VIA** is a single-cell Trajectory Inference method that offers topology construction, pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. VIA combines lazy-teleporting random walks and Monte-Carlo Markov Chain simulations to overcome common challenges such as 1) accurate terminal state and lineage inference, 2) ability to capture combination of cyclic, disconnected and tree-like structures, 3) scalability in feature and sample space. 4) Generalizability to multi-omic analysis. In addition to transcriptomic data, VIA works on scATAC-seq, flow and imaging cytometry data. 
-Please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`_ for more details. 
+**Via 2.0** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal studies** enabled by:
 
+#. **Graph augmentation using metadata for (temporal) studies:** Using sequential metadata (temporal labels, hierarchical information, spatial distances) to guide the cartography
+#. **Higher Order Random Walks:** Leveraging higher order random walks with **memory** to highlight key end-to-end differentiation pathways along the atlas 
+#. **Atlas View:** Via 2.0 offers a unique visualization of the predicted trajectory by intuitively merging the cell-cell graph connectivity with the high-resolution of single-cell embeddings.
+
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/rtd_fig1.png?raw=true" width="850px" align="center", class="only-light" </a>
+
+Via 2.0 still offers all the functionality of Via 1.0 in terms of various types of topology construction (disconnected, cyclic), pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages, for details please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`_ . 
+
+Via 2.0 extends the lazy-teleporting walks to higher order random walks with **memory** to allow better lineage detection, pathway recovery and preservation of global features in terms of computation and visualization. Via 2.0 is generalizable to multi-omic analysis: in addition to transcriptomic data, VIA works on scATAC-seq, flow and imaging cytometry data. 
+
+
+
+**Try out the following with Via 2.0:**
+
+- Combining temporal information with scRNA velocity `temporal study <https://pyvia.readthedocs.io/en/latest/Via2.0%20Cartographic%20Mouse%20Gastrualation.html>`_
+- Constructing the Atlas View `visualization  <https://pyvia.readthedocs.io/en/latest/Zebrahub_tutorial_visualization.html>`_
 
 **VIA visualizes Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
 
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" width="600px" align="center" </a>
-  
-**Multifurcating wind maps without RNA velocity**
-
-.. raw:: html
-
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" width="600px" align="center" </a>
 
 **VIA plots hi-res edge graph for Mouse Gastrulation (Pijuan Sala) human hematopoiesis**
 
@@ -25,63 +37,5 @@ Please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/milestoneplot_withannots.png?raw=true" width="600px" align="center" </a>
 
-**Via Atlas Animation of connectivity for human hematopoiesis (Setty)**
 
-.. raw:: html
-
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/human_edgebundle_test.gif?raw=true" width="600px" align="center" </a>
-
-
-Examples and Visualization
---------------------------
-There are several `Jupyter Notebooks <https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks>`_ here and on the github page with step-by-step code for real and simulated datasets. |:eight_spoked_asterisk:| **The NB for multifurcating data shows a step-by-step usage tutorial.** 
-
-
-**scATAC-seq Human Hematopoiesis** `(click to open interactive VIA graph) <https://shobistassen.github.io/toggle_data.html>`_
-
-.. raw:: html
-
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/scATAC_BuenrostroPCs_MainFig.png?raw=true" width="600px" align="center" </a>
-
-**Notebooks**
-
-.. list-table::
-   :widths: 25 25 25 25
-   :header-rows: 1
-
-   * - Notebook
-     - details
-     - dataset
-     - reference
-
-   * - Multifurcation: `Starter Tutorial <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Multifurcating.ipynb>`_
-     - 4-leaf simulation
-     - `4-leaf <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_
-     - `DynToy <https://github.com/dynverse/dyntoy>`_
-
-   * - Disconnected `Tutorial <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_Toy_Disconnected.ipynb>`_
-     - disconnected simulation
-     - `4-leaf <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_
-     - `DynToy <https://github.com/dynverse/dyntoy>`_
-
-   * - Human `Embryoid <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_EmbryoidBody.ipynb>`_
-     - 16,825 ESCs
-     - EB `scRNA-seq <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_ and `embedding <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_
-     - Moon et al. (2019)
-
-   * - scATAC-seq `Hematopoiesis <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_scATAC-seq_HumanHematopoiesis.ipynb>`_
-     - Human hematopoiesis
-     - `scATAC-seq <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_
-     - Buenrostro et al. (2018)
-
-   * - scRNA-seq `Hematopoiesis <https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_scRNA_Hematopoiesis.ipynb>`_
-     - Human hematopoiesis (5780 cells)
-     - CD34 `scRNA-seq <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_
-     - Setty et al. (2019)
-
-
-
-
-.. |DOI| image:: https://zenodo.org/badge/212254929.svg
-    :target: https://zenodo.org/badge/latestdoi/212254929
-    :alt: DOI
+scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://shobistassen.github.io/toggle_data.html>`_
