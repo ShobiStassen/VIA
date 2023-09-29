@@ -33,3 +33,10 @@ Via 2.0 Atlas Animations
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/toy4.gif?raw=true" width="1000px" align="center" </a>
 
+|
+|
+|:eight_spoked_asterisk:| **Fine-grained vector field without using RNA-velocity**
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" width="600px" align="center" </a>
