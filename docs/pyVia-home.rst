@@ -29,13 +29,17 @@ Via 2.0 extends the lazy-teleporting walks to higher order random walks with **m
 
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" width="600px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" width="850px" align="center" </a>
 
 **VIA plots hi-res edge graph for Mouse Gastrulation (Pijuan Sala) human hematopoiesis**
 
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/milestoneplot_withannots.png?raw=true" width="600px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/milestoneplot_withannots.png?raw=true" width="850px" align="center" </a>
 
 
 scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://shobistassen.github.io/toggle_data.html>`_
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/scATAC_BuenrostroPCs_MainFig.png?raw=true" width="850px" align="center" </a>
