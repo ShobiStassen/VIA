@@ -57,7 +57,7 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
 
 .. toctree::
    :maxdepth: 1
-   :caption: General:
+   :caption: General
    :hidden:
    
    pyVia-home
@@ -70,7 +70,7 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
 
 .. toctree::
    :maxdepth: 1
-   :caption: Via 2.0 Atlas View Gallery:
+   :caption: Via 2.0 Atlas View Gallery
    :hidden:
 
    Atlas view examples
@@ -78,7 +78,7 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
 
 .. toctree::
    :maxdepth: 1
-   :caption: Via 2.0 Cartography:
+   :caption: Via 2.0 Cartography
    :hidden:
 
    Via2.0 Cartographic Mouse Gastrualation
@@ -87,7 +87,7 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
 
 .. toctree::
    :maxdepth: 1
-   :caption: Tutorials Via:
+   :caption: Tutorials Via
    :hidden:
 
    ViaJupyter_Toy_Multifurcating
@@ -98,6 +98,15 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
    ViaJupyter_Pancreas_RNAvelocity
    ViaJupyter_scRNAVelocity_hematopoiesis
 
+.. toctree::
+   :maxdepth: 3
+   :caption: Tutorials
+   :hidden:
+
+   tutorials/Basic tutorial
+   tutorials/Disconnected trajectories
+
+   
 
 .. |DOI| image:: https://zenodo.org/badge/212254929.svg
     :target: https://zenodo.org/badge/latestdoi/212254929
