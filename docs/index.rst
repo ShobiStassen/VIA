@@ -89,13 +89,6 @@ scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://s
    ViaJupyter_Pancreas_RNAvelocity
    ViaJupyter_scRNAVelocity_hematopoiesis
 
-.. toctree::
-   :maxdepth: 3
-   :caption: Tutorials
-   :hidden:
-
-   tutorials/Basic tutorial
-   tutorials/Disconnected trajectories
 
    
 
