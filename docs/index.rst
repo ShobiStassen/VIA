@@ -32,14 +32,6 @@ Via 2.0 extends the lazy-teleporting walks to higher order random walks with **m
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/rtd_fig2_v2.png?raw=true" width="850px" align="center" </a>
 
 
-scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://shobistassen.github.io/toggle_data.html>`_
--------------------------------------------------------------------------------------------------------------------------------
-
-.. raw:: html
-
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/scATAC_BuenrostroPCs_MainFig.png?raw=true" width="600px" align="center" </a>
-
-
 .. toctree::
    :maxdepth: 1
    :caption: General
