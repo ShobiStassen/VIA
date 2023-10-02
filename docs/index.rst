@@ -29,7 +29,7 @@ Via 2.0 extends the lazy-teleporting walks to higher order random walks with **m
 
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" width="600px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/rtd_fig2_v2.png?raw=true" width="850px" align="center" </a>
 
 **VIA plots hi-res edge graph for Mouse Gastrulation (Pijuan Sala) human hematopoiesis**
 
