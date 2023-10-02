@@ -25,21 +25,19 @@ Via 2.0 extends the lazy-teleporting walks to higher order random walks with **m
 - Combining temporal information with scRNA velocity `temporal study <https://pyvia.readthedocs.io/en/latest/Via2.0%20Cartographic%20Mouse%20Gastrualation.html>`_
 - Constructing the Atlas View `visualization  <https://pyvia.readthedocs.io/en/latest/Zebrahub_tutorial_visualization.html>`_
 
-**VIA visualizes Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
+**Via 2.0 Atlas View plots hi-res edge graph for Mouse Gastrulation (Pijuan Sala)**
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/rtd_fig2_v2.png?raw=true" width="850px" align="center" </a>
+
+**Via 2.0 visualizes Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
 
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/plasma_pijuansala_annotated.gif?raw=true" width="850px" align="center" </a>
 
-**VIA plots hi-res edge graph for Mouse Gastrulation (Pijuan Sala) human hematopoiesis**
-
-.. raw:: html
-
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/milestoneplot_withannots.png?raw=true" width="850px" align="center" </a>
 
 
-scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://shobistassen.github.io/toggle_data.html>`_
 
-.. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/scATAC_BuenrostroPCs_MainFig.png?raw=true" width="850px" align="center" </a>
