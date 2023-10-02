@@ -40,3 +40,14 @@ Via 2.0 Atlas Animations
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" width="1000px" align="center" </a>
+
+|
+|
+
+scATAC-seq Human Hematopoiesis `(click to open interactive VIA graph) <https://shobistassen.github.io/toggle_data.html>`_
+-------------------------------------------------------------------------------------------------------------------------------
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/scATAC_BuenrostroPCs_MainFig.png?raw=true" width="600px" align="center" </a>
+
