@@ -11,3 +11,4 @@ myst_nb
 furo
 sphinx_tippy
 pyVIA
+sphinx_rtd_theme
