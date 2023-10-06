@@ -33,6 +33,7 @@ Tutorials and **[videos](https://pyvia.readthedocs.io/en/latest/Tutorial%20Video
 
 :eight_spoked_asterisk: You can start with the **[The tutorial/Notebook](https://pyvia.readthedocs.io/en/latest/Basic%20tutorial.html)** for multifurcating data which shows a step-by-step use case. :eight_spoked_asterisk: 
 
+
 **scATAC-seq dataset of Human Hematopoiesis represented by VIA graphs** *(click image to open interactive graph)*
 <p align="center">
      <a href="https://shobistassen.github.io/toggle_data.html"><img width="100%" src="https://github.com/ShobiStassen/VIA/blob/master/Figures/scATAC_BuenrostroPCs_MainFig.png?raw=true"></a>
@@ -43,12 +44,6 @@ Refer to the Jupiter Notebooks to plot these fine-grained vector fields of the s
 <p align="center">
      <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/streamplotspng.png?raw=true" alt="Trulli" width="80%" >
 </p> 
-
-#### :eight_spoked_asterisk: windmaps of multifurcating simulated data
-<p align="center">
-     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/multifurc_animation.gif?raw=true" alt="Trulli" width="80%" >
-</p>
-
 
 ## Jupyter Notebook Tutorials
 Please visit our **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** for the latest tutorials and **[videos](https://pyvia.readthedocs.io/en/latest/Tutorial%20Video.html)** on usage and installation
