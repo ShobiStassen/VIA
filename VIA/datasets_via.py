@@ -1,9 +1,77 @@
 import pandas as pd
 import scanpy as sc
+from scanpy import read
 import wget
 import gdown
 import os
 from scipy.io import loadmat
+from datetime import datetime
+def _zebrahub(foldername="./", use_velocity:bool = False):
+    """Load Zebrahub data as AnnData object (2Gb). Optioally load with velocity matrices (10Gb) by setting use_velocity = True
+
+    The data has been filtered and log-normed as follows:
+        sc.pp.filter_cells(adata, min_genes=200)
+        sc.pp.filter_genes(adata, min_cells=5)
+        print('after filtering', adata)
+        sc.pp.normalize_total(adata, target_sum=1e4)
+        adata.raw = adata  # saving the raw counts
+        sc.pp.log1p(adata)
+
+    Args:
+        foldername (string): foldername (string): path to directory where you want to store the dataset (or read it from if it's already been downloaded. './' current directory is default
+
+    Returns:
+        AnnData object
+
+    .. image:: https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/zebrahub_labeled.png?raw=true
+       :width="200px"
+    """
+    # read files as pandas objects
+    if use_velocity: data_path = foldername + "Zebrahub_data_via_obsmVelocity.h5ad"
+    else: data_path = foldername + "zebrahub_data_via.h5ad"
+
+
+    if not os.path.isfile(data_path):
+
+        if use_velocity:
+            print(f'{datetime.now()}\tStart downloading data... This could take a few minutes (10 Gb file)')
+            data_url = "https://drive.google.com/file/d/1eOJ734HufRlz2uGTXZE7DZkQ1a5FpRGk/view?usp=drive_link"
+        else:
+            print(f'{datetime.now()}\tStart downloading data... This could take a few minutes (2.5 Gb file)')
+            data_url = "https://drive.google.com/file/d/1Pr_-5JDJYbpaUFwP5BvDrtfEQa_kb3Zq/view?usp=drive_link"
+        #wget.download(data_url, data_path)
+        adata = read(data_path, backup_url=data_url, sparse=True, cache=True)
+        print(f'{datetime.now()}\tFinished downloading data. Saved to {data_path}')
+    else:adata=sc.read_h5ad( filename=data_path)
+
+
+    #adata=sc.read_h5ad( filename=data_path)
+    return adata
+
+def _mouse_gastrulation_sala(foldername="./"):
+    """Load Mouse Gastrulation 2019 Pijuan Sala data. This anndata object includes
+
+    Args:
+        foldername (string): foldername (string): path to directory where you want to store the dataset (or read it from if it's already been downloaded. './' current directory is default
+
+    Returns:
+        AnnData object
+
+    .. image:: https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/mouseGastrSala.png?raw=true
+       :width="200px"
+    """
+    # read files as pandas objects
+    data_path = foldername + "pijuan_gastrulation_via.h5ad"
+
+
+    if not os.path.isfile(data_path):
+        print(f'{datetime.now()}\tStart downloading data... This could take a few minutes')
+        data_url = "https://drive.google.com/file/d/1rvH04WAF97nXd0UiHfcVIdIF6sxS3QhL/view"
+        #wget.download(data_url, data_path)
+        print(f'{datetime.now()}\tFinished downloading data. Saved to {data_path}')
+    adata = read(data_path, backup_url=data_url, sparse=True, cache=True)
+    #adata=sc.read_h5ad( filename=data_path)
+    return adata
 
 def toy_multifurcating(foldername="./"):
     """Load Toy_Multifurcating data as AnnData object
@@ -28,8 +96,10 @@ def toy_multifurcating(foldername="./"):
         wget.download(data_url, data_path)
 
     if not os.path.isfile(ids_path):
+        print(f'{datetime.now()}\tStart downloading data...')
         ids_url = "https://raw.githubusercontent.com/ShobiStassen/VIA/master/Datasets/toy_multifurcating_M8_n1000d1000_ids_with_truetime.csv"
         wget.download(ids_url, ids_path)
+        print(f'{datetime.now()}\tFinished downloading data. Saved to {data_path}')
 
     df_counts = pd.read_csv(data_path)
     df_ids = pd.read_csv(ids_path)
@@ -244,7 +314,7 @@ def embryoid_body(foldername="./"):
     """Load embryoid body data as AnnData object
 
     Args:
-        foldername (string): Directory of dataset
+        foldername (string): Directory to save dataset
 
     Returns:
         AnnData object

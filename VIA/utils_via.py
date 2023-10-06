@@ -597,7 +597,9 @@ def _construct_knn(data: np.ndarray, knn: int, distance: str, num_threads: int, 
     ef_const, M = 200, 30
     if not too_big:
         if nsamples < 10000:
-            k = ef_const = min(nsamples - 10, 500)
+            #k = ef_const = min(nsamples - 10, 500) #was this until Sept62023
+            ef_const = min(nsamples-1, 500)
+            k=min(nsamples-1, 500)
         if nsamples <= 50000 and dim > 30:
             M = 48  # good for scRNA-seq where dimensionality is high
 
@@ -648,11 +650,10 @@ def getbb(sc, ax):
             bboxes.append(result.transformed(ax.transData.inverted()))
     return bboxes
 
-def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
+def sc_loc_ofsuperCluster_PCAspace(p0, idx):
     '''
     #helper function for draw_trajectory_gams in order to find the PCA location of the terminal and intermediate clusters and roots
     :param p0: coarse via object
-    :param p1: coarse or refined via object. can set to same as p0
     :param idx: if using a subsampled PCA space for visualization. otherwise just range(0,n_samples)
     :return:
     '''
@@ -660,29 +661,20 @@ def sc_loc_ofsuperCluster_PCAspace(p0, p1, idx):
     # Returns location (index) of cell nearest to the ci_list in the downsampled space
     #print("dict of terminal state pairs, Super: sub: ", p1.dict_terminal_super_sub_pairs)
     p0_labels = np.asarray(p0.labels)
-    p1_labels = np.asarray(p1.labels)
-    p1_sc_markov_pt = p1.single_cell_pt_markov
+
+    p0_sc_markov_pt = p0.single_cell_pt_markov
     ci_list = []
     for ci in range(len(list(set(p0.labels)))):
-        if ci in p1.revised_super_terminal_clusters:  # p0.terminal_clusters:
-            loc_i = np.where(p1_labels == p1.dict_terminal_super_sub_pairs[ci])[0]
-            # loc_i = np.where(p0_labels == ci)[0]
-            # val_pt = [p1.single_cell_pt_markov[i] for i in loc_i]
-            val_pt = [p1_sc_markov_pt[i] for i in loc_i]
-            th_pt = np.percentile(val_pt, 0)  # 80
-            loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] >= th_pt]
-            temp = np.mean(p0.data[loc_i], axis=0)
-            labelsq, distances = p0.knn_struct.knn_query(temp, k=1)
-            ci_list.append(labelsq[0][0])
 
-        elif (ci in p0.root) & (len(p0.root) == 1):
+
+        if (ci in p0.root) & (len(p0.root) == 1):
             loc_root = np.where(np.asarray(p0.root) == ci)[0][0]
 
-            p1_root_label = p1.root[loc_root]
-            loc_i = np.where(np.asarray(p1_labels) == p1_root_label)[0]
+            p0_root_label = p0.root[loc_root]
+            loc_i = np.where(np.asarray(p0_labels) == p0_root_label)[0]
 
             # loc_i = np.where(p0.labels == ci)[0]
-            val_pt = [p1_sc_markov_pt[i] for i in loc_i]
+            val_pt = [p0_sc_markov_pt[i] for i in loc_i]
             th_pt = np.percentile(val_pt, 20)  # 50
             loc_i = [loc_i[i] for i in range(len(val_pt)) if val_pt[i] <= th_pt]
             temp = np.mean(p0.data[loc_i], axis=0)
@@ -1701,3 +1693,144 @@ def rw2_emb(filename='/home/user/Trajectory/Datasets/'):
     df.to_csv(filename+'csv')
     return
 '''
+
+def save_sparse_knn_as_npz(via_object,working_directory:str=None):
+    '''
+
+    :param via_object:
+    :param working_directory: defaults to working directory pathway stored in via_object.working_dir_fp. e.g.  working_dir_fp='/home/user/Trajectory/Zebrafish/'
+    :return:
+    '''
+    import random
+    pseudorand = random.randint(0, 1000)
+    print("saving csv for RW2")
+    from scipy.sparse import save_npz
+
+    print(f'Unique ID for RW2 file {pseudorand}')
+
+    fname = working_directory+ 'pc' + str(via_object.ncomp) + '_knn' + str(via_object.knn) + 'rw2_' + str(pseudorand)
+    save_npz(fname+ '.npz',             via_object.csr_full_graph)
+    print('npz saved to',fname+ '.npz')
+    return fname
+
+def rw2_feature_representation(via_object, filepath_npz:str=None, working_directory:str='/home/user/Trajectory/Datasets/', n_dim:int = 128,p_return:float=0.5, q_inward=1,):
+    '''
+    computes the graph feature representation based on Pecaypy implementation of Node2Vec and saves it as a csv file using the same filename
+    :param via_object: required if this is the first time the sc-knn graph is being saved into an npz file which is the format required to run the feature representation
+    :param filename: filepath and name of npz file if one exists already. otherwise provide via_object to save an npz file of the single-cell graph. These are like PCs for graph networks. It's best to compute it once and save e.g. 128 features that you can use at any time
+    :param n_dim: number of features (components) default = 128. other values": 32,64,128
+    :param p_inward. larger number means more exploration
+    :param q_inward. larger number means more introspective search
+    :return:filepath_npz (name of csv filepath for features), feature_rep ndarray (n_cellsxn_dim)
+    '''
+    from pecanpy import pecanpy as node2vec
+    print(
+        f'{datetime.now()}\tStart feature representation computations')
+    # initialize node2vec object, similarly for SparseOTF and DenseOTF
+
+    g = node2vec.SparseOTF(p=p_return, q=q_inward, workers=4, verbose=True, extend=True)
+    #g = node2vec.SparseOTF(p=1, q=0.01, workers=4, verbose=True, extend=True)
+    # alternatively, can specify ``extend=True`` for using node2vec+
+
+    if filepath_npz is None:
+        #save down the knn graph as an npz file
+        print(f'working directory is {working_directory}')
+        filepath_npz=save_sparse_knn_as_npz(via_object, working_directory)
+    # load graph from edgelist file
+    g.read_npz(filepath_npz+'.npz', weighted=True)
+    # precompute and save 2nd order transition probs (for PreComp only)
+    #g.preprocess_transition_probs()
+
+    # generate random walks, which could then be used to train w2v
+    #walks = g.simulate_walks(num_walks=10, walk_length=80)
+
+    # alternatively, generate the embeddings directly using ``embed``
+    print(f'{datetime.now()}\tStart g.embed. takes 5-8 mins for 100K cells - saving down takes a few mins. ')
+    print(f'{datetime.now()}\tSuffice to run this once and going forward load the saved .csv file with the features')
+    feature_rep = g.embed(num_walks=20, walk_length=80, dim=n_dim) #dim default = 128
+    filepath_csv = filepath_npz + '_ndim' + str(n_dim) + '_qin' + str(q_inward) + '_pret' + str(p_return)
+    print(f'{datetime.now()}\tEnd feature representation computations and save csv to file {filepath_csv}.csv')
+    print(f'{datetime.now()}\tGoing forward these features can be used as X_input in the via_atlas_emb() function')
+    df = pd.DataFrame(feature_rep)
+
+    df.to_csv(filepath_csv+'.csv')
+    return filepath_npz, feature_rep
+
+def lineage_corr(marker_lineages:list=[], list_filenames:list=[],cmap='Blues',fontscale:float=0.75):
+    import seaborn as sns
+    from matplotlib.colors import ListedColormap
+    sns.set(font_scale=fontscale)
+    n_terminal_clusters = len(marker_lineages)
+    fig_ncols = min(3, n_terminal_clusters)
+    fig_nrows, mod = divmod(n_terminal_clusters, fig_ncols)
+    if mod ==0:
+        if fig_nrows==0: fig_nrows+=1
+        else: fig_nrows=fig_nrows
+    if mod != 0:        fig_nrows+=1
+    ti=0
+    fig, ax = plt.subplots(fig_nrows,fig_ncols)
+    for r in range(fig_nrows):
+        for c in range(fig_ncols):
+            if ti < n_terminal_clusters:
+                marker_lineage_i= marker_lineages[ti]
+                df_store=pd.DataFrame()
+                for f in list_filenames:
+                    df_ = pd.read_csv(f+'.csv')
+                    memvalue= f.partition('memory')[2]
+                    column_name = str(memvalue)
+                    df_store[column_name]= df_[marker_lineage_i]
+                corrM = df_store.corr()
+
+                print(corrM)
+                # Plot correlation matrix
+
+                #ax=sns.heatmap(corrM, annot=True, cmap=cmap)
+                dict_ = {0:'cartilage', 2:'dermis', 1:                 'forebrain', 136:                 'RGC',
+                145:                 'musculature', 37:'erythrocyte',
+                102:'vasculature', 105: 'oligodendrocyte',55:'myotome'}
+
+                if fig_nrows == 1:
+                    if fig_ncols == 1:
+                        mask = np.triu(np.ones(corrM.shape)).astype(bool)
+
+                        sns.heatmap(corrM, ax=ax,mask=mask, cmap=cmap, fmt='', square=True, linewidths=1)
+                        mask = np.ones((corrM.shape[0], corrM.shape[0])) - mask
+
+                        ax = sns.heatmap(corrM, ax=ax,mask=mask, cmap=ListedColormap(['white']), cbar=False, fmt='',
+                                         linewidths=1)
+                        ax.set_title('Lineage:' + str(marker_lineage_i))
+
+                    else:
+                        mask = np.triu(np.ones(corrM.shape)).astype(bool)
+                        sns.heatmap(corrM, ax=ax[c],mask=mask, cmap=cmap, fmt='', square=True, linewidths=1)
+                        mask = np.ones((corrM.shape[0], corrM.shape[0])) - mask
+                        sns.heatmap(corrM, ax=ax[c], mask=mask, cmap=ListedColormap(['white']), cbar=False, fmt='',
+                                       linewidths=1)
+                        ax[c].set_title('Lineage:' + str(marker_lineage_i))
+                else:
+                    mask = np.triu(np.ones(corrM.shape)).astype(bool)
+                    sns.heatmap(corrM, ax = ax[r,c],mask=mask, cmap=cmap, fmt='', square=True, linewidths=1)
+                    mask = np.ones((corrM.shape[0], corrM.shape[0])) - mask
+                    sns.heatmap(corrM, ax=ax[r,c],mask=mask, cmap=ListedColormap(['white']), cbar=False, fmt='', linewidths=1, xticklabels=True, yticklabels=True)
+
+                    n, m = corrM.shape
+                    val_ = corrM.values[np.tri(N=n, M=m, k=-1, dtype=bool)]
+                    ax[r,c].set_title(dict_[int(marker_lineage_i)]+' Max:'+str(round(np.max(val_),2))+ '/Med:'+str(round(np.median(val_),2)))#
+                    #ax[r, c].set_title('Lineage:' +str(marker_lineage_i) + ' Max:' + str(                        round(np.max(val_), 2)) + '/Med:' + str(round(np.median(val_), 2)))
+
+                    #print(val_)
+                    print(f'marker lineage:{dict_[int(marker_lineage_i)]} Max = {str(round(np.max(val_),2))} /Med:  {str(round(np.median(val_),2))}')
+
+            if fig_nrows==1:
+                if fig_ncols ==1:
+                    if ti>=n_terminal_clusters:ax.axis('off')
+                    ax.grid(False)
+                else:
+                    if ti>=n_terminal_clusters: ax[c].axis('off')
+                    ax[c].grid(False)
+            else:
+                if ti>=n_terminal_clusters:ax[r,c].axis('off')
+                ax[r, c].grid(False)
+            ti += 1
+    plt.show()
+    return
