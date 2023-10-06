@@ -45,7 +45,7 @@ Refer to the Jupiter Notebooks to plot these fine-grained vector fields of the s
      <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/streamplotspng.png?raw=true" alt="Trulli" width="80%" >
 </p> 
 
-## Jupyter Notebook Tutorials
+## Tutorials on [readthedocs](https://pyvia.readthedocs.io/en/latest/)
 Please visit our **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** for the latest tutorials and **[videos](https://pyvia.readthedocs.io/en/latest/Tutorial%20Video.html)** on usage and installation
 notebook       | details         | dataset  | reference 
 ---------------| ---------------| ---------| ----------
