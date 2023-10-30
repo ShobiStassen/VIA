@@ -55,7 +55,7 @@ notebook       | details         | dataset  | reference
 [*Zebrafish Gastrulation*](https://pyvia.readthedocs.io/en/latest/Zebrahub%20TI%20tutorial.html) | Time series of 120,000 cells | [Zebrahub](https://drive.google.com/drive/folders/1cr_mq94qZDoJLNDkAMukHYDGa4kkrMat?usp=drive_link)| Lange et al. (2023)
 [*Mouse Gastrulation*](https://pyvia.readthedocs.io/en/latest/Via2.0%20Cartographic%20Mouse%20Gastrualation.html) | Time series of 90,000 cells | [Mouse data](https://drive.google.com/drive/folders/1EaYoQadm-s6gDJb_YUeeyxZ6LOITLqVK?usp=sharing)| Sala et al. (2019)
 [*FACED image-based*](https://pyvia.readthedocs.io/en/latest/Imaging%20Cytometry%20%28cell%20cycle%29.html) | 2036 MCF7 cells in cell cycle | [MCF7 FACED](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | in-house data
-[*scATAC-seq Hematopoiesis*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_scATAC-seq_HumanHematopoiesis.ipynb) | Human hematopoiesis | [scATAC-seq](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | Buenrostro et al. (2018)
+[*scATAC-seq Hematopoiesis*]() | Human hematopoiesis | [scATAC-seq](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | Buenrostro et al. (2018)
 [*scRNA-seq Hematopoiesis*](https://pyvia.readthedocs.io/en/latest/ViaJupyter_scRNA_Hematopoiesis.html) | Human hematopoiesis (5780 cells) | [CD34 scRNA-seq](https://drive.google.com/file/d/1ZSZbMeTQQPfPBGcnfUNDNL4om98UiNcO/view?usp=sharing) | Setty et al. (2019)
 ## Datasets
 Dataset are available in the [Datasets folder](https://github.com/ShobiStassen/VIA/tree/master/Datasets) (smaller files) with larger datasets [here](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing).  
