@@ -5,13 +5,12 @@ Via2.0 Atlas views
 |
 
 **Atlas view of Zebrahub (Lange 2023 - 120K cells) colored by major tissue type and stage**
-
 | 
 | 
 
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/zebrahub.png?raw=true" width="1000px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/atlas_gallery_zebrahub.png?raw=true" width="1000px" align="center" </a>
 
 | 
 | 
