@@ -1,7 +1,7 @@
 Via2.0 Atlas views
 ===================
 
-**Via 2.0** offers sophisticated visualization tools aimed to capture connectivity and cellular resolution simultaneously. We present several examples of single-cell atlases to show that the Atlas view uniquely illustrates developmental data. 
+**Via 2.0** offers sophisticated visualization tools aimed to capture connectivity and cellular resolution simultaneously. We present several examples of single-cell atlases to show that the Atlas view uniquely illustrates developmental data. The Atlas Views of the Mouse Pup data are millions of cells large.
 
 **Atlas view of Zebrahub (Lange 2023 - 120K cells) colored by major tissue type and stage**
 | 
@@ -61,6 +61,15 @@ Via2.0 Atlas views
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/qiu_renal2023.png?raw=true" width="1000px" align="center" </a>
+
+| 
+|
+
+**Atlas view of Mouse Neural Development (Qiu 2023 - 1.8 Million cells E8.0 - Pup) colored by major tissue type and stage**
+
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/rtd_picture_neural.png?raw=true" width="1000px" align="center" </a>
 
 | 
 |
