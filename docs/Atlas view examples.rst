@@ -51,7 +51,7 @@ Via2.0 Atlas views
 
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/rtd_picture_neural.png?raw=true" width="1000px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/rtd_picture_neural_2.png?raw=true" width="1000px" align="center" </a>
 
 | 
 |
