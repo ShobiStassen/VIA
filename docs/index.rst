@@ -52,6 +52,7 @@ Via 2.0 extends the lazy-teleporting walks to higher order random walks with **m
 
    Atlas view examples
    Via2 Atlas Animation
+   Via Atlas View for Spatial omics
 
 .. toctree::
    :maxdepth: 1
