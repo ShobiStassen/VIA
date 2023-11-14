@@ -5,8 +5,7 @@ Via2.0 Atlas views for Spatial Omics data
 
 
 **Atlas view of Preoptic cell classes of Merfish data (Moffitt 2018- 75K cells) compared to UMAP of the same**
-| 
-| 
+
 
 .. raw:: html
 
@@ -15,8 +14,7 @@ Via2.0 Atlas views for Spatial Omics data
 |
 
 **Atlas view of Mouse Retina from Merfish data (Choi 2023) compared to UMAP of the same**
-| 
-| 
+
 
 .. raw:: html
 
