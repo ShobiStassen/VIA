@@ -5,9 +5,6 @@ Via2.0 Atlas views
 
 
 **Atlas view of Zebrahub (Lange 2023 - 120K cells) colored by major tissue type and stage**
-| 
-| 
-
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/atlas_gallery_zebrahub.png?raw=true" width="1000px" align="center" </a>
@@ -34,8 +31,6 @@ Via2.0 Atlas views
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/wagner_zebrafish2.png?raw=true" width="1000px" align="center" </a>
-
-
 | 
 |
 
@@ -55,7 +50,7 @@ Via2.0 Atlas views
 
 | 
 |
-https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/readthedocs_434_full_qiu_mousepup.png?raw=true
+
 
 **Atlas view of Mouse Neural Development (Qiu 2023 - 1.8 Million cells E8.0 - Pup) colored by major tissue type and stage**
 
