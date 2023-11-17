@@ -1,6 +1,6 @@
 Large Mouse Embryo to Pup Developmental Atlas
 =================================================
-**Via2.0** Cartographic views of the timelapse mouse development dataset (Qiu et al., 2023) from gastrula to pup taken at 6 hours intervals spanning over 8 Million cells
+**Via2.0** Cartographic views of the timelapse mouse development dataset (Qiu et al., 2023) from gastrula to pup taken at 6 hours intervals spanning over 8 Million cells. Via2.0 integrates temporal information in order to preserve the global chronology of all major germ layers as they differentiate. The first figure shows 8 Millions cells whereas the subsequent figure show the Atlas View on specific subsets of the dataset.
 
 **Atlas view of Mouse Embryo to Pup (Qiu 2023 - 8 Million cells E8.0 - E17.5) colored by major tissue type and stage**
 
