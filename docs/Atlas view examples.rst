@@ -47,7 +47,7 @@ Via2.0 Atlas views
 
 .. raw:: html
 
-  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/readthedocs_434_full_qiu_mousepup.png?raw=true" width="1000px" align="center" </a>
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/readthedocs_434_full_qiu_mousepup_atlasview.png?raw=true" width="1000px" align="center" </a>
 
 | 
 |
