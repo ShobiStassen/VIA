@@ -51,7 +51,7 @@ Via 2.0 extends the lazy-teleporting walks to higher order random walks with **m
    :hidden:
 
    Atlas view examples
-   Mouse_to_Pup_Atlas
+   Mouse_to_pup_atlas
    Via2 Atlas Animation
    Via Atlas View for Spatial omics
 
