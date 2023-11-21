@@ -5,7 +5,7 @@ pyVIA - [Multi-Omic Single-Cell Cartography](https://pyvia.readthedocs.io/en/lat
 
 1. **Integration of metadata (e.g time-series labels):** Using sequential metadata (temporal labels from longitudinal studies, hierarchical information from phylogenetic trees, spatial distances relevant to spatial omics data) to guide the cartography.  Integrating RNA-velocity where applicable. 
 2. **Higher Order Random Walks:** Leveraging higher order random walks with **memory** to highlight key end-to-end differentiation pathways along the atlas 
-3. **Atlas View:** Via 2.0 offers a unique visualization of the predicted trajectory by intuitively merging the cell-cell graph connectivity with the high-resolution of single-cell embeddings.
+3. **Atlas View:** Via 2.0 offers a unique **visualization** of the predicted trajectory by intuitively merging the cell-cell graph connectivity with the high-resolution of single-cell embeddings. Visit the [**Gallery**](https://pyvia.readthedocs.io/en/latest/Atlas%20view%20examples.html) to see examples. 
 4. **Generalizable and data modality agnostic** Via 2.0 still offers all the functionality of Via 1.0 across single-cell data modalities (scRNA-seq, imaging and flow cyometry, scATAC-seq) for types of topologies  (disconnected, cyclic, tree) to infer pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. 
 
 <p align="center">
