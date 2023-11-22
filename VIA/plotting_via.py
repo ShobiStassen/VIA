@@ -608,8 +608,8 @@ def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None,
     return full_mds
 
 def via_atlas_emb(via_object = None, X_input: ndarray = None, graph:csr_matrix=None, n_components:int=2, alpha: float = 1.0, negative_sample_rate: int = 5,
-                  gamma: float = 1.0, spread:float=1.0, min_dist:float=0.1, init_pos:Union[str, ndarray]='spectral', random_state:int=0,
-                    n_epochs:int=100, distance_metric: str = 'euclidean', layout:Optional[list]=None, cluster_membership:Optional[list]=None, saveto='')-> ndarray:
+                  gamma: float = 1.0, spread:float=1.0, min_dist:float=0.1, init_pos:Union[str, ndarray]='via', random_state:int=0,
+                    n_epochs:int=100, distance_metric: str = 'euclidean', layout:Optional[list]=None, cluster_membership:Optional[list]=None, parallel:bool=False, saveto='', n_jobs:int=2)-> ndarray:
     '''
 
     Run dimensionality reduction using the VIA modified HNSW graph using via cluster graph initialization when Via_object is provided
@@ -623,11 +623,11 @@ def via_atlas_emb(via_object = None, X_input: ndarray = None, graph:csr_matrix=N
     :param gamma: Weight to apply to negative samples.
     :param spread: The effective scale of embedded points. In combination with min_dist this determines how clustered/clumped the embedded points are.
     :param min_dist: The effective minimum distance between embedded points. Smaller values will result in a more clustered/clumped embedding where nearby points on the manifold are drawn closer together, while larger values will result on a more even dispersal of points
-    :param init_pos: either a string (default) 'spectral', 'via' (uses via graph to initialize). Or a n_cellx2 dimensional ndarray with initial coordinates
+    :param init_pos: either a string (default) 'via' (uses via graph to initialize), or 'spectral'. Or a n_cellx2 dimensional ndarray with initial coordinates
     :param random_state:
     :param n_epochs: The number of training epochs to be used in optimizing the low dimensional embedding. Larger values result in more accurate embeddings. If 0 is specified a value will be selected based on the size of the input dataset (200 for large datasets, 500 for small).
     :param distance_metric:
-    :param layout: ndarray This is required if the init_pos is set to 'via'. layout should then = via0.graph_node_pos (which is a list of lists, of length n_clusters)
+    :param layout: ndarray . custom initial layout. (n_cells x2). also requires cluster_membership labels
     :param cluster_membership: via_object.labels (cluster level labels of length n_samples corresponding to the layout)
     :return: ndarray of shape (nsamples,n_components)
     '''
@@ -684,11 +684,30 @@ def via_atlas_emb(via_object = None, X_input: ndarray = None, graph:csr_matrix=N
 
     #prod_matrix = graph.multiply(transpose)
     #graph = graph + transpose - prod_matrix
-    X_emb, aux_data = simplicial_set_embedding(data=X_input, graph=graph, n_components=n_components, initial_alpha=alpha,
-                                      a=a, b=b, n_epochs=n_epochs, metric_kwds={}, gamma=gamma, metric=distance_metric,
-                                      negative_sample_rate=negative_sample_rate, init=init_pos,
-                                      random_state=np.random.RandomState(random_state),
-                                      verbose=1, output_dens=False, densmap_kwds={}, densmap=False)
+    if parallel:
+        import numba
+        print('before setting numba threads')
+        print(f'there are {numba.get_num_threads()} threads')
+        numba.set_num_threads(n_jobs)
+        print(f'there are now {numba.get_num_threads()} threads')
+    random_state = np.random.RandomState(random_state)
+    if parallel:
+        print('using parallel, the random_state will not be used.')
+
+        do_randomize_init = True
+        if do_randomize_init:
+            init_pos = init_pos + random_state.normal(
+                scale=0.001, size=init_pos.shape
+            ).astype(np.float32)
+    X_emb, aux_data = simplicial_set_embedding(data=X_input, graph=graph, n_components=n_components,
+                                                   initial_alpha=alpha,
+                                                   a=a, b=b, n_epochs=n_epochs, metric_kwds={}, gamma=gamma,
+                                                   metric=distance_metric,
+                                                   negative_sample_rate=negative_sample_rate, init=init_pos,
+                                                   random_state=random_state,
+                                                   verbose=1, output_dens=False, densmap_kwds={}, densmap=False,
+                                                   parallel=parallel)
+
     if len(saveto)>0:
         U_df = pd.DataFrame(X_emb)
         U_df.to_csv(saveto)
@@ -1277,7 +1296,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list='', arr
         ax_i.axis('off')
     fig.patch.set_visible(False)
     return fig, axs
-def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '',size_scatter:int=1, alpha_scatter:float = 0.3 ,headwidth_bundle:float=0.1, headwidth_alpha:float=0.8, arrow_frequency:float=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False, lineage_pathway:list = [], dpi:int = 300, fontsize_title:int=6, fontsize_labels:int=6,global_visual_pruning=0.5,use_sc_labels_sequential_for_direction:bool = False,sc_scatter_size=3,sc_scatter_alpha:float=0.4,add_sc_embedding:bool=True,scatter_size_sc_embedding:int=5):
+def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '', alpha_milestones:float = 0.3 ,headwidth_bundle:float=0.1, headwidth_alpha:float=0.8, arrow_frequency:float=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False, lineage_pathway:list = [], dpi:int = 300, fontsize_title:int=6, fontsize_labels:int=6,global_visual_pruning=0.5,use_sc_labels_sequential_for_direction:bool = False,sc_scatter_size=3,sc_scatter_alpha:float=0.4,add_sc_embedding:bool=True,size_milestones:int=5, colorbar_legend='pseudotime'):
 
     '''
 
@@ -1293,7 +1312,8 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
     :param alpha_bundle: alpha when drawing lines
     :param linewidth_bundle: linewidth of bundled lines
     :param edge_color:
-    :param size_scatter: scatter size of the milestones (use sc_size_scatter to control single cell scatter when using in conjunction with lineage probs)
+    :param alpha_milestones: float 0.3 alpha of milestones
+    :param size_milestones: scatter size of the milestones (use sc_size_scatter to control single cell scatter when using in conjunction with lineage probs/ sc embeddings)
     :param arrow_frequency: min dist between arrows (bundled edges otherwise have overcrowding of arrows)
     :param show_direction: True will draw arrows along the lines to indicate direction
     :param milestone_edges: pandas DataFrame milestoone_edges[['source','target']]
@@ -1313,6 +1333,7 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
     :param sc_scatter_alpha: transparency of the background singlecell scatter when plotting lineages
     :param add_sc_embedding: add background of single cell scatter plot for Atlas
     :param scatter_size_sc_embedding
+    :param colorbar_legend str title of colorbar
     :return: fig, axis with bundled edges plotted
     '''
 
@@ -1348,18 +1369,26 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
             milestone_edges = hammerbundle_dict['edges']
             if sc_labels_expression is None:
                 milestone_numeric_values = hammerbundle_dict['milestone_embedding']['numeric label']
-            else: milestone_numeric_values = sc_labels_expression
+            else:
+                if (isinstance(sc_labels_expression[0], str)) == True:
+                    color_dict = {}
+                    set_labels = list(set(sc_labels_expression))
+                    set_labels.sort(reverse=True)
+                    for index, value in enumerate(set_labels):
+                        color_dict[value] = index
+                    milestone_numeric_values = [color_dict[i] for i in sc_labels_expression]
+                    sc_labels_expression=milestone_numeric_values
+                else: milestone_numeric_values = sc_labels_expression
             milestone_pt = hammerbundle_dict['milestone_embedding']['pt']
             if use_sc_labels_sequential_for_direction: milestone_pt = hammerbundle_dict['milestone_embedding'][
                 'numeric label']
             if sc_labels_expression is not None:  # if both sclabelexpression and sequential are provided, then sc_labels_expression takes precedence
                 df = pd.DataFrame()
                 df['sc_milestone_labels'] = hammerbundle_dict['sc_milestone_labels']
-
                 df['sc_expression'] = sc_labels_expression
                 df = df.groupby('sc_milestone_labels').mean()
 
-                milestone_numeric_values = df['sc_expression'].values  # used to color edges
+                milestone_numeric_values = df['sc_expression'].values  # used to color edges. direction is based on milestone_pt
 
     else:
         hammer_bundle = hammerbundle_dict['hammerbundle']
@@ -1470,13 +1499,13 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
                                 max_alph = max(val_alph)
                                 val_alph = [i/max_alph for i in val_alph]
                                 ax.scatter(via_object.embedding[:, 0], via_object.embedding[:, 1], alpha=val_alph,
-                                       c=sc_labels_expression, s=scatter_size_sc_embedding, cmap=cmap_name,
+                                       c=sc_labels_expression, s=sc_scatter_size, cmap=cmap_name,
                                        zorder=2)  # alpha=1 change back to
                             #ax.scatter(via_object.embedding[:, 0], via_object.embedding[:, 1], alpha=0.1,                                       c='lightgray', s=5)
                             #new_cmap= truncate_colormap(cmap, 0.25, 1.0) #use this for gene expression plotting in zebrahub non-neuro ecto
 
                             else:
-                                ax.scatter(via_object.embedding[:, 0], via_object.embedding[:, 1], alpha=1, c=sc_labels_expression, s=scatter_size_sc_embedding, cmap=cmap, zorder=1) #alpha=1 change back to
+                                ax.scatter(via_object.embedding[:, 0], via_object.embedding[:, 1], alpha=1, c=sc_labels_expression, s=sc_scatter_size, cmap=cmap, zorder=1) #alpha=1 change back to
                             ax.add_patch( Rectangle((max_l, max_dw), max_r - max_l, max_up - max_dw, facecolor="white",alpha=sc_scatter_alpha))
 
                 if len(lineage_pathway)>0:
@@ -1613,7 +1642,7 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
 
                     seg_count+=1
                 if show_milestones == False:
-                    size_scatter = 0.01
+                    size_milestones = 0.01
                     show_milestones=True
                     scale_scatter_size_pop = False
                 if show_milestones == True:
@@ -1638,8 +1667,8 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
                         sqrt_nsamples = math.sqrt(n_samples)
                         group_pop_scale = [math.log(6+i /sqrt_nsamples) for i in
                                            hammerbundle_dict['milestone_embedding']['cluster population']]
-                        size_scatter_scaled = [size_scatter * i for i in group_pop_scale]
-                    else: size_scatter_scaled = size_scatter # constant value
+                        size_scatter_scaled = [size_milestones * i for i in group_pop_scale]
+                    else: size_scatter_scaled = size_milestones # constant value
                     #NOTE # using vmax=1 in the scatter plot would mean that all values are plotted relative to a 0-1 scale and the legend for all plots is 0-1.
                     # If we want to allow that each legend is unique then there is autoscaling of the colors such that the max color is set to the max value of that particular subplot (even if that max value is well below 1)
                     if fig_nrows == 1:
@@ -1649,27 +1678,27 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
                                        c=milestone_numeric_values_normed, cmap=cmap_name,
                                        edgecolors='None') #without alpha parameter which otherwise gets passed onto the colorbar
 
-                            ax.scatter(layout[:,0], layout[:,1], s=size_scatter_scaled, c=milestone_numeric_values_normed, cmap= cmap_name, alpha=alpha_scatter, edgecolors='None')
+                            ax.scatter(layout[:,0], layout[:,1], s=size_scatter_scaled, c=milestone_numeric_values_normed, cmap= cmap_name, alpha=alpha_milestones, edgecolors='None')
 
                         else:
                             im = ax[c].scatter(layout[:, 0], layout[:, 1],     s=0.01,                                       c=milestone_numeric_values_normed, cmap=cmap_name,
                                             edgecolors='None') #without alpha parameter which otherwise gets passed onto the colorbar
 
-                            ax[c].scatter(layout[:,0], layout[:,1], s=size_scatter_scaled, c=milestone_numeric_values_normed,cmap= cmap_name, alpha=alpha_scatter, edgecolors='None')
+                            ax[c].scatter(layout[:,0], layout[:,1], s=size_scatter_scaled, c=milestone_numeric_values_normed,cmap= cmap_name, alpha=alpha_milestones, edgecolors='None')
                     else:
                         '''
                        
                         ax[r, c].scatter(layout[:, 0], layout[:, 1], s=size_scatter_scaled*3,
                                          c=milestone_numeric_values_normed, cmap=cmap_name,
-                                         alpha=alpha_scatter*0.5, edgecolors='none', vmin=min_numerical_value)  # vmax=1)
+                                         alpha=alpha_milestones*0.5, edgecolors='none', vmin=min_numerical_value)  # vmax=1)
                         
                         
                         '''
                         im = ax[r, c].scatter(layout[:, 0], layout[:, 1], c=milestone_numeric_values_normed, s=0.01,
                                               cmap=cmap_name, edgecolors='none', vmin=min_numerical_value)
-                        ax[r, c].scatter(layout[:, 0], layout[:, 1], s=size_scatter_scaled*1.5,
+                        ax[r, c].scatter(layout[:, 0], layout[:, 1], s=size_scatter_scaled,
                                         c=milestone_numeric_values_normed, cmap=cmap_name,
-                                        alpha=alpha_scatter, edgecolors='none', vmin=min_numerical_value)  # vmax=1)
+                                        alpha=alpha_milestones, edgecolors='none', vmin=min_numerical_value)  # vmax=1)
 
 
                         ''''
@@ -1680,13 +1709,13 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
                                     if scale_scatter_size_pop:
                                         ax[r, c].scatter(layout[j, 0], layout[j, 1], s=size_scatter_scaled[j] * 1.5,
                                              c=milestone_numeric_values_normed[j], cmap=cmap_name,
-                                             alpha=alpha_scatter * 1.5, edgecolors='None',
+                                             alpha=alpha_milestones * 1.5, edgecolors='None',
                                              vmin=min_numerical_value)  # vmax=1)
                                     else:
                                         print(f'node {j} {milestone_numeric_values_normed[j]}')
                                         ax[r, c].scatter(layout[j, 0], layout[j, 1], s=size_scatter_scaled*1.5,
                                                      c=milestone_numeric_values_normed[j], cmap=cmap_name,
-                                                     alpha=alpha_scatter*1.5, edgecolors='None',
+                                                     alpha=alpha_milestones*1.5, edgecolors='None',
                                                      vmin=min_numerical_value)  # vmax=1)
                         '''
                     if text_labels == True:
@@ -1704,22 +1733,22 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
                                 if fig_nrows == 1:
                                     if fig_ncols == 1:
                                         ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=np.array([milestone_numeric_values_rgba[i]]),
-                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                                       alpha=alpha_milestones, edgecolors='None', label=mode_label)
                                     else:
                                         ax[c].scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=np.array([milestone_numeric_values_rgba[i]]),
-                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                                       alpha=alpha_milestones, edgecolors='None', label=mode_label)
                                 else:
                                     ax[r,c].scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled[i], c=np.array([milestone_numeric_values_rgba[i]]),
-                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                                       alpha=alpha_milestones, edgecolors='None', label=mode_label)
                             else:
                                 if fig_nrows == 1:
                                     if fig_ncols == 1:
                                         ax.scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled, c=np.array([milestone_numeric_values_rgba[i]]),
-                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                                       alpha=alpha_milestones, edgecolors='None', label=mode_label)
                                     else: ax[c].scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled, c=np.array([milestone_numeric_values_rgba[i]]),
-                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                                       alpha=alpha_milestones, edgecolors='None', label=mode_label)
                                 else: ax[r, c].scatter(layout[i, 0], layout[i, 1], s=size_scatter_scaled, c=np.array([milestone_numeric_values_rgba[i]]),
-                                       alpha=alpha_scatter, edgecolors='None', label=mode_label)
+                                       alpha=alpha_milestones, edgecolors='None', label=mode_label)
                             if fig_nrows == 1:
                                 if fig_ncols == 1:
                                     ax.text(layout[i, 0], layout[i, 1], mode_label, style='italic', fontsize=fontsize_labels, color="black")
@@ -1763,8 +1792,11 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
 
                         divider = make_axes_locatable(ax[c])
                         cax = divider.append_axes('right', size='5%', pad=0.05)
-                        if len(lineage_pathway) > 0: cb = fig.colorbar(im, cax=cax, orientation='vertical', label='lineage likelihood')
-                        else: cb = fig.colorbar(im, cax=cax, orientation='vertical', label='pseudotime')
+                        if (len(lineage_pathway)) >0:
+                            colorbar_legend = 'lineage likelihood'
+                            cb = fig.colorbar(im, cax=cax, orientation='vertical', label=colorbar_legend)
+                        else:
+                            cb = fig.colorbar(im, cax=cax, orientation='vertical', label=colorbar_legend)
 
                         ax_cb = cb.ax
                         text = ax_cb.yaxis.label
