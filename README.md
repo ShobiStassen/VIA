@@ -19,7 +19,7 @@ If you find our work useful, please consider citing our **[paper](https://www.na
 
 
 ## Tutorials for Cartographic TI and Visualization using Via 2.0
-Tutorials and **[videos](https://pyvia.readthedocs.io/en/latest/Tutorial%20Video.html)**  available on **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** with step-by-step code for real and simulated datasets. Tutorials explain how to generate cartographic visualizations for TI, tune parameters, obtain various outputs and also understand the importance of *memory*.
+Tutorials and **[videos](https://pyvia.readthedocs.io/en/latest/Tutorial%20Video.html)**  available on **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** with step-by-step code for real and simulated datasets. Tutorials explain how to generate cartographic visualizations for TI, tune parameters, obtain various outputs and also understand the importance of *memory*. Datasets (anndata h5ad) links are provided below.
 
 #### :eight_spoked_asterisk:Cartography of Zebrafish gastrulation
 <p align="center">
