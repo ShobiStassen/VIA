@@ -23,7 +23,7 @@ Via 2.0 extends the lazy-teleporting walks to higher order random walks with **m
 **Try out the following with Via 2.0:**
 
 - Combining temporal information with scRNA velocity `temporal study <https://pyvia.readthedocs.io/en/latest/Via2.0%20Cartographic%20Mouse%20Gastrualation.html>`_
-- Constructing the Atlas View `visualization  <https://pyvia.readthedocs.io/en/latest/Zebrahub_tutorial_visualization.html>`_
+- Constructing the Atlas View `visualization  <https://pyvia.readthedocs.io/en/latest/Zebrahub_tutorial_visualization.html>`_ H5ad anndata objects are provided on the `github page <https://github.com/ShobiStassen/VIA>`_
 
 **Via 2.0 Atlas View plots hi-res edge graph for Mouse Gastrulation (Pijuan Sala)**
 
