@@ -1,4 +1,4 @@
-StaVia - [Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases](https://pyvia.readthedocs.io/en/latest/) 
+[StaVia](https://pyvia.readthedocs.io/en/latest/) - Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases
 =============================================================================================================================
 
 
