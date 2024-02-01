@@ -14,9 +14,9 @@ StaVia - Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/rtd_fig1.png?raw=true" width="850px" align="center", class="only-light" </a>
 
-Via 2.0 still offers all the functionality of Via 1.0 in terms of various types of topology construction (disconnected, cyclic), pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages, for details please refer to our `paper <https://www.nature.com/articles/s41467-021-25773-3>`_ . 
+StaVia still offers all the functionality of `Via 1.0 <https://www.nature.com/articles/s41467-021-25773-3>`_ .  in terms of various types of topology construction (disconnected, cyclic), pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages, for details please refer to our `preprint <https://www.biorxiv.org/content/10.1101/2024.01.29.577871v1>`_.
 
-Via 2.0 extends the lazy-teleporting walks to higher order random walks with **memory** to allow better lineage detection, pathway recovery and preservation of global features in terms of computation and visualization. Via 2.0 is generalizable to multi-omic analysis: in addition to transcriptomic data, VIA works on scATAC-seq, flow and imaging cytometry data. 
+StaVia extends the lazy-teleporting walks to higher order random walks with **memory** to allow better lineage detection, pathway recovery and preservation of global features in terms of computation and visualization. StaVia is generalizable to multi-omic analysis: in addition to transcriptomic data (time-series studies, spatial omics), VIA works on scATAC-seq, flow and imaging cytometry data. 
 
 
 
@@ -25,7 +25,7 @@ Via 2.0 extends the lazy-teleporting walks to higher order random walks with **m
 - Combining temporal information with scRNA velocity `temporal study <https://pyvia.readthedocs.io/en/latest/Via2.0%20Cartographic%20Mouse%20Gastrualation.html>`_
 - Constructing the Atlas View `visualization  <https://pyvia.readthedocs.io/en/latest/Zebrahub_tutorial_visualization.html>`_ . H5ad anndata objects are provided on the `github page <https://github.com/ShobiStassen/VIA>`_
 
-**Via 2.0 Atlas View for Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
+**StaVia Cartographic Atlas View for Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
 
 .. raw:: html
 
