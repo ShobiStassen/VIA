@@ -1,7 +1,8 @@
-pyVIA - [Multi-Omic Single-Cell Cartography](https://pyvia.readthedocs.io/en/latest/) 
-====================================================
+StaVia - [Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases](https://pyvia.readthedocs.io/en/latest/) 
+=============================================================================================================================
 
-**Via 2.0** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal studies** enabled by. In addition to the full functionality of earlier versions, Via 2.0 now offers
+
+**StaVia (Via 2.0)** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal and spatial studies** enabled by. In addition to the full functionality of earlier versions, StaVia now offers
 
 1. **Integration of metadata (e.g time-series labels, spatial coordinates):** Using sequential metadata (temporal labels from longitudinal studies, hierarchical information from phylogenetic trees, spatial distances relevant to spatial omics data) to guide the cartography.  Integrating RNA-velocity where applicable. 
 2. **Higher Order Random Walks:** Leveraging higher order random walks with **memory** to highlight key end-to-end differentiation pathways along the atlas 
@@ -13,7 +14,7 @@ pyVIA - [Multi-Omic Single-Cell Cartography](https://pyvia.readthedocs.io/en/lat
 </p>
 
 
-Via 2.0 extends the lazy-teleporting walks to higher order random walks with **memory** to allow better lineage detection, pathway recovery and preservation of global features in terms of computation and visualization. The cartographic approach combining high edge and spatial resolution produces informative and esthetically pleasing visualizations caled the Atlas View. 
+StaVia extends the lazy-teleporting walks to higher order random walks with **memory** to allow better lineage detection, pathway recovery and preservation of global features in terms of computation and visualization. The cartographic approach combining high edge and spatial resolution produces informative and esthetically pleasing visualizations caled the Atlas View. 
 
 If you find our work useful, please consider citing our **[paper](https://www.nature.com/articles/s41467-021-25773-3)** [![DOI](https://zenodo.org/badge/212254929.svg)](https://zenodo.org/badge/latestdoi/212254929). 
 
