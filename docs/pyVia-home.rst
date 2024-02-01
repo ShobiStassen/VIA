@@ -1,9 +1,9 @@
 |DOI|
 
-pyVIA - Multi-Omic Single-Cell Cartography 
-====================================================
+StaVia - Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases
+=============================================================================
 
-**Via 2.0** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal studies** enabled by:
+**StaVia (Via 2.0)** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal and spatial studies** enabled by:
 
 #. **Graph augmentation using metadata for (temporal) studies:** Using sequential metadata (temporal labels, hierarchical information, spatial distances) to guide the cartography
 #. **Higher Order Random Walks:** Leveraging higher order random walks with **memory** to highlight key end-to-end differentiation pathways along the atlas 
