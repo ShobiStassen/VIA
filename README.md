@@ -2,7 +2,7 @@ StaVia - [Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases](h
 =============================================================================================================================
 
 
-**StaVia (Via 2.0)** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal and spatial studies** enabled by. In addition to the full functionality of earlier versions, StaVia now offers
+**StaVia (Via 2.0)** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal and spatial studies** enabled by. In addition to the full functionality of earlier versions, StaVia now offers **(check out our [preprint](https://www.biorxiv.org/content/10.1101/2024.01.29.577871v1)** for details)
 
 1. **Integration of metadata (e.g time-series labels, spatial coordinates):** Using sequential metadata (temporal labels from longitudinal studies, hierarchical information from phylogenetic trees, spatial distances relevant to spatial omics data) to guide the cartography.  Integrating RNA-velocity where applicable. 
 2. **Higher Order Random Walks:** Leveraging higher order random walks with **memory** to highlight key end-to-end differentiation pathways along the atlas 
@@ -14,12 +14,12 @@ StaVia - [Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases](h
 </p>
 
 
-StaVia extends the lazy-teleporting walks to higher order random walks with **memory** to allow better lineage detection, pathway recovery and preservation of global features in terms of computation and visualization. The cartographic approach combining high edge and spatial resolution produces informative and esthetically pleasing visualizations caled the Atlas View. 
+StaVia extends the lazy-teleporting walks to higher order random walks with **memory** to allow better lineage detection, pathway recovery and preservation of global features in terms of computation and visualization. The cartographic approach combining high edge and spatial resolution produces informative and esthetically pleasing visualizations caled the **Atlas View**. 
 
-If you find our work useful, please consider citing our **[paper](https://www.nature.com/articles/s41467-021-25773-3)** [![DOI](https://zenodo.org/badge/212254929.svg)](https://zenodo.org/badge/latestdoi/212254929). 
+If you find our work useful, please consider citing our **[preprint](https://www.biorxiv.org/content/10.1101/2024.01.29.577871v1)** and **[paper](https://www.nature.com/articles/s41467-021-25773-3)** [![DOI](https://zenodo.org/badge/212254929.svg)](https://zenodo.org/badge/latestdoi/212254929). 
 
 
-## Tutorials for Cartographic TI and Visualization using Via 2.0
+## Tutorials for Cartographic TI and Visualization using StaVi
 Tutorials and **[videos](https://pyvia.readthedocs.io/en/latest/Tutorial%20Video.html)**  available on **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** with step-by-step code for real and simulated datasets. Tutorials explain how to generate cartographic visualizations for TI, tune parameters, obtain various outputs and also understand the importance of *memory*. Datasets (anndata h5ad) links are provided below.
 
 #### :eight_spoked_asterisk:Cartography of Zebrafish gastrulation
