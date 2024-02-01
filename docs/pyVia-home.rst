@@ -31,7 +31,7 @@ StaVia extends the lazy-teleporting walks to higher order random walks with **me
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/AtlasGallery/rtd_fig2_v2.png?raw=true" width="850px" align="center" </a>
 
-**Via 2.0 visualizes Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
+**StaVia visualizes Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
 
 .. raw:: html
 
