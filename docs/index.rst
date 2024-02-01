@@ -1,12 +1,12 @@
 |DOI|
 
-StaVia - Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases
+`StaVia <https://www.biorxiv.org/content/10.1101/2024.01.29.577871v1>`_ - Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases
 =============================================================================
 
 **StaVia (Via 2.0)** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal and spatial studies** enabled by:
 
-#. **Graph augmentation using metadata for (temporal) studies:** Using sequential metadata (temporal labels, hierarchical information, spatial coordinates) to guide the cartography
-#. **Higher Order Random Walks:** Leveraging higher order random walks with **memory** to highlight key end-to-end differentiation pathways along the atlas 
+#. **Graph augmentation integrating metadata (spatial omics and time-series studies):** Using sequential metadata (temporal labels, hierarchical information, spatial coordinates) to guide the cartography
+#. **Higher Order Random Walks:** Leveraging higher order random walks with **memory** of a cell's past states to highlight key end-to-end differentiation pathways along the atlas
 #. **Atlas View:** Via 2.0 offers a unique visualization of the predicted trajectory by intuitively merging the cell-cell graph connectivity with the high-resolution of single-cell embeddings.
 
 
@@ -20,7 +20,7 @@ StaVia extends the lazy-teleporting walks to higher order random walks with **me
 
 
 
-**Try out the following with Via 2.0:**
+**Try out the following with StaVia:**
 
 - Combining temporal information with scRNA velocity `temporal study <https://pyvia.readthedocs.io/en/latest/Via2.0%20Cartographic%20Mouse%20Gastrualation.html>`_
 - Constructing the Atlas View `visualization  <https://pyvia.readthedocs.io/en/latest/Zebrahub_tutorial_visualization.html>`_ . H5ad anndata objects are provided on the `github page <https://github.com/ShobiStassen/VIA>`_
