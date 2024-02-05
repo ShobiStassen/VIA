@@ -11,6 +11,12 @@
 
 .. raw:: html
 
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/twitter%20gif.gif?raw=true" width="850px" align="center" </a>
+|
+|
+
+.. raw:: html
+
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/rtd_fig1.png?raw=true" width="850px" align="center", class="only-light" </a>
 
 StaVia still offers all the functionality of `Via 1.0 <https://www.nature.com/articles/s41467-021-25773-3>`_ .  in terms of various types of topology construction (disconnected, cyclic), pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages, for details please refer to our `preprint <https://www.biorxiv.org/content/10.1101/2024.01.29.577871v1>`_.
