@@ -109,6 +109,7 @@ def make_edgebundle_milestone(embedding:ndarray=None, sc_graph=None, via_object=
     :param via_object: via_object (best way to run this function by simply providing via_object)
     :param sc_graph: igraph graph set as the via attribute self.ig_full_graph (affinity graph)
     :param initial_bandwidth: increasing bw increases merging of minor edges
+    :param n_milestones: increasing n_milestones reveals finer edge details
     :param decay: increasing decay increases merging of minor edges #https://datashader.org/user_guide/Networks.html
     :param milestone_labels: default list=[]. Usually autocomputed. but can provide as single-cell level labels (clusters, groups, which function as milestone groupings of the single cells)
     :param sc_labels_numeric: default is None which automatically chooses via_object's pseudotime or time_series_labels (when available). otherwise set to a list of numerical values representing some sequential/chronological information
