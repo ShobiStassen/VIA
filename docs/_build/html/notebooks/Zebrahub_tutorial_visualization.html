@@ -1,0 +1,792 @@
+<!doctype html>
+<html class="no-js" lang="en">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="1. Basic workflow" href="ViaJupyter_Toy_Multifurcating.html" /><link rel="prev" title="2. Via 2.0 Cartography on Zebrahub (Trajectory Inference)" href="Zebrahub%20TI%20tutorial.html" />
+
+    <!-- Generated with Sphinx 5.1.1 and Furo 2023.03.27 -->
+        <title>3. Via 2.0 Cartography on Zebrahub (Visualization) - pyvia documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?digest=fad236701ea90a88636c2a8c73b44ae642ed2a53" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?digest=30d1aed668e5c3a91c3e3bf6a60b675221979f0e" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f8f8f8;
+  --color-code-foreground: black;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-half" viewBox="0 0 24 24">
+    <title>Auto light/dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-shadow">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M13 12h5" />
+      <path d="M13 15h4" />
+      <path d="M13 18h1" />
+      <path d="M13 9h4" />
+      <path d="M13 6h1" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">pyvia  documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  
+  <span class="sidebar-brand-text">pyvia  documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">General</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../pyVia-home.html">StaVia - Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Release%20History.html">Release History</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Tutorial%20Video.html">VIA Tutorial Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Parameters%20and%20Attributes.html">Parameters and Attributes</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../api/index.html">API</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../api/pyVIA%20Core.html">pyVIA core</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/Plotting.html">Plotting</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.animate_atlas.html">pyVIA.plotting_via.animate_atlas</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.animate_streamplot.html">pyVIA.plotting_via.animate_streamplot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.get_gene_expression.html">pyVIA.plotting_via.get_gene_expression</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_atlas_view.html">pyVIA.plotting_via.plot_atlas_view</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_differentiation_flow.html">pyVIA.plotting_via.plot_differentiation_flow</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_gene_trend_heatmaps.html">pyVIA.plotting_via.plot_gene_trend_heatmaps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_piechart_viagraph.html">pyVIA.plotting_via.plot_piechart_viagraph</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_population_composition.html">pyVIA.plotting_via.plot_population_composition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_sc_lineage_probability.html">pyVIA.plotting_via.plot_sc_lineage_probability</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_scatter.html">pyVIA.plotting_via.plot_scatter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_trajectory_curves.html">pyVIA.plotting_via.plot_trajectory_curves</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_viagraph.html">pyVIA.plotting_via.plot_viagraph</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.via_streamplot.html">pyVIA.plotting_via.via_streamplot</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/Utils.html">Util Functions for plotting</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.make_edgebundle_milestone.html">pyVIA.plotting_via.make_edgebundle_milestone</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.via_atlas_emb.html">pyVIA.plotting_via.via_atlas_emb</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.via_forcelayout.html">pyVIA.plotting_via.via_forcelayout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.via_mds.html">pyVIA.plotting_via.via_mds</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/Datasets.html">Datasets</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.cell_cycle_cyto_data.html">datasets_via.cell_cycle_cyto_data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.embryoid_body.html">datasets_via.embryoid_body</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.scATAC_hematopoiesis.html">datasets_via.scATAC_hematopoiesis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.scRNA_hematopoiesis.html">datasets_via.scRNA_hematopoiesis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.toy_disconnected.html">datasets_via.toy_disconnected</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.toy_multifurcating.html">datasets_via.toy_multifurcating</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../Basic%20Example%20Code.html">Examples for installation checking</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Via 2.0 Atlas View Gallery</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Atlas%20view%20examples.html">Via2.0 Atlas views</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Mouse_to_pup_atlas.html">Large Mouse Embryo to Pup Developmental Atlas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Via2%20Atlas%20Animation.html">Via 2.0 Atlas Animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Via%20Atlas%20View%20for%20Spatial%20omics.html">Via2.0 Atlas views for Spatial Omics data</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Via 2.0 Cartography</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="Via2.0%20Cartographic%20Mouse%20Gastrualation.html">1. Via 2.0 Cartography on Mouse Gastrulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Zebrahub%20TI%20tutorial.html">2. Via 2.0 Cartography on Zebrahub (Trajectory Inference)</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">3. Via 2.0 Cartography on Zebrahub (Visualization)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials Via</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="ViaJupyter_Toy_Multifurcating.html">1. Basic workflow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ViaJupyter_Toy_Disconnected.html">2. Disconnected Trajectories</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ViaJupyter_scRNA_Hematopoiesis.html">3. Via Human Hematopoiesis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Imaging%20Cytometry%20%28cell%20cycle%29.html">4. Imaging cytometry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mESC_timeseries.html">5. Using time-series metadata (mESC Cytof)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ViaJupyter_Pancreas_RNAvelocity.html">6. Using RNA-velocity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ViaJupyter_scRNAVelocity_hematopoiesis.html">7. Bone marrow with RNA-velocity</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main">
+          <section class="tex2jax_ignore mathjax_ignore" id="via-2-0-cartography-on-zebrahub-visualization">
+<h1>3. Via 2.0 Cartography on Zebrahub (Visualization)<a class="headerlink" href="#via-2-0-cartography-on-zebrahub-visualization" title="Permalink to this heading"></a></h1>
+<p>This tutorial focuses on how to generate the Via2.0 Zebrahub Atlas View. The TI analysis is shown in Tutorial #2</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">scanpy</span> <span class="k">as</span> <span class="nn">sc</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pyVIA.core</span> <span class="k">as</span> <span class="nn">via</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+</pre></div>
+</div>
+</div>
+</div>
+<section id="load-the-data">
+<h2>Load the data<a class="headerlink" href="#load-the-data" title="Permalink to this heading"></a></h2>
+<p>Data has been filtered and library normalized.
+Data is annotated with time/stage, cluster labels, and cell type labels (coarse and fine)</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="si">}</span><span class="se">\t</span><span class="s1">Start reading data&#39;</span><span class="p">)</span>
+<span class="n">adata</span><span class="o">=</span><span class="n">sc</span><span class="o">.</span><span class="n">read_h5ad</span><span class="p">(</span> <span class="n">filename</span><span class="o">=</span><span class="s1">&#39;/home/user/Trajectory/Datasets/Zebrafish_Lange2023/Rawdata/Zebrahub_data_via.h5ad&#39;</span><span class="p">)</span>
+<span class="c1">#compute PCA</span>
+<span class="n">adata</span><span class="o">.</span><span class="n">uns</span><span class="p">[</span><span class="s1">&#39;log1p&#39;</span><span class="p">][</span><span class="s1">&#39;base&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span> <span class="c1">#fix for small bug in scanpy #see https://github.com/theislab/single-cell-tutorial/issues/97</span>
+<span class="n">sc</span><span class="o">.</span><span class="n">pp</span><span class="o">.</span><span class="n">highly_variable_genes</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">n_top_genes</span><span class="o">=</span><span class="mi">2000</span><span class="p">)</span>
+<span class="n">sc</span><span class="o">.</span><span class="n">tl</span><span class="o">.</span><span class="n">pca</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">n_comps</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">adata</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2024-02-06 16:48:28.584723	Start reading data
+AnnData object with n_obs × n_vars = 119457 × 28187
+    obs: &#39;n_genes&#39;, &#39;n_counts&#39;, &#39;fish&#39;, &#39;timepoint_cluster&#39;, &#39;n_genes_by_counts&#39;, &#39;total_counts&#39;, &#39;total_counts_mt&#39;, &#39;pct_counts_mt&#39;, &#39;total_counts_nc&#39;, &#39;pct_counts_nc&#39;, &#39;developmental_stage&#39;, &#39;timepoint&#39;, &#39;zebrafish_anatomy_ontology_class&#39;, &#39;zebrafish_anatomy_ontology_id&#39;, &#39;parc&#39;, &#39;kmeans50&#39;, &#39;celltype_extrainfo&#39;, &#39;zebrafish_anatomy_ontology_class_shobi&#39;, &#39;adjusted_timepoint&#39;, &#39;bool_list&#39;, &#39;global annotation&#39;, &#39;time_coarse_cell_type&#39;, &#39;time_fine_cell_type&#39;, &#39;parc_cluster&#39;, &#39;parc_cluster_and_cell_type&#39;
+    var: &#39;gene_ids&#39;, &#39;feature_types&#39;, &#39;genome&#39;, &#39;mt&#39;, &#39;nc&#39;, &#39;n_cells_by_counts&#39;, &#39;mean_counts&#39;, &#39;pct_dropout_by_counts&#39;, &#39;total_counts&#39;, &#39;n_cells&#39;, &#39;highly_variable&#39;, &#39;means&#39;, &#39;dispersions&#39;, &#39;dispersions_norm&#39;
+    uns: &#39;global_annotation_colors&#39;, &#39;hvg&#39;, &#39;log1p&#39;, &#39;pca&#39;, &#39;timepoint_colors&#39;, &#39;zebrafish_anatomy_ontology_class_colors&#39;, &#39;zebrafish_anatomy_ontology_id_colors&#39;
+    obsm: &#39;X_U&#39;, &#39;X_Via2_Atlas&#39;, &#39;X_pca&#39;, &#39;X_umap&#39;
+    varm: &#39;PCs&#39;
+    layers: &#39;counts&#39;
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="extract-some-annotations">
+<h2>Extract some annotations<a class="headerlink" href="#extract-some-annotations" title="Permalink to this heading"></a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">n_cells</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;cells is&#39;</span><span class="p">,</span> <span class="n">n_cells</span><span class="p">)</span>
+<span class="n">parc_cluster</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;parc_cluster&#39;</span><span class="p">]]</span>
+<span class="n">parc_cluster_and_cell_type</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;parc_cluster_and_cell_type&#39;</span><span class="p">]]</span>
+<span class="n">coarse_cell_type</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;zebrafish_anatomy_ontology_class&#39;</span><span class="p">]]</span>
+<span class="n">fine_cell_type</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;zebrafish_anatomy_ontology_class_shobi&#39;</span><span class="p">]]</span> <span class="c1">#consolidated annotaions from individual time point files</span>
+<span class="n">coarse_fine_cell_type</span> <span class="o">=</span> <span class="p">[</span><span class="n">coarse_cell_type</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">fine_cell_type</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_cells</span><span class="p">)]</span>
+<span class="n">time_point_numeric</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;adjusted_timepoint&#39;</span><span class="p">]]</span> <span class="c1">#assigned a numeric value to each stage (e.g. 5hpf is 5, 10hpf is 10,...)</span>
+<span class="n">early_cell_type</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">!=</span> <span class="s1">&#39;nan&#39;</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;global annotation&#39;</span><span class="p">]]</span>
+
+<span class="n">hybrid_cell_time</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">fine_cell_type</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;_&#39;</span><span class="o">+</span><span class="n">early_cell_type</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">+</span><span class="s1">&#39;_&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">time_point_numeric</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_cells</span><span class="p">)]</span> <span class="c1">#labels of early stage cells which was provided for cells &lt;24hpf also included</span>
+<span class="n">parc_numeric_cluster_labels</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;parc&#39;</span><span class="p">]]</span>
+<span class="n">parc_cluster</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;parc_cluster&#39;</span><span class="p">]]</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>cells is 119457
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="find-a-suitable-root">
+<h2>Find a suitable root<a class="headerlink" href="#find-a-suitable-root" title="Permalink to this heading"></a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">root_str</span> <span class="o">=</span> <span class="s1">&#39;paraxial mesoderm_Somites_0&#39;</span>
+<span class="n">loc_root</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">hybrid_cell_time</span><span class="p">)</span> <span class="o">==</span> <span class="n">root_str</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="c1">#&#39;paraxial mesoderm_PSM_0&#39; 1 cell , &#39;paraxial mesoderm_Somites_0&#39; has 51 cells, &#39;paraxial mesoderm_Muscle_0&#39;, &#39;tail bud_NMPs_0&#39;</span>
+<span class="n">root</span> <span class="o">=</span> <span class="p">[</span><span class="n">loc_root</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+<span class="n">n_pcs</span> <span class="o">=</span> <span class="mi">100</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="si">}</span><span class="se">\t</span><span class="s1">root is cell number  </span><span class="si">{</span><span class="n">root</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s1"> of type </span><span class="si">{</span><span class="n">fine_cell_type</span><span class="p">[</span><span class="n">root</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2024-02-06 16:49:16.395417	root is cell number  2604 of type paraxial mesoderm
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="initialize-parameters">
+<h2>Initialize parameters<a class="headerlink" href="#initialize-parameters" title="Permalink to this heading"></a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">knn</span><span class="o">=</span><span class="mi">30</span>
+<span class="n">time_series</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># True</span>
+<span class="n">memory</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="n">jac_std_global</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># 1 is used in all the umap csv files</span>
+<span class="n">random_seed</span> <span class="o">=</span> <span class="mi">0</span><span class="c1">#1  # 0</span>
+<span class="n">knn_sequential</span> <span class="o">=</span> <span class="mi">15</span>  <span class="c1"># 5 forviagraphs #15 for embedding</span>
+<span class="n">t_diff_step</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">do_gaussian_kernel_edgeweights</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">edgebundle_pruning_twice</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">edgepruning_clustering_resolution</span> <span class="o">=</span> <span class="mf">0.15</span>  <span class="c1"># 0.15 viagraph and embedding</span>
+<span class="n">edgebundle_pruning</span> <span class="o">=</span> <span class="mf">0.05</span>  <span class="c1"># 0.15</span>
+<span class="n">neighboring_terminal_states_threshold</span> <span class="o">=</span> <span class="mi">4</span>  <span class="c1"># 3</span>
+<span class="n">viagraph_decay</span> <span class="o">=</span> <span class="mf">0.6</span>  <span class="c1"># 0.7, 0.9</span>
+<span class="n">max_vis_out</span> <span class="o">=</span> <span class="mi">2</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="set-terminal-states-optional">
+<h2>Set terminal states (optional)<a class="headerlink" href="#set-terminal-states-optional" title="Permalink to this heading"></a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># The parameter &quot;user_defined_terminal_group&quot; is being set to a list of group level annotations corresponding to the provided true_label. These were terminal fates detected in previous runs and saved for reproducability.</span>
+<span class="c1"># This parameter can also be left to its default user_defined_terminal_group = []. the results should be similar.</span>
+<span class="n">user_defined_cellfates</span><span class="o">=</span> <span class="p">[</span><span class="s1">&#39;0_cartilage element&#39;</span><span class="p">,</span> <span class="s1">&#39;2_dermis&#39;</span><span class="p">,</span> <span class="s1">&#39;49_fin&#39;</span><span class="p">,</span>
+                                          <span class="s1">&#39;67_pharyngeal arch&#39;</span><span class="p">,</span> <span class="s1">&#39;120_cranial cartilage&#39;</span><span class="p">,</span>
+                                          <span class="s1">&#39;1_forebrain&#39;</span><span class="p">,</span> <span class="s1">&#39;71_neuron&#39;</span><span class="p">,</span> <span class="s1">&#39;89_diencephalon&#39;</span><span class="p">,</span>
+                                          <span class="s1">&#39;136_radial glial cell&#39;</span><span class="p">,</span>
+                                          <span class="s1">&#39;10_epidermal cell&#39;</span><span class="p">,</span> <span class="s1">&#39;83_neuromast&#39;</span><span class="p">,</span> 
+                                          <span class="s1">&#39;145_enteric musculature&#39;</span><span class="p">,</span> <span class="s1">&#39;55_myotome&#39;</span><span class="p">,</span> 
+                                          <span class="s1">&#39;46_hematopoietic cell&#39;</span><span class="p">,</span>                                          <span class="s1">&#39;102_vasculature&#39;</span><span class="p">,</span> <span class="s1">&#39;127_Muller cell&#39;</span><span class="p">,</span> <span class="s1">&#39;105_oligodendrocyte&#39;</span><span class="p">,</span>                            <span class="s1">&#39;69_liver&#39;</span><span class="p">,</span> <span class="s1">&#39;90_pharynx&#39;</span><span class="p">,</span>
+                                          <span class="s1">&#39;95_intestine&#39;</span><span class="p">]</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="initialize-and-run-the-via2-0-class">
+<h2>Initialize and Run the Via2.0 Class<a class="headerlink" href="#initialize-and-run-the-via2-0-class" title="Permalink to this heading"></a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Initialize and Run the Via2.0 Class</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="si">}</span><span class="se">\t</span><span class="s1">Run Via2.0&#39;</span><span class="p">)</span>
+
+<span class="n">v0</span> <span class="o">=</span> <span class="n">via</span><span class="o">.</span><span class="n">VIA</span><span class="p">(</span><span class="n">adata</span><span class="o">.</span><span class="n">obsm</span><span class="p">[</span><span class="s1">&#39;X_pca&#39;</span><span class="p">][:,</span> <span class="mi">0</span><span class="p">:</span><span class="n">n_pcs</span><span class="p">],</span> <span class="n">true_label</span><span class="o">=</span><span class="n">parc_cluster_and_cell_type</span><span class="p">,</span> 
+             <span class="n">labels</span><span class="o">=</span><span class="n">parc_cluster</span><span class="p">,</span> <span class="n">knn</span><span class="o">=</span><span class="n">knn</span><span class="p">,</span> <span class="n">memory</span><span class="o">=</span><span class="n">memory</span><span class="p">,</span>
+             <span class="n">user_defined_terminal_group</span><span class="o">=</span><span class="n">user_defined_cellfates</span><span class="p">,</span>
+             <span class="n">edgepruning_clustering_resolution</span><span class="o">=</span><span class="n">edgepruning_clustering_resolution</span><span class="p">,</span>
+             <span class="n">neighboring_terminal_states_threshold</span><span class="o">=</span><span class="n">neighboring_terminal_states_threshold</span><span class="p">,</span>
+             <span class="n">too_big_factor</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">resolution_parameter</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+             <span class="n">root_user</span><span class="o">=</span><span class="n">root</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="n">random_seed</span><span class="p">,</span>
+             <span class="n">is_coarse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">preserve_disconnected</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">pseudotime_threshold_TS</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">x_lazy</span><span class="o">=</span><span class="mf">0.99</span><span class="p">,</span>
+             <span class="n">do_gaussian_kernel_edgeweights</span><span class="o">=</span><span class="n">do_gaussian_kernel_edgeweights</span><span class="p">,</span>
+             <span class="n">alpha_teleport</span><span class="o">=</span><span class="mf">0.99</span><span class="p">,</span> <span class="n">edgebundle_pruning</span><span class="o">=</span><span class="n">edgebundle_pruning</span><span class="p">,</span> <span class="n">edgebundle_pruning_twice</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+             <span class="n">time_series</span><span class="o">=</span><span class="n">time_series</span><span class="p">,</span> <span class="n">time_series_labels</span><span class="o">=</span><span class="n">time_point_numeric</span><span class="p">,</span> <span class="n">knn_sequential</span><span class="o">=</span><span class="n">knn_sequential</span><span class="p">,</span>
+             <span class="n">knn_sequential_reverse</span><span class="o">=</span><span class="n">knn_sequential</span><span class="p">,</span> <span class="n">t_diff_step</span><span class="o">=</span><span class="n">t_diff_step</span><span class="p">,</span>
+             <span class="n">do_compute_embedding</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="n">v0</span><span class="o">.</span><span class="n">run_VIA</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2024-02-06 16:49:16.446582	Run Via2.0
+2024-02-06 16:49:16.453681	Running VIA over input data of 119457 (samples) x 100 (features)
+2024-02-06 16:49:16.453681	Knngraph has 30 neighbors
+2024-02-06 16:49:49.943120	Using time series information to guide knn graph construction 
+2024-02-06 16:49:49.954230	Time series ordered set [0, 5, 10, 15, 20, 25, 30, 35, 40, 45]
+2024-02-06 16:50:36.547252	Shape neighbors (119457, 30) and sequential neighbors (119457, 30)
+2024-02-06 16:50:36.600487	Shape augmented neighbors (119457, 60)
+2024-02-06 16:50:36.651840	Actual average allowable time difference between nodes is 10.0
+2024-02-06 16:50:55.131081	Finished global pruning of 30-knn graph used for clustering at level of 0.15. Kept 46.9 % of edges. 
+2024-02-06 16:50:55.445815	Number of connected components used for clustergraph  is 1
+2024-02-06 16:51:17.750064	Using predfined labels provided by user (this must be provided as an array)
+2024-02-06 16:51:17.750064	Making cluster graph. Global cluster graph pruning level: 0.15
+2024-02-06 16:51:19.093352	Graph has 1 connected components before pruning
+2024-02-06 16:51:19.108996	Graph has 1 connected components after pruning
+2024-02-06 16:51:19.108996	Graph has 1 connected components after reconnecting
+2024-02-06 16:51:19.108996	48.0% links trimmed from local pruning relative to start
+2024-02-06 16:51:19.108996	88.8% links trimmed from global pruning relative to start
+2024-02-06 16:51:19.108996	Graph has 1 connected components before pruning
+2024-02-06 16:51:19.108996	Graph has 3 connected components after pruning
+2024-02-06 16:51:19.124624	Graph has 1 connected components after reconnecting
+2024-02-06 16:51:19.124624	48.0% links trimmed from local pruning relative to start
+2024-02-06 16:51:19.124624	92.1% links trimmed from global pruning relative to start
+2024-02-06 16:51:19.124624	component number 0 out of  [0]
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>C:\Users\Kevin tsia\anaconda3\envs\via2\lib\site-packages\scipy\sparse\_index.py:103: SparseEfficiencyWarning: Changing the sparsity structure of a csr_matrix is expensive. lil_matrix is more efficient.
+  self._set_intXint(row, col, x.flat[0])
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2024-02-06 16:51:20.255203	The root index, 2604 provided by the user belongs to cluster number 97 and corresponds to cell type 97_paraxial mesoderm
+2024-02-06 16:51:20.404829	Computing lazy-teleporting expected hitting times
+2024-02-06 16:51:31.983877	 ended all multiprocesses, will retrieve and reshape
+try rw2 hitting times setup
+start computing walks with rw2 method
+g.indptr.size, 147
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>C:\Users\Kevin tsia\anaconda3\envs\via2\lib\site-packages\pecanpy\graph.py:90: UserWarning: WARNING: Implicitly set node IDs to the canonical node ordering due to missing IDs field in the raw CSR npz file. This warning message can be suppressed by setting implicit_ids to True in the read_npz function call, or by setting the --implicit_ids flag in the CLI
+  warnings.warn(
+</pre></div>
+</div>
+<script type="application/vnd.jupyter.widget-view+json">{"model_id": "8ae88c9f5ae949f0bec168a67a082fd2", "version_major": 2, "version_minor": 0}</script><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>memory for rw2 hittings times  2. Using rw2 based pt
+do scaling of pt
+2024-02-06 16:51:41.963854	Terminal cluster list based on user defined cells/groups: [(&#39;0_cartilage element&#39;, 0), (&#39;2_dermis&#39;, 2), (&#39;49_fin&#39;, 49), (&#39;67_pharyngeal arch&#39;, 67), (&#39;120_cranial cartilage&#39;, 120), (&#39;1_forebrain&#39;, 1), (&#39;71_neuron&#39;, 71), (&#39;89_diencephalon&#39;, 89), (&#39;136_radial glial cell&#39;, 136), (&#39;10_epidermal cell&#39;, 10), (&#39;83_neuromast&#39;, 83), (&#39;145_enteric musculature&#39;, 145), (&#39;55_myotome&#39;, 55), (&#39;46_hematopoietic cell&#39;, 46), (&#39;102_vasculature&#39;, 102), (&#39;127_Muller cell&#39;, 127), (&#39;105_oligodendrocyte&#39;, 105), (&#39;69_liver&#39;, 69), (&#39;90_pharynx&#39;, 90), (&#39;95_intestine&#39;, 95)]
+2024-02-06 16:51:41.963854	Terminal clusters corresponding to unique lineages in this component are [0, 2, 49, 67, 120, 1, 71, 89, 136, 10, 83, 145, 55, 46, 102, 127, 105, 69, 90, 95] 
+TESTING rw2_lineage probability at memory 10
+testing rw2 lineage probability at memory 10
+g.indptr.size, 147
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>C:\Users\Kevin tsia\anaconda3\envs\via2\lib\site-packages\pecanpy\graph.py:90: UserWarning: WARNING: Implicitly set node IDs to the canonical node ordering due to missing IDs field in the raw CSR npz file. This warning message can be suppressed by setting implicit_ids to True in the read_npz function call, or by setting the --implicit_ids flag in the CLI
+  warnings.warn(
+</pre></div>
+</div>
+<script type="application/vnd.jupyter.widget-view+json">{"model_id": "6d7341d9b3704c7ba1f3e2bcffb3b6e9", "version_major": 2, "version_minor": 0}</script><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2024-02-06 16:51:48.486988	 Cluster or terminal cell fate 0 is reached 265.0 times
+2024-02-06 16:51:48.683785	 Cluster or terminal cell fate 2 is reached 321.0 times
+2024-02-06 16:51:48.923914	 Cluster or terminal cell fate 49 is reached 38.0 times
+2024-02-06 16:51:49.118724	 Cluster or terminal cell fate 67 is reached 326.0 times
+2024-02-06 16:51:49.340747	 Cluster or terminal cell fate 120 is reached 169.0 times
+2024-02-06 16:51:49.568767	 Cluster or terminal cell fate 1 is reached 65.0 times
+2024-02-06 16:51:49.816750	 Cluster or terminal cell fate 71 is reached 45.0 times
+2024-02-06 16:51:50.007561	 Cluster or terminal cell fate 89 is reached 417.0 times
+2024-02-06 16:51:50.233503	 Cluster or terminal cell fate 136 is reached 116.0 times
+2024-02-06 16:51:50.461331	 Cluster or terminal cell fate 10 is reached 71.0 times
+2024-02-06 16:51:50.692439	 Cluster or terminal cell fate 83 is reached 30.0 times
+2024-02-06 16:51:50.925563	 Cluster or terminal cell fate 145 is reached 116.0 times
+2024-02-06 16:51:51.169573	 Cluster or terminal cell fate 55 is reached 45.0 times
+2024-02-06 16:51:51.405499	 Cluster or terminal cell fate 46 is reached 25.0 times
+2024-02-06 16:51:51.625457	 Cluster or terminal cell fate 102 is reached 124.0 times
+2024-02-06 16:51:51.854602	 Cluster or terminal cell fate 127 is reached 109.0 times
+2024-02-06 16:51:52.087725	 Cluster or terminal cell fate 105 is reached 59.0 times
+2024-02-06 16:51:52.314733	 Cluster or terminal cell fate 69 is reached 47.0 times
+2024-02-06 16:51:52.546824	 Cluster or terminal cell fate 90 is reached 66.0 times
+2024-02-06 16:51:52.788913	 Cluster or terminal cell fate 95 is reached 40.0 times
+2024-02-06 16:51:53.453693	There are (20) terminal clusters corresponding to unique lineages {0: &#39;0_pectoral fin&#39;, 2: &#39;2_dermis&#39;, 49: &#39;49_fin&#39;, 67: &#39;67_pharyngeal arch&#39;, 120: &#39;120_cranial cartilage&#39;, 1: &#39;1_forebrain&#39;, 71: &#39;71_neuron&#39;, 89: &#39;89_diencephalon&#39;, 136: &#39;136_radial glial cell&#39;, 10: &#39;10_epidermal cell&#39;, 83: &#39;83_neuromast&#39;, 145: &#39;145_enteric musculature&#39;, 55: &#39;55_myotome&#39;, 46: &#39;46_hematopoietic cell&#39;, 102: &#39;102_vasculature&#39;, 127: &#39;127_Muller cell&#39;, 105: &#39;105_oligodendrocyte&#39;, 69: &#39;69_liver&#39;, 90: &#39;90_pharynx&#39;, 95: &#39;95_intestine&#39;}
+2024-02-06 16:51:53.453693	Begin projection of pseudotime and lineage likelihood
+2024-02-06 16:52:02.358324	Start reading data
+2024-02-06 16:52:02.358324	Correlation of Via pseudotime with developmental stage 73.33 %
+2024-02-06 16:52:02.400584	Cluster graph layout based on forward biasing
+2024-02-06 16:52:02.426671	Graph has 1 connected components before pruning
+2024-02-06 16:52:02.432658	Graph has 58 connected components after pruning
+2024-02-06 16:52:02.478882	Graph has 1 connected components after reconnecting
+2024-02-06 16:52:02.479882	67.2% links trimmed from local pruning relative to start
+2024-02-06 16:52:02.479882	80.4% links trimmed from global pruning relative to start
+2024-02-06 16:52:02.479882	Additional Visual cluster graph pruning for edge bundling at level: 0.15
+2024-02-06 16:52:02.481883	Make via clustergraph edgebundle
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>C:\Users\Kevin tsia\anaconda3\envs\via2\lib\site-packages\scipy\sparse\_index.py:103: SparseEfficiencyWarning: Changing the sparsity structure of a csr_matrix is expensive. lil_matrix is more efficient.
+  self._set_intXint(row, col, x.flat[0])
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2024-02-06 16:52:05.635522	Hammer dims: Nodes shape: (146, 2) Edges shape: (890, 3)
+2024-02-06 16:52:05.853588	Time elapsed 143.6 seconds
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="computing-the-atlas-view">
+<h2>Computing the Atlas View<a class="headerlink" href="#computing-the-atlas-view" title="Permalink to this heading"></a></h2>
+<blockquote>
+<div><p>Set parameter <strong>init_pos</strong></p>
+<ul class="simple">
+<li><p>‘via’ : uses via graph to initialize embedding</p></li>
+<li><p>‘spectral’ : uses normalized Laplacian of the fuzzy 1-skeleton</p></li>
+<li><p>n_cell x 2 dimensional array preset by the user</p></li>
+</ul>
+</div></blockquote>
+<p>Once you have the single cell atlas embedding, you can compute the edge layout and generate the full Atlas View</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">compute_atlas_embedding</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="k">if</span> <span class="n">compute_atlas_embedding</span><span class="p">:</span>
+    <span class="c1"># STEP 3</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="si">}</span><span class="se">\t</span><span class="s1">Start Atlas embedding computation&#39;</span><span class="p">)</span>
+    <span class="n">atlas_embedding</span> <span class="o">=</span> <span class="n">via</span><span class="o">.</span><span class="n">via_atlas_emb</span><span class="p">(</span><span class="n">via_object</span><span class="o">=</span><span class="n">v0</span><span class="p">,</span> <span class="n">init_pos</span><span class="o">=</span><span class="s1">&#39;via&#39;</span><span class="p">,</span> <span class="n">min_dist</span><span class="o">=</span><span class="mf">0.2</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span> <span class="n">atlas_embedding</span> <span class="o">=</span> <span class="n">embedding</span><span class="o">=</span><span class="n">adata</span><span class="o">.</span><span class="n">obsm</span><span class="p">[</span><span class="s1">&#39;X_Via2_Atlas&#39;</span><span class="p">]</span> <span class="c1">#use pre-saved embedding</span>
+
+<span class="n">v0</span><span class="o">.</span><span class="n">embedding</span> <span class="o">=</span> <span class="n">atlas_embedding</span> <span class="c1">#remember to pass this onto the via_object</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2024-02-06 16:52:05.878707	Start Atlas embedding computation
+X-input (119457, 100)
+len membership and n_cells 119457 119457
+n cell 119457
+2024-02-06 16:52:05.878707	Computing embedding on sc-Viagraph
+2024-02-06 16:52:10.671518	using via cluster graph to initialize embedding
+(119457, 100)
+</pre></div>
+</div>
+<script type="application/vnd.jupyter.widget-view+json">{"model_id": "8552cc8430da4eebb6a60f92ce571262", "version_major": 2, "version_minor": 0}</script><div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>	completed  0  /  100 epochs
+	completed  10  /  100 epochs
+	completed  20  /  100 epochs
+	completed  30  /  100 epochs
+	completed  40  /  100 epochs
+	completed  50  /  100 epochs
+	completed  60  /  100 epochs
+	completed  70  /  100 epochs
+	completed  80  /  100 epochs
+	completed  90  /  100 epochs
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="re-orient-optional">
+<h2>Re-orient (optional)<a class="headerlink" href="#re-orient-optional" title="Permalink to this heading"></a></h2>
+<p>If you want to apply a rotation transformation on the embedding</p>
+<p>#re-orient/rotate. This can be skipped.  Only use it if neceseary First plot out the atlas_embedding (code in next snipped) and see if you want to rotate it so the early cells are on the LHS.
+import math
+theta_deg = 180
+theta_radians = math.sin(math.radians(theta_deg))
+R = np.array([[math.cos(theta_radians), -math.sin(theta_radians)],[math.sin(theta_radians),math.cos(theta_radians)]])
+atlas_embedding_ = np.matmul(R,atlas_embedding.T)
+atlas_embedding_=atlas_embedding.T
+v0.embedding = atlas_embedding_</p>
+</section>
+<section id="plot-atlas-embedding">
+<h2>Plot Atlas Embedding’<a class="headerlink" href="#plot-atlas-embedding" title="Permalink to this heading"></a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="si">}</span><span class="se">\t</span><span class="s1">Plot Atlas Embedding&#39;</span><span class="p">)</span>
+<span class="n">f1</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">via</span><span class="o">.</span><span class="n">plot_scatter</span><span class="p">(</span><span class="n">embedding</span><span class="o">=</span><span class="n">atlas_embedding</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">time_point_numeric</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;plasma&#39;</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+                          <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">edgecolors</span><span class="o">=</span><span class="s1">&#39;None&#39;</span><span class="p">,</span>
+                          <span class="n">title</span><span class="o">=</span><span class="s1">&#39;atlas&#39;</span><span class="p">,</span> <span class="n">text_labels</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">f1</span><span class="o">.</span><span class="n">set_size_inches</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+
+<span class="n">f2</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">via</span><span class="o">.</span><span class="n">plot_scatter</span><span class="p">(</span><span class="n">embedding</span><span class="o">=</span><span class="n">atlas_embedding</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">coarse_cell_type</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;atlas celltype&#39;</span><span class="p">,</span>
+                          <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="n">f2</span><span class="o">.</span><span class="n">set_size_inches</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>No artists with labels found to put in legend.  Note that artists whose label start with an underscore are ignored when legend() is called with no argument.
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2024-02-06 17:02:03.305009	Plot Atlas Embedding
+</pre></div>
+</div>
+<img alt="../_images/85f8728b1469431a0d855922a789456b73d099dacc82a51d3b119b6825ce5c41.png" src="../_images/85f8728b1469431a0d855922a789456b73d099dacc82a51d3b119b6825ce5c41.png" />
+<img alt="../_images/4244eef9926088cd51361edd0b63410a016c0f05b64edcf75bbeb193ec0ef034.png" src="../_images/4244eef9926088cd51361edd0b63410a016c0f05b64edcf75bbeb193ec0ef034.png" />
+</div>
+</div>
+</section>
+<section id="atlas-view-edges">
+<h2>Atlas View Edges<a class="headerlink" href="#atlas-view-edges" title="Permalink to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Compute the edges and pass it onto the via_object to avoid recomputing each time you plot</p></li>
+</ol>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="si">}</span><span class="se">\t</span><span class="s1">Start Computing Atlas View&#39;</span><span class="p">)</span>
+<span class="n">dict_coarse</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;notochord&#39;</span><span class="p">:</span><span class="mf">2.5</span><span class="p">,</span> <span class="s1">&#39;central_nervous_system&#39;</span><span class="p">:</span><span class="mf">5.5</span><span class="p">,</span><span class="s1">&#39;neural_crest&#39;</span><span class="p">:</span><span class="mf">4.5</span><span class="p">,</span><span class="s1">&#39;paraxial_mesoderm&#39;</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span><span class="s1">&#39;intermediate_mesoderm&#39;</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="s1">&#39;lateral_mesoderm&#39;</span><span class="p">:</span><span class="mf">1.5</span><span class="p">,</span>
+                       <span class="s1">&#39;mesenchyme&#39;</span><span class="p">:</span><span class="mf">2.0</span><span class="p">,</span><span class="s1">&#39;hematopoietic_system&#39;</span><span class="p">:</span><span class="mf">0.5</span><span class="p">,</span><span class="s1">&#39;periderm&#39;</span><span class="p">:</span><span class="mi">8</span><span class="p">,</span><span class="s1">&#39;endoderm&#39;</span><span class="p">:</span><span class="mi">7</span><span class="p">}</span>
+<span class="n">decay</span> <span class="o">=</span> <span class="mf">0.55</span><span class="c1">#0.7  # increasing decay increasing merging of edges</span>
+<span class="n">i_bw</span> <span class="o">=</span> <span class="mf">0.035</span><span class="c1">#0.05  # increasing bw increases merging of edges</span>
+<span class="n">global_visual_pruning</span> <span class="o">=</span> <span class="mf">0.55</span>
+<span class="n">n_milestones</span> <span class="o">=</span> <span class="mi">300</span>
+
+<span class="n">hammerbundle_dict</span> <span class="o">=</span> <span class="n">via</span><span class="o">.</span><span class="n">make_edgebundle_milestone</span><span class="p">(</span><span class="n">via_object</span><span class="o">=</span><span class="n">v0</span><span class="p">,</span> <span class="n">n_milestones</span><span class="o">=</span><span class="n">n_milestones</span><span class="p">,</span> <span class="n">decay</span><span class="o">=</span><span class="n">decay</span><span class="p">,</span>
+                                                  <span class="n">initial_bandwidth</span><span class="o">=</span><span class="n">i_bw</span><span class="p">,</span>
+                                                  <span class="n">global_visual_pruning</span><span class="o">=</span><span class="n">global_visual_pruning</span><span class="p">,</span>
+                                                  <span class="n">sc_labels_numeric</span><span class="o">=</span><span class="n">time_point_numeric</span><span class="p">)</span>
+<span class="n">v0</span><span class="o">.</span><span class="n">hammerbundle_milestone_dict</span> <span class="o">=</span> <span class="n">hammerbundle_dict</span>  <span class="c1"># make the hmbd in one shot to be used for all plots</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2024-02-06 17:02:15.718628	Start Computing Atlas View
+2024-02-06 17:02:15.718628	Start finding milestones
+2024-02-06 17:02:50.911185	End milestones with 300
+2024-02-06 17:02:52.349099	Recompute weights
+2024-02-06 17:02:52.414034	pruning milestone graph based on recomputed weights
+2024-02-06 17:02:52.417055	Graph has 1 connected components before pruning
+2024-02-06 17:02:52.419138	Graph has 1 connected components after pruning
+2024-02-06 17:02:52.419138	Graph has 1 connected components after reconnecting
+2024-02-06 17:02:52.425153	regenerate igraph on pruned edges
+2024-02-06 17:02:52.757955	Setting numeric label as time_series_labels or other sequential metadata for coloring edges
+2024-02-06 17:02:53.431797	Making smooth edges
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="si">}</span><span class="se">\t</span><span class="s1">Plot Atlas View&#39;</span><span class="p">)</span>
+<span class="c1"># color by tissue type, we </span>
+<span class="n">color_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;notochord&#39;</span><span class="p">:</span> <span class="mf">2.5</span><span class="p">,</span> <span class="s1">&#39;central_nervous_system&#39;</span><span class="p">:</span> <span class="mf">5.5</span><span class="p">,</span> <span class="s1">&#39;neural_crest&#39;</span><span class="p">:</span> <span class="mf">4.5</span><span class="p">,</span> <span class="s1">&#39;paraxial_mesoderm&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+               <span class="s1">&#39;intermediate_mesoderm&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;lateral_mesoderm&#39;</span><span class="p">:</span> <span class="mf">1.5</span><span class="p">,</span>
+               <span class="s1">&#39;mesenchyme&#39;</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">,</span> <span class="s1">&#39;hematopoietic_system&#39;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span> <span class="s1">&#39;periderm&#39;</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span> <span class="s1">&#39;endoderm&#39;</span><span class="p">:</span> <span class="mi">7</span><span class="p">}</span>
+
+<span class="c1">#color by major cell type</span>
+<span class="n">headwidth_bundle</span> <span class="o">=</span> <span class="mf">0.2</span>
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">via</span><span class="o">.</span><span class="n">plot_atlas_view</span><span class="p">(</span><span class="n">via_object</span><span class="o">=</span><span class="n">v0</span><span class="p">,</span> <span class="n">sc_labels</span><span class="o">=</span><span class="n">hybrid_cell_time</span><span class="p">,</span> <span class="n">fontsize_labels</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">text_labels</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                              <span class="n">add_sc_embedding</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">sc_scatter_alpha</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span> <span class="n">sc_scatter_size</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> 
+                              <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;rainbow&#39;</span><span class="p">,</span> <span class="n">linewidth_bundle</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> 
+                              <span class="n">sc_labels_expression</span><span class="o">=</span><span class="p">[</span><span class="n">color_dict</span><span class="p">[</span><span class="n">coarse_cell_type</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">v0</span><span class="o">.</span><span class="n">labels</span><span class="p">))],</span> 
+                              <span class="n">headwidth_bundle</span><span class="o">=</span><span class="n">headwidth_bundle</span><span class="p">)</span>
+<span class="n">fig</span><span class="o">.</span><span class="n">set_size_inches</span><span class="p">(</span><span class="mi">35</span><span class="p">,</span> <span class="mi">25</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2024-02-06 17:03:23.164984	Plot Atlas View
+inside add sc embedding second if
+</pre></div>
+</div>
+<img alt="../_images/641c3666337e34e2d2801f0d4170a4014fd9a804fbe2f63660d68c976a453e36.png" src="../_images/641c3666337e34e2d2801f0d4170a4014fd9a804fbe2f63660d68c976a453e36.png" />
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1">#if you want to color by categories (e.g. tissue type)</span>
+<span class="c1">#autogenerate color_dict </span>
+<span class="c1">#color_dict = {}</span>
+<span class="c1">#set_labels = list(set(labels))</span>
+<span class="c1">#set_labels.sort(reverse=True)</span>
+<span class="c1">#for index, value in enumerate(set_labels): color_dict[value] = index</span>
+
+<span class="c1">#color by stage</span>
+<span class="n">fig2</span><span class="p">,</span> <span class="n">ax2</span> <span class="o">=</span> <span class="n">via</span><span class="o">.</span><span class="n">plot_atlas_view</span><span class="p">(</span><span class="n">via_object</span><span class="o">=</span><span class="n">v0</span><span class="p">,</span> <span class="n">sc_labels</span><span class="o">=</span><span class="n">hybrid_cell_time</span><span class="p">,</span> <span class="n">fontsize_labels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">text_labels</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                                <span class="n">add_sc_embedding</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">sc_scatter_alpha</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span> <span class="n">sc_scatter_size</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;plasma&#39;</span><span class="p">,</span>
+                                <span class="n">sc_labels_expression</span><span class="o">=</span><span class="n">time_point_numeric</span><span class="p">,</span>
+                                <span class="n">linewidth_bundle</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> 
+                                <span class="n">headwidth_bundle</span><span class="o">=</span><span class="n">headwidth_bundle</span><span class="p">)</span>
+<span class="n">fig2</span><span class="o">.</span><span class="n">set_size_inches</span><span class="p">(</span><span class="mi">35</span><span class="p">,</span> <span class="mi">25</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>inside add sc embedding second if
+</pre></div>
+</div>
+<img alt="../_images/9b10ae4020cfe4132a9deaec57b9902dbbe4effd24e74a60cfbff912224d1a4a.png" src="../_images/9b10ae4020cfe4132a9deaec57b9902dbbe4effd24e74a60cfbff912224d1a4a.png" />
+</div>
+</div>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="ViaJupyter_Toy_Multifurcating.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">1. Basic workflow</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="Zebrahub%20TI%20tutorial.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">2. Via 2.0 Cartography on Zebrahub (Trajectory Inference)</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2022, shobana stassen
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">3. Via 2.0 Cartography on Zebrahub (Visualization)</a><ul>
+<li><a class="reference internal" href="#load-the-data">Load the data</a></li>
+<li><a class="reference internal" href="#extract-some-annotations">Extract some annotations</a></li>
+<li><a class="reference internal" href="#find-a-suitable-root">Find a suitable root</a></li>
+<li><a class="reference internal" href="#initialize-parameters">Initialize parameters</a></li>
+<li><a class="reference internal" href="#set-terminal-states-optional">Set terminal states (optional)</a></li>
+<li><a class="reference internal" href="#initialize-and-run-the-via2-0-class">Initialize and Run the Via2.0 Class</a></li>
+<li><a class="reference internal" href="#computing-the-atlas-view">Computing the Atlas View</a></li>
+<li><a class="reference internal" href="#re-orient-optional">Re-orient (optional)</a></li>
+<li><a class="reference internal" href="#plot-atlas-embedding">Plot Atlas Embedding’</a></li>
+<li><a class="reference internal" href="#atlas-view-edges">Atlas View Edges</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/scripts/furo.js"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script defer="defer" src="https://unpkg.com/@popperjs/core@2"></script>
+    <script defer="defer" src="https://unpkg.com/tippy.js@6"></script>
+    <script defer="defer" src="../_static/tippy\notebooks\Zebrahub_tutorial_visualization.7d09145d-ec1a-460a-88b0-443a44d786c4.js"></script>
+    </body>
+</html>

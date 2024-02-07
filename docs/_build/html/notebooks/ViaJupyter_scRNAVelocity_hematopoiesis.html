@@ -1,0 +1,638 @@
+<!doctype html>
+<html class="no-js" lang="en">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="prev" title="6. Using RNA-velocity" href="ViaJupyter_Pancreas_RNAvelocity.html" />
+
+    <!-- Generated with Sphinx 5.1.1 and Furo 2023.03.27 -->
+        <title>7. Bone marrow with RNA-velocity - pyvia documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?digest=fad236701ea90a88636c2a8c73b44ae642ed2a53" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?digest=30d1aed668e5c3a91c3e3bf6a60b675221979f0e" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f8f8f8;
+  --color-code-foreground: black;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-half" viewBox="0 0 24 24">
+    <title>Auto light/dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-shadow">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M13 12h5" />
+      <path d="M13 15h4" />
+      <path d="M13 18h1" />
+      <path d="M13 9h4" />
+      <path d="M13 6h1" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">pyvia  documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  
+  <span class="sidebar-brand-text">pyvia  documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">General</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../pyVia-home.html">StaVia - Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Release%20History.html">Release History</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Tutorial%20Video.html">VIA Tutorial Videos</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Parameters%20and%20Attributes.html">Parameters and Attributes</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../api/index.html">API</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../api/pyVIA%20Core.html">pyVIA core</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/Plotting.html">Plotting</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.animate_atlas.html">pyVIA.plotting_via.animate_atlas</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.animate_streamplot.html">pyVIA.plotting_via.animate_streamplot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.get_gene_expression.html">pyVIA.plotting_via.get_gene_expression</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_atlas_view.html">pyVIA.plotting_via.plot_atlas_view</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_differentiation_flow.html">pyVIA.plotting_via.plot_differentiation_flow</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_gene_trend_heatmaps.html">pyVIA.plotting_via.plot_gene_trend_heatmaps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_piechart_viagraph.html">pyVIA.plotting_via.plot_piechart_viagraph</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_population_composition.html">pyVIA.plotting_via.plot_population_composition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_sc_lineage_probability.html">pyVIA.plotting_via.plot_sc_lineage_probability</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_scatter.html">pyVIA.plotting_via.plot_scatter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_trajectory_curves.html">pyVIA.plotting_via.plot_trajectory_curves</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.plot_viagraph.html">pyVIA.plotting_via.plot_viagraph</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.via_streamplot.html">pyVIA.plotting_via.via_streamplot</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/Utils.html">Util Functions for plotting</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.make_edgebundle_milestone.html">pyVIA.plotting_via.make_edgebundle_milestone</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.via_atlas_emb.html">pyVIA.plotting_via.via_atlas_emb</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.via_forcelayout.html">pyVIA.plotting_via.via_forcelayout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.plotting_via/pyVIA.plotting_via.via_mds.html">pyVIA.plotting_via.via_mds</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../api/Datasets.html">Datasets</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.cell_cycle_cyto_data.html">datasets_via.cell_cycle_cyto_data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.embryoid_body.html">datasets_via.embryoid_body</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.scATAC_hematopoiesis.html">datasets_via.scATAC_hematopoiesis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.scRNA_hematopoiesis.html">datasets_via.scRNA_hematopoiesis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.toy_disconnected.html">datasets_via.toy_disconnected</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api/_autosummary/VIA.datasets_via/datasets_via.toy_multifurcating.html">datasets_via.toy_multifurcating</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../Basic%20Example%20Code.html">Examples for installation checking</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Via 2.0 Atlas View Gallery</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Atlas%20view%20examples.html">Via2.0 Atlas views</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Mouse_to_pup_atlas.html">Large Mouse Embryo to Pup Developmental Atlas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Via2%20Atlas%20Animation.html">Via 2.0 Atlas Animations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Via%20Atlas%20View%20for%20Spatial%20omics.html">Via2.0 Atlas views for Spatial Omics data</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Via 2.0 Cartography</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Via2.0%20Cartographic%20Mouse%20Gastrualation.html">1. Via 2.0 Cartography on Mouse Gastrulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Zebrahub%20TI%20tutorial.html">2. Via 2.0 Cartography on Zebrahub (Trajectory Inference)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Zebrahub_tutorial_visualization.html">3. Via 2.0 Cartography on Zebrahub (Visualization)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials Via</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="ViaJupyter_Toy_Multifurcating.html">1. Basic workflow</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ViaJupyter_Toy_Disconnected.html">2. Disconnected Trajectories</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ViaJupyter_scRNA_Hematopoiesis.html">3. Via Human Hematopoiesis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Imaging%20Cytometry%20%28cell%20cycle%29.html">4. Imaging cytometry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mESC_timeseries.html">5. Using time-series metadata (mESC Cytof)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ViaJupyter_Pancreas_RNAvelocity.html">6. Using RNA-velocity</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">7. Bone marrow with RNA-velocity</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main">
+          <section class="tex2jax_ignore mathjax_ignore" id="bone-marrow-with-rna-velocity">
+<h1>7. Bone marrow with RNA-velocity<a class="headerlink" href="#bone-marrow-with-rna-velocity" title="Permalink to this heading"></a></h1>
+<p>We use the familiar bone marrow dataset (Setty et al 2019) but show how to analyze this dataset using a combination of RNA-velocity and gene-gene similarities. Relying purely on RNA-velocity has been noted to be difficult on this dataset due to a boost in expression (Bergen 2021) which yields negative directionality. <strong>By allowing the RNA velocity and gene-gene based graph structure to work together, we can arrive at a more sensible analysis. In Via this is controlled by velo_weight.</strong></p>
+<section id="common-visualization-pitfalls">
+<h2>Common visualization pitfalls<a class="headerlink" href="#common-visualization-pitfalls" title="Permalink to this heading"></a></h2>
+<p>We also take the opportunity to show that the underlying via graph is less susceptible to directionality artefacts that visualizations that project the trajectory onto umap/tsne/phate for interpretation. There is no doubt that 2D visualizations are useful and intuitive, but we find that can be instances where the visualized directionality is distorted by the 2D single cell embedding and it can therefore be useful to a) refer back to the via graph based abstraction and b) plot the trajectory on a few types of embeddings to overcome any distortions specific to a visualization method.</p>
+</section>
+<section id="load-data-and-pre-process">
+<h2>Load data and pre-process<a class="headerlink" href="#load-data-and-pre-process" title="Permalink to this heading"></a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython2 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">core_working</span> <span class="k">as</span> <span class="nn">via</span>
+<span class="kn">import</span> <span class="nn">scvelo</span> <span class="k">as</span> <span class="nn">scv</span>
+<span class="kn">import</span> <span class="nn">scanpy</span> <span class="k">as</span> <span class="nn">sc</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+
+<span class="n">adata</span> <span class="o">=</span> <span class="n">scv</span><span class="o">.</span><span class="n">datasets</span><span class="o">.</span><span class="n">bonemarrow</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">adata</span><span class="p">)</span>
+
+<span class="n">n_pcs</span> <span class="o">=</span><span class="mi">80</span>
+<span class="n">n_neighbors</span><span class="o">=</span><span class="mi">30</span>
+
+<span class="n">scv</span><span class="o">.</span><span class="n">pp</span><span class="o">.</span><span class="n">filter_and_normalize</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">min_shared_counts</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span><span class="c1">#, n_top_genes=hvg)</span>
+<span class="n">sc</span><span class="o">.</span><span class="n">pp</span><span class="o">.</span><span class="n">pca</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">n_comps</span><span class="o">=</span><span class="n">n_pcs</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Start scvelo...&#39;</span><span class="p">)</span>
+<span class="n">title</span> <span class="o">=</span> <span class="s1">&#39;scVelo stochastic mode&#39;</span> <span class="c1">#this is faster but you can also use &#39;dynamical&#39;</span>
+<span class="n">scv</span><span class="o">.</span><span class="n">pp</span><span class="o">.</span><span class="n">moments</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">n_pcs</span><span class="o">=</span><span class="n">n_pcs</span><span class="p">,</span> <span class="n">n_neighbors</span><span class="o">=</span><span class="n">n_neighbors</span><span class="p">)</span>
+<span class="n">scv</span><span class="o">.</span><span class="n">tl</span><span class="o">.</span><span class="n">velocity</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;stochastic&#39;</span><span class="p">)</span>
+<span class="n">scv</span><span class="o">.</span><span class="n">tl</span><span class="o">.</span><span class="n">velocity_graph</span><span class="p">(</span><span class="n">adata</span><span class="p">)</span>
+
+<span class="n">adata</span><span class="o">.</span><span class="n">uns</span><span class="p">[</span><span class="s1">&#39;clusters_colors&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;#1f77b4&#39;</span><span class="p">,</span> <span class="s1">&#39;#aec7e8&#39;</span><span class="p">,</span> <span class="s1">&#39;#ff7f0e&#39;</span><span class="p">,</span> <span class="s1">&#39;#ffbb78&#39;</span><span class="p">,</span> <span class="s1">&#39;#2ca02c&#39;</span><span class="p">,</span> <span class="s1">&#39;#98df8a&#39;</span><span class="p">,</span> <span class="s1">&#39;#d62728&#39;</span><span class="p">,</span> <span class="s1">&#39;#ff9896&#39;</span><span class="p">,</span> <span class="s1">&#39;#9467bd&#39;</span><span class="p">,</span> <span class="s1">&#39;#c5b0d5&#39;</span><span class="p">]</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>AnnData object with n_obs × n_vars = 5780 × 14319
+    obs: &#39;clusters&#39;, &#39;palantir_pseudotime&#39;
+    uns: &#39;clusters_colors&#39;
+    obsm: &#39;X_tsne&#39;
+    layers: &#39;spliced&#39;, &#39;unspliced&#39;
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Filtered out 7837 genes that are detected 20 counts (shared).
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Normalized count data: X, spliced, unspliced.
+Logarithmized X.
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Start scvelo...
+computing neighbors
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    finished (0:00:01) --&gt; added 
+    &#39;distances&#39; and &#39;connectivities&#39;, weighted adjacency matrices (adata.obsp)
+computing moments based on connectivities
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    finished (0:00:03) --&gt; added 
+    &#39;Ms&#39; and &#39;Mu&#39;, moments of un/spliced abundances (adata.layers)
+computing velocities
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    finished (0:00:03) --&gt; added 
+    &#39;velocity&#39;, velocity vectors for each individual cell (adata.layers)
+computing velocity graph (using 1/8 cores)
+</pre></div>
+</div>
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|          | 0/5780 [00:00&lt;?, ?cells/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    finished (0:00:29) --&gt; added 
+    &#39;velocity_graph&#39;, sparse matrix with cosine correlations (adata.uns)
+</pre></div>
+</div>
+</div>
+</div>
+<p><strong>The scvelo plot shows negative direction in some regions</strong></p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython2 notranslate"><div class="highlight"><pre><span></span><span class="n">scv</span><span class="o">.</span><span class="n">pl</span><span class="o">.</span><span class="n">velocity_embedding_stream</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;clusters&#39;</span><span class="p">,</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>computing velocity embedding
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    finished (0:00:01) --&gt; added
+    &#39;velocity_tsne&#39;, embedded velocity vectors (adata.obsm)
+</pre></div>
+</div>
+<img alt="../_images/5399b1d2cbf6082d2ccdcd71e36e23765d89d512a9a618d7477a98ea30792fc9.png" src="../_images/5399b1d2cbf6082d2ccdcd71e36e23765d89d512a9a618d7477a98ea30792fc9.png" />
+</div>
+</div>
+</section>
+<section id="run-via">
+<h2>Run VIA<a class="headerlink" href="#run-via" title="Permalink to this heading"></a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython2 notranslate"><div class="highlight"><pre><span></span><span class="n">velocity_matrix</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="s1">&#39;velocity&#39;</span><span class="p">]</span>
+<span class="n">gene_matrix</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">todense</span><span class="p">()</span>
+<span class="n">embedding_original</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obsm</span><span class="p">[</span><span class="s1">&#39;X_tsne&#39;</span><span class="p">][:,</span> <span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">]</span>
+<span class="n">data_pca</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obsm</span><span class="p">[</span><span class="s1">&#39;X_pca&#39;</span><span class="p">][:,</span> <span class="mi">0</span><span class="p">:</span><span class="n">n_pcs</span><span class="p">]</span>
+
+<span class="n">root</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;HSC_1&#39;</span><span class="p">]</span>
+<span class="n">random_seed</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">jac_std_global</span> <span class="o">=</span> <span class="mf">0.15</span>
+<span class="n">cluster_graph_pruning_std</span><span class="o">=</span><span class="mf">0.3</span>
+<span class="n">velo_weight</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="c1"># equal contribution of velocity and gene similarity towards the direction of edges</span>
+
+<span class="n">true_label</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">adata</span><span class="o">.</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;clusters&#39;</span><span class="p">]]</span>
+
+<span class="n">v0</span> <span class="o">=</span> <span class="n">via</span><span class="o">.</span><span class="n">VIA</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data_pca</span><span class="p">,</span> <span class="n">true_label</span><span class="o">=</span><span class="n">true_label</span><span class="p">,</span> <span class="n">jac_std_global</span><span class="o">=</span><span class="n">jac_std_global</span><span class="p">,</span> <span class="n">dist_std_local</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">knn</span><span class="o">=</span><span class="n">n_neighbors</span><span class="p">,</span>
+ <span class="n">root_user</span><span class="o">=</span><span class="n">root</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s1">&#39;group&#39;</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="n">random_seed</span><span class="p">,</span>
+           <span class="n">is_coarse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">preserve_disconnected</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cluster_graph_pruning_std</span><span class="o">=</span><span class="n">cluster_graph_pruning_std</span><span class="p">,</span>
+             <span class="n">piegraph_arrow_head_width</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>    <span class="n">piegraph_edgeweight_scalingfactor</span><span class="o">=</span><span class="mf">2.5</span><span class="p">,</span> <span class="n">velocity_matrix</span><span class="o">=</span><span class="n">velocity_matrix</span><span class="p">,</span>
+                    <span class="n">gene_matrix</span><span class="o">=</span><span class="n">gene_matrix</span><span class="p">,</span> <span class="n">velo_weight</span><span class="o">=</span><span class="n">velo_weight</span><span class="p">)</span>
+<span class="n">v0</span><span class="o">.</span><span class="n">run_VIA</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:54:57.304416	Running VIA over input data of 5780 (samples) x 80 (features)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:54:58.486445	Global pruning of weighted 30 -knn graph
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:00.601603	Finished global pruning. Kept 46.37 of edges. 
+2022-04-29 11:55:00.633836	Number of connected components used for clustergraph  is 1
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:00.936347	 the number of components in the original full graph is 1
+2022-04-29 11:55:00.936444	For downstream visualization purposes we are also constructing a low knn-graph 
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:02.050860	Commencing community detection
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:02.406207	Finished running Leiden algorithm. Found 175 clusters.
+2022-04-29 11:55:02.408592	Merging 159 very small clusters (&lt;10)
+2022-04-29 11:55:02.415882	Finished detecting communities. Found 16 communities
+2022-04-29 11:55:02.417255	Making cluster graph. Global cluster graph pruning level: 0.3
+2022-04-29 11:55:02.443449	Graph has 1 connected components before pruning
+2022-04-29 11:55:02.444971	Graph has 1 connected components before pruning n_nonz 9 30
+2022-04-29 11:55:02.446404	Graph has 1 connected components after reconnecting
+2022-04-29 11:55:02.446577	0.0% links trimmed from local pruning relative to start
+2022-04-29 11:55:02.446608	57.1% links trimmed from global pruning relative to start
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:03.088915	 Looking for initial states
+f{datetime.now()}	Stationary distribution normed {np.round(pi,3)}
+2022-04-29 11:55:03.090192	Top 3 candidates for root: [ 3 10 14] with stationary prob (%) [0.03 2.47 2.83]
+2022-04-29 11:55:03.090715	top 5 candidates for terminal: [ 4  8  1 12  9]
+new root is 0  with degree 6.16 HSC_1
+2022-04-29 11:55:03.152403	Computing lazy-teleporting expected hitting times
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:03.928193	Identifying terminal clusters corresponding to unique lineages...
+2022-04-29 11:55:03.928420	Closeness:[0, 3, 7, 10]
+2022-04-29 11:55:03.928466	Betweenness:[0, 2, 3, 5, 7, 10, 14]
+2022-04-29 11:55:03.928496	Out Degree:[0, 2, 3, 7, 10, 14, 15]
+2022-04-29 11:55:03.930588	Terminal clusters corresponding to unique lineages in this component are [2, 3, 7, 10, 14] 
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:04.296802	From root 0,  the Terminal state 2 is reached 425 times.
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:04.769583	From root 0,  the Terminal state 3 is reached 7 times.
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:05.206542	From root 0,  the Terminal state 7 is reached 436 times.
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:05.667292	From root 0,  the Terminal state 10 is reached 139 times.
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:06.063376	From root 0,  the Terminal state 14 is reached 410 times.
+2022-04-29 11:55:06.116335	Terminal clusters corresponding to unique lineages are [2, 3, 7, 10, 14] 
+2022-04-29 11:55:06.116470	Begin projection of pseudotime and lineage likelihood
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2022-04-29 11:55:07.245138	Transition matrix with weight of 0.5 on RNA velocity
+2022-04-29 11:55:07.246445	Graph has 1 connected components before pruning
+2022-04-29 11:55:07.247732	Graph has 1 connected components before pruning n_nonz 2 2
+2022-04-29 11:55:07.251005	Graph has 1 connected components after reconnecting
+2022-04-29 11:55:07.251188	55.9% links trimmed from local pruning relative to start
+2022-04-29 11:55:07.251223	75.0% links trimmed from global pruning relative to start
+</pre></div>
+</div>
+<img alt="../_images/a3251eb2babd8a1e1449319b4cf447bf5fbded91c29e09dfeebe03c295eb0e02.png" src="../_images/a3251eb2babd8a1e1449319b4cf447bf5fbded91c29e09dfeebe03c295eb0e02.png" />
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>time elapsed 9.7 seconds
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="different-embeddings">
+<h2>Different embeddings<a class="headerlink" href="#different-embeddings" title="Permalink to this heading"></a></h2>
+<p>The directionality offered by the Via graph is consistent with the biology. However, when we project the trajectory onto different types of embeddings, we can sometimes see slightly misleading directions. We therefore show the fine-grained vector field of differentiation on the original tsne computed for this dataset and used in publications, a recomputed tsne on scanpy defaults and on umap.</p>
+<p><strong>Original tsne</strong>
+You will note that the CLP direction is into itself, however, the HSC2 point in the direction up towards CLP as we expect. Note that in the viagraph, the HSC2s clearly point up to the CLPS. Later we plot the finegrained vector field onto scanpy’s default tsne and umap and see that the overall directinoality is largely consistent with our expectations and the Via graph. This highlights the importance of trying out a few parameters when choosing a suitable embedding.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython2 notranslate"><div class="highlight"><pre><span></span><span class="n">via</span><span class="o">.</span><span class="n">via_streamplot</span><span class="p">(</span><span class="n">via_coarse</span><span class="o">=</span><span class="n">v0</span><span class="p">,</span> <span class="n">embedding</span><span class="o">=</span><span class="n">embedding_original</span><span class="p">,</span> <span class="n">scatter_size</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">scatter_alpha</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+                   <span class="n">marker_edgewidth</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">density_stream</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">density_grid</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">smooth_transition</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                   <span class="n">smooth_grid</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">color_scheme</span><span class="o">=</span><span class="s1">&#39;annotation&#39;</span><span class="p">,</span> <span class="n">add_outline_clusters</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                   <span class="n">cluster_outline_edgewidth</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Via original tsne&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<img alt="../_images/42de492b249015f1da95e4737fe15e1f961086a5152c1916daf85814debe4fc4.png" src="../_images/42de492b249015f1da95e4737fe15e1f961086a5152c1916daf85814debe4fc4.png" />
+</div>
+</div>
+<p><strong>Recompute tsne</strong>
+The less of a gap between the CLP cluster and the main body of cells, the less of a misinterpreted arrow we have at the CLP.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython2 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="s1">&#39;recompute tsne...&#39;</span><span class="p">)</span>
+<span class="n">sc</span><span class="o">.</span><span class="n">tl</span><span class="o">.</span><span class="n">tsne</span><span class="p">(</span><span class="n">adata</span><span class="p">)</span>
+<span class="n">embedding_tsne</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obsm</span><span class="p">[</span><span class="s1">&#39;X_tsne&#39;</span><span class="p">]</span>
+
+<span class="n">via</span><span class="o">.</span><span class="n">via_streamplot</span><span class="p">(</span><span class="n">via_coarse</span><span class="o">=</span><span class="n">v0</span><span class="p">,</span> <span class="n">embedding</span><span class="o">=</span><span class="n">embedding_tsne</span><span class="p">,</span> <span class="n">scatter_size</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">scatter_alpha</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+                       <span class="n">marker_edgewidth</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">density_stream</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">density_grid</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">smooth_transition</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                       <span class="n">smooth_grid</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">color_scheme</span><span class="o">=</span><span class="s1">&#39;annotation&#39;</span><span class="p">,</span> <span class="n">add_outline_clusters</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                       <span class="n">cluster_outline_edgewidth</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Via tsne&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>recompute tsne...
+</pre></div>
+</div>
+<img alt="../_images/6e9fb39942dfd16004ead942d6319d73605a267a5c9266aa6a0d3f33ce8596b6.png" src="../_images/6e9fb39942dfd16004ead942d6319d73605a267a5c9266aa6a0d3f33ce8596b6.png" />
+</div>
+</div>
+<p><strong>Plot on Umap</strong>
+Use scanpy’s default umap implementation. Vector field of trajectory colored by cell type and pseudotime</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython2 notranslate"><div class="highlight"><pre><span></span><span class="n">sc</span><span class="o">.</span><span class="n">tl</span><span class="o">.</span><span class="n">umap</span><span class="p">(</span><span class="n">adata</span><span class="p">,</span> <span class="n">min_dist</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
+<span class="n">embedding_umap</span> <span class="o">=</span> <span class="n">adata</span><span class="o">.</span><span class="n">obsm</span><span class="p">[</span><span class="s1">&#39;X_umap&#39;</span><span class="p">]</span>
+
+<span class="n">via</span><span class="o">.</span><span class="n">via_streamplot</span><span class="p">(</span><span class="n">via_coarse</span><span class="o">=</span><span class="n">v0</span><span class="p">,</span> <span class="n">embedding</span><span class="o">=</span><span class="n">embedding_umap</span><span class="p">,</span> <span class="n">scatter_size</span><span class="o">=</span><span class="mi">80</span><span class="p">,</span> <span class="n">scatter_alpha</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+                   <span class="n">marker_edgewidth</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">density_stream</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">density_grid</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">smooth_transition</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                   <span class="n">smooth_grid</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">color_scheme</span><span class="o">=</span><span class="s1">&#39;annotation&#39;</span><span class="p">,</span> <span class="n">add_outline_clusters</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                   <span class="n">cluster_outline_edgewidth</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Via umap&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+
+<span class="n">via</span><span class="o">.</span><span class="n">via_streamplot</span><span class="p">(</span><span class="n">via_coarse</span><span class="o">=</span><span class="n">v0</span><span class="p">,</span> <span class="n">embedding</span><span class="o">=</span><span class="n">embedding_umap</span><span class="p">,</span> <span class="n">scatter_size</span><span class="o">=</span><span class="mi">80</span><span class="p">,</span> <span class="n">scatter_alpha</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+                   <span class="n">marker_edgewidth</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">density_stream</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">density_grid</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">smooth_transition</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                   <span class="n">smooth_grid</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">color_scheme</span><span class="o">=</span><span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="n">add_outline_clusters</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                   <span class="n">cluster_outline_edgewidth</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Via umap&#39;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>graph.data.size 285080
+graph.data.size 284804 284804
+</pre></div>
+</div>
+<img alt="../_images/570f780148174b1c3246dbcf11fa221647f2476afe3d1290a7da20382fea46b2.png" src="../_images/570f780148174b1c3246dbcf11fa221647f2476afe3d1290a7da20382fea46b2.png" />
+<img alt="../_images/e129691f972d969f763cc40c95dc388e6c24b2ab648bb9561c54ec2f656cd765.png" src="../_images/e129691f972d969f763cc40c95dc388e6c24b2ab648bb9561c54ec2f656cd765.png" />
+</div>
+</div>
+</section>
+<section id="lineage-paths">
+<h2>Lineage Paths<a class="headerlink" href="#lineage-paths" title="Permalink to this heading"></a></h2>
+<p>See the differentiation likelihood from the HSC-1 towards each of the detected final states (outlined in Red as detected by VIA)</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython2 notranslate"><div class="highlight"><pre><span></span><span class="n">v0</span><span class="o">.</span><span class="n">draw_piechart_graph</span><span class="p">()</span>
+
+<span class="n">via</span><span class="o">.</span><span class="n">draw_sc_lineage_probability</span><span class="p">(</span><span class="n">v0</span><span class="p">,</span><span class="n">v0</span><span class="p">,</span> <span class="n">embedding</span><span class="o">=</span><span class="n">embedding</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<img alt="../_images/a3251eb2babd8a1e1449319b4cf447bf5fbded91c29e09dfeebe03c295eb0e02.png" src="../_images/a3251eb2babd8a1e1449319b4cf447bf5fbded91c29e09dfeebe03c295eb0e02.png" />
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><span class=" -Color -Color-Blue">Cluster path on clustergraph starting from Root Cluster</span> 0 <span class=" -Color -Color-Blue">to Terminal Cluster</span> 2 <span class=" -Color -Color-Blue">:</span> [0, 1, 8, 2]
+<span class=" -Color -Color-Blue">Cluster path on clustergraph starting from Root Cluster</span> 0 <span class=" -Color -Color-Blue">to Terminal Cluster</span> 3 <span class=" -Color -Color-Blue">:</span> [0, 1, 8, 12, 11, 3]
+<span class=" -Color -Color-Blue">Cluster path on clustergraph starting from Root Cluster</span> 0 <span class=" -Color -Color-Blue">to Terminal Cluster</span> 7 <span class=" -Color -Color-Blue">:</span> [0, 1, 8, 2, 7]
+<span class=" -Color -Color-Blue">Cluster path on clustergraph starting from Root Cluster</span> 0 <span class=" -Color -Color-Blue">to Terminal Cluster</span> 10 <span class=" -Color -Color-Blue">:</span> [0, 1, 4, 15, 6, 10]
+<span class=" -Color -Color-Blue">Cluster path on clustergraph starting from Root Cluster</span> 0 <span class=" -Color -Color-Blue">to Terminal Cluster</span> 14 <span class=" -Color -Color-Blue">:</span> [0, 1, 8, 12, 14]
+2022-04-29 11:57:04.548609	Cluster level path on sc-knnGraph from Root Cluster 0 to Terminal Cluster 1 along path: [5, 5, 4, 4, 4, 4, 4, 4, 4]
+2022-04-29 11:57:04.572205	Cluster level path on sc-knnGraph from Root Cluster 0 to Terminal Cluster 2 along path: [5, 5, 4, 8, 2, 2, 2]
+2022-04-29 11:57:04.593602	Cluster level path on sc-knnGraph from Root Cluster 0 to Terminal Cluster 3 along path: [5, 5, 11, 3, 3, 3, 3]
+2022-04-29 11:57:04.615902	Cluster level path on sc-knnGraph from Root Cluster 0 to Terminal Cluster 4 along path: [5, 5, 5, 1, 1, 1, 1]
+2022-04-29 11:57:04.637048	Cluster level path on sc-knnGraph from Root Cluster 0 to Terminal Cluster 5 along path: [5, 5, 5, 5, 5]
+</pre></div>
+</div>
+<img alt="../_images/c6b9bf414b22998a8f12c7ce323b0fb99ee648aa9b544fece2d99565c6ba4e24.png" src="../_images/c6b9bf414b22998a8f12c7ce323b0fb99ee648aa9b544fece2d99565c6ba4e24.png" />
+</div>
+</div>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          <a class="prev-page" href="ViaJupyter_Pancreas_RNAvelocity.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">6. Using RNA-velocity</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2022, shobana stassen
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">7. Bone marrow with RNA-velocity</a><ul>
+<li><a class="reference internal" href="#common-visualization-pitfalls">Common visualization pitfalls</a></li>
+<li><a class="reference internal" href="#load-data-and-pre-process">Load data and pre-process</a></li>
+<li><a class="reference internal" href="#run-via">Run VIA</a></li>
+<li><a class="reference internal" href="#different-embeddings">Different embeddings</a></li>
+<li><a class="reference internal" href="#lineage-paths">Lineage Paths</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/scripts/furo.js"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script defer="defer" src="https://unpkg.com/@popperjs/core@2"></script>
+    <script defer="defer" src="https://unpkg.com/tippy.js@6"></script>
+    <script defer="defer" src="../_static/tippy\notebooks\ViaJupyter_scRNAVelocity_hematopoiesis.156a2c7c-1316-4118-aa80-52e980d8ace8.js"></script>
+    </body>
+</html>
