@@ -47,7 +47,7 @@ StaVia extends the lazy-teleporting walks to higher order random walks with **me
    Release History
    Tutorial Video
    Parameters and Attributes
-   api
+   api/index
    Basic Example Code
 
 .. toctree::
@@ -65,22 +65,22 @@ StaVia extends the lazy-teleporting walks to higher order random walks with **me
    :caption: Via 2.0 Cartography
    :hidden:
 
-   Via2.0 Cartographic Mouse Gastrualation
-   Zebrahub TI tutorial   
-   Zebrahub_tutorial_visualization
+   notebooks/Via2.0 Cartographic Mouse Gastrualation
+   notebooks/Zebrahub TI tutorial   
+   notebooks/Zebrahub_tutorial_visualization
 
 .. toctree::
    :maxdepth: 1
    :caption: Tutorials Via
    :hidden:
 
-   ViaJupyter_Toy_Multifurcating
-   ViaJupyter_Toy_Disconnected
-   ViaJupyter_scRNA_Hematopoiesis
-   Imaging Cytometry (cell cycle)
-   mESC_timeseries
-   ViaJupyter_Pancreas_RNAvelocity
-   ViaJupyter_scRNAVelocity_hematopoiesis
+   notebooks/ViaJupyter_Toy_Multifurcating
+   notebooks/ViaJupyter_Toy_Disconnected
+   notebooks/ViaJupyter_scRNA_Hematopoiesis
+   notebooks/Imaging Cytometry (cell cycle)
+   notebooks/mESC_timeseries
+   notebooks/ViaJupyter_Pancreas_RNAvelocity
+   notebooks/ViaJupyter_scRNAVelocity_hematopoiesis
 
 
    
