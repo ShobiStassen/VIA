@@ -37,17 +37,8 @@ author = 'shobana stassen'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinxemoji.sphinxemoji', 
-              'sphinx_rtd_theme',
-              'nbsphinx',
-              "sphinx.ext.autodoc",
-              'sphinx.ext.githubpages',
-              'sphinx.ext.autosummary',
-              'sphinx.ext.viewcode',
-              'sphinx.ext.napoleon',
-              'sphinx_autodoc_typehints',
-              'myst_nb',
-              "sphinx_tippy"]
+extensions = ['sphinxemoji.sphinxemoji', 'sphinx_rtd_theme','nbsphinx',"sphinx.ext.autodoc",'sphinx.ext.githubpages',
+              'sphinx.ext.viewcode','sphinx.ext.napoleon','sphinx_autodoc_typehints','myst_nb',"sphinx_tippy"]
 
 # Generate the API documentation when building
 autosummary_generate = True

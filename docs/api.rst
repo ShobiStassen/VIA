@@ -1,24 +1,8 @@
-.. module:: pyvia
-
 API
 ===
-Import pyvia as::
 
-    import pyVIA.core as via
-
-.. toctree::
-    :caption: API
-    :maxdepth: 1
-
-    pyVIA Core
-    Plotting
-    Utils
-    Datasets
-
-Full API
---------
-pyVIA core
-^^^^^^^^^^^^
+pyvia api 
+-------------------------------
 
 .. autoclass:: VIA.core.VIA
    :members: 
@@ -27,7 +11,7 @@ pyVIA core
 
 
 Plotting
-^^^^^^^^^^^^
+--------
 
 .. automodule:: VIA.plotting_via
     :members:
@@ -35,9 +19,12 @@ Plotting
     :show-inheritance:
 
 Datasets
-^^^^^^^^^^
+--------
 
 .. automodule:: VIA.datasets_via
     :members:
     :inherited-members:
     :show-inheritance:
+
+
+
