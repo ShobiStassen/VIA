@@ -158,7 +158,6 @@ def toy_disconnected(foldername="./"):
 def cell_cycle_cyto_data(foldername="./"):
     '''
     Load cell cycle imagine based flow-cyto features
-    
     AnnData object with n_obs × n_vars = 2036 × 38
     obs: 'cell_cycle_phase'
     :param foldername (string) Default current directory. path to directory where you want to store the dataset
