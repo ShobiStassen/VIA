@@ -1,5 +1,3 @@
-.. _API_plotting:
-
 .. currentmodule:: pyVIA.plotting_via
     
 Plotting
