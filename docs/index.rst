@@ -27,8 +27,8 @@ StaVia extends the lazy-teleporting walks to higher order random walks with **me
 
 **Try out the following with StaVia:**
 
-- Combining temporal information with scRNA velocity `temporal study <https://pyvia.readthedocs.io/en/latest/Via2.0%20Cartographic%20Mouse%20Gastrualation.html>`_
-- Constructing the Atlas View `visualization  <https://pyvia.readthedocs.io/en/latest/Zebrahub_tutorial_visualization.html>`_ . H5ad anndata objects are provided on the `github page <https://github.com/ShobiStassen/VIA>`_
+- Combining temporal information with scRNA velocity `temporal study <https://pyvia.readthedocs.io/en/latest/notebooks/Via2.0%20Cartographic%20Mouse%20Gastrualation.html>`_
+- Constructing the Atlas View `visualization  <https://pyvia.readthedocs.io/en/latest/notebooks/Zebrahub_tutorial_visualization.html>`_ . H5ad anndata objects are provided on the `github page <https://github.com/ShobiStassen/VIA>`_
 
 **StaVia Cartographic Atlas View for Mouse Gastrulation using time-series and RNA velocity adjusted graphs**
 
@@ -47,7 +47,7 @@ StaVia extends the lazy-teleporting walks to higher order random walks with **me
    Release History
    Tutorial Video
    Parameters and Attributes
-   api
+   api/index
    Basic Example Code
 
 .. toctree::
@@ -65,22 +65,22 @@ StaVia extends the lazy-teleporting walks to higher order random walks with **me
    :caption: Via 2.0 Cartography
    :hidden:
 
-   Via2.0 Cartographic Mouse Gastrualation
-   Zebrahub TI tutorial   
-   Zebrahub_tutorial_visualization
+   notebooks/Via2.0 Cartographic Mouse Gastrualation
+   notebooks/Zebrahub TI tutorial   
+   notebooks/Zebrahub_tutorial_visualization
 
 .. toctree::
    :maxdepth: 1
    :caption: Tutorials Via
    :hidden:
 
-   ViaJupyter_Toy_Multifurcating
-   ViaJupyter_Toy_Disconnected
-   ViaJupyter_scRNA_Hematopoiesis
-   Imaging Cytometry (cell cycle)
-   mESC_timeseries
-   ViaJupyter_Pancreas_RNAvelocity
-   ViaJupyter_scRNAVelocity_hematopoiesis
+   notebooks/ViaJupyter_Toy_Multifurcating
+   notebooks/ViaJupyter_Toy_Disconnected
+   notebooks/ViaJupyter_scRNA_Hematopoiesis
+   notebooks/Imaging Cytometry (cell cycle)
+   notebooks/mESC_timeseries
+   notebooks/ViaJupyter_Pancreas_RNAvelocity
+   notebooks/ViaJupyter_scRNAVelocity_hematopoiesis
 
 
    

@@ -478,8 +478,8 @@ def via_mds(via_object=None, X_pca:ndarray=None, viagraph_full: csr_matrix=None,
             random_seed: int = 0, diffusion_op: int = 1, n_milestones=2000, time_series_labels: list = [],
             knn_seq: int = 5, k_project_milestones:int = 3, t_difference:int=2, saveto='', embedding_type:str='mds', double_diffusion:bool=False) -> ndarray:
     '''
+    Fast computation of a 2D embedding based on previous StaVia analysis.
 
-    Fast computation of a 2D embedding
     FOR EXAMPLE:
     via_object.embedding = via.via_mds(via_object = v0)
     plot_scatter(embedding = via_object.embedding, labels = via_object.true_labels)
@@ -612,7 +612,7 @@ def via_atlas_emb(via_object = None, X_input: ndarray = None, graph:csr_matrix=N
                     n_epochs:int=100, distance_metric: str = 'euclidean', layout:Optional[list]=None, cluster_membership:Optional[list]=None, parallel:bool=False, saveto='', n_jobs:int=2)-> ndarray:
     '''
 
-    Run dimensionality reduction using the VIA modified HNSW graph using via cluster graph initialization when Via_object is provided
+    Run dimensionality reduction using the StaVia modified HNSW graph using via cluster graph initialization when Via_object is provided.
 
     :param via_object: if via_object is provided then X_input and graph are ignored
     :param X_input: ndarray nsamples x features (PCs)
@@ -732,6 +732,8 @@ def run_umap_hnsw(via_object=None, X_input: ndarray = None, graph: csr_matrix = 
 def plot_population_composition(via_object, time_labels:list = None, celltype_list:list=None, cmap:str = 'rainbow', legend:bool = True,
                                 alpha:float = 0.5, linewidth:float = 0.2, n_intervals:int = 20,xlabel:str = 'time', ylabel:str='', title:str = 'Cell populations', color_dict:dict=None, fraction:bool=True):
     '''
+    Plot population compositions along known time stamps.
+
     :param via_object: optional. this is required unless both time_labels and cell_labels are provided as arguments to the function
     :param time_labels: list length n_cells of pseudotime or known stage numeric labels
     :param cell_labels:  list of cell type or cluster length n_cells
@@ -781,6 +783,8 @@ def plot_population_composition(via_object, time_labels:list = None, celltype_li
 
 def plot_differentiation_flow(via_object,  idx:list=None, dpi=150, marker_lineages = [], label_node:list = [], do_log_flow:bool=True, fontsize:int=8,alpha_factor:float = 0.9,majority_cluster_population_dict:dict =None, cmap_sankey='rainbow', title_str:str='Differentiation Flow', root_cluster_list:list=None):
     '''
+    Draws sankey plots visualising lineage and cell fate.
+
     #SANKEY PLOTS
     G is the igraph knn (low K) used for shortest path in high dim space. no idx needed as it's made on full sample
     knn_hnsw is the knn made in the embedded space used for query to find the nearest point in the downsampled embedding
@@ -1044,6 +1048,7 @@ def plot_differentiation_flow(via_object,  idx:list=None, dpi=150, marker_lineag
     return
 def plot_sc_lineage_probability(via_object,  embedding:ndarray=None, idx:list=None, cmap_name='plasma', dpi=150, scatter_size =None,marker_lineages = [], fontsize:int=8,alpha_factor:float = 0.9,majority_cluster_population_dict:dict =None, cmap_sankey='rainbow', do_sankey:bool=False):
     '''
+    Plot single cell embedding labelled with lieage likelihood.
 
     G is the igraph knn (low K) used for shortest path in high dim space. no idx needed as it's made on full sample
     knn_hnsw is the knn made in the embedded space used for query to find the nearest point in the downsampled embedding
@@ -1220,7 +1225,8 @@ def plot_sc_lineage_probability(via_object,  embedding:ndarray=None, idx:list=No
 def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list='', arrow_head=0.1,
                       edgeweight_scale=1.5, cmap=None, label_text=True, size_factor_node:float = 1):
     '''
-    cluster level expression of gene/feature intensity
+    Cluster level expression of gene/feature intensity
+
     :param via_object:
     :param type_data:
     :param gene_exp: pd.Dataframe size n_cells x genes. Otherwise defaults to plotting pseudotime
@@ -1299,6 +1305,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list='', arr
 def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor=1,linewidth_bundle=2, facecolor:str='white', cmap:str = 'plasma', extra_title_text = '', alpha_milestones:float = 0.3 ,headwidth_bundle:float=0.1, headwidth_alpha:float=0.8, arrow_frequency:float=0.05, show_arrow:bool=True,sc_labels_sequential:list=None,sc_labels_expression:list=None, initial_bandwidth=0.03, decay=0.7, n_milestones:int=None, scale_scatter_size_pop:bool=False, show_milestones:bool=True, sc_labels:list=None, text_labels:bool=False, lineage_pathway:list = [], dpi:int = 300, fontsize_title:int=6, fontsize_labels:int=6,global_visual_pruning=0.5,use_sc_labels_sequential_for_direction:bool = False,sc_scatter_size=3,sc_scatter_alpha:float=0.4,add_sc_embedding:bool=True,size_milestones:int=5, colorbar_legend='pseudotime'):
 
     '''
+    Draws atlas view. Integrated visualisation of edgebundle and single cell embedding.
 
     Edges can be colored by time-series numeric labels, pseudotime, lineage pathway probabilities,  or gene expression. If not specificed then time-series is chosen if available, otherwise falls back to pseudotime. to use gene expression the sc_labels_expression is provided as a list.
     To specify other numeric sequential data provide a list of sc_labels_sequential = [] n_samples in length. via_object.embedding must be an ndarray of shape (nsamples,2)
@@ -1843,15 +1850,18 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
                     ax[r, c].axis('off')
                     ax[r, c].grid(False)
     return fig, ax
+
 def animate_atlas(hammerbundle_dict=None,  via_object=None, linewidth_bundle=2, frame_interval:int = 10, n_milestones:int=None,facecolor:str='white', cmap:str = 'plasma_r', extra_title_text = '',size_scatter:int=1, alpha_scatter:float = 0.2, saveto='/home/user/Trajectory/Datasets/animation_default.gif', time_series_labels:list=None, sc_labels_numeric:list=None ):
 
     '''
+    Plot animated atlas view visualising the growth of edgebudle and single cell embedding based on given time_series_labels.
+
     :param ax: axis to plot on
     :param hammer_bundle: hammerbundle object with coordinates of all the edges to draw
     :param layout: coords of cluster nodes and optionally also contains the numeric value associated with each cluster (such as time-stamp) layout[['x','y','numeric label']] sc/cluster/milestone level
     :param CSM: cosine similarity matrix. cosine similarity between the RNA velocity between neighbors and the change in gene expression between these neighbors. Only used when available
     :param velocity_weight: percentage weightage given to the RNA velocity based transition matrix
-    :param pt: cluster-level pseudotime
+    :param time_series_labels: if not given, by default it will be set to pseudotime
     :param alpha_bundle: alpha when drawing lines
     :param linewidth_bundle: linewidth of bundled lines
     :param edge_color:
@@ -2463,6 +2473,8 @@ arrow_style="-|>",  max_length:int=4, linewidth:float=1,min_mass = 1, cutoff_per
 
 def get_gene_expression(via_object, gene_exp:pd.DataFrame, cmap:str='jet', dpi:int=150, marker_genes:list = [], linewidth:float = 2.0,n_splines:int=10, spline_order:int=4, fontsize_:int=8, marker_lineages=[],optional_title_text:str='', cmap_dict:dict=None):
     '''
+    Line graph of gene expression vs pseudotime along lineages.
+
     :param via_object: via object
     :param gene_exp: dataframe where columns are features (gene) and rows are single cells
     :param cmap: default: 'jet'
@@ -2593,7 +2605,7 @@ def plot_trajectory_curves(via_object, embedding: ndarray=None, idx:Optional[lis
                          linewidth:float=1.5, marker_edgewidth:float=1, cmap_pseudotime:str='viridis_r',dpi:int=150,highlight_terminal_states:bool=True, use_maxout_edgelist:bool =False):
     '''
 
-    projects the graph based coarse trajectory onto a umap/tsne embedding
+    Projects the graph based coarse trajectory onto a umap/tsne embedding
 
     :param via_object: via object
 
@@ -2857,7 +2869,7 @@ def plot_trajectory_curves(via_object, embedding: ndarray=None, idx:Optional[lis
 
 def plot_viagraph_(ax=None, hammer_bundle=None, layout:ndarray=None, CSM:ndarray=None, velocity_weight:float=None, pt:list=None, alpha_bundle=1, linewidth_bundle=2, edge_color='darkblue',headwidth_bundle=0.1, arrow_frequency=0.05, show_direction=True,ax_text:bool=True, title:str='', plot_clusters:bool=False, cmap:str='viridis', via_object=None, fontsize:float=9, dpi:int=300):
     '''
-    this plots the edgebundles on the via clustergraph level and also adds the relevant arrow directions based on the TI directionality
+    Plots the edgebundles on the via clustergraph level and also adds the relevant arrow directions based on the TI directionality
 
     :param ax: axis to plot on
     :param hammer_bundle: hammerbundle object with coordinates of all the edges to draw. self.hammer
@@ -3040,7 +3052,8 @@ def _slow_sklearn_mds(via_graph: csr_matrix, X_pca:ndarray, t_diff_op:int=1):
 
 def plot_piechart_viagraph(via_object, type_data='pt', gene_exp:list=[], cmap_piechart:str = 'rainbow', title='', cmap:str=None, ax_text=True, dpi=150,headwidth_arrow = 0.1, alpha_edge=0.4, linewidth_edge=2, edge_color='darkblue',reference_labels=None, show_legend:bool=True, pie_size_scale:float=0.8, fontsize:float=8, pt_visual_threshold:int =99,highlight_terminal_clusters:bool = True, size_node_notpiechart: float = 1):
     '''
-    plot two subplots with a clustergraph level representation of the viagraph showing true-label composition (lhs) and pseudotime/gene expression (rhs)
+    Plot two subplots with a clustergraph level representation of the viagraph showing true-label composition (lhs) and pseudotime/gene expression (rhs)
+
     Returns matplotlib figure with two axes that plot the clustergraph using edge bundling
     left axis shows the clustergraph with each node colored by annotated ground truth membership.
     right axis shows the same clustergraph with each node colored by the pseudotime or gene expression
