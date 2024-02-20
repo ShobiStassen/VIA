@@ -171,7 +171,7 @@ def _rw2_walks(A: ndarray, root: int, memory: float = 0.8, weighted: bool = True
         g.data[:] = 1.0  # overwrite edge weights with constant
     num_nodes = g.indptr.size
     walk_length = num_nodes * 2
-    print(f'g.indptr.size, {num_nodes}')
+    #print(f'g.indptr.size, {num_nodes}')
     # look deeper at how the node id mapping is done: https://pecanpy.readthedocs.io/en/latest/_modules/pecanpy/graph.html#DenseGraph.read_edg
     g.set_node_ids(node_ids=None,
                    implicit_ids=implicit_ids,
@@ -221,7 +221,7 @@ def _rw2_walks(A: ndarray, root: int, memory: float = 0.8, weighted: bool = True
 def _compute_rw2_lineageprobability(A: ndarray, root: int, memory: float = 0.8, p_memory: float = 1.0,
                                    num_walks: int = 1000, terminal_states: list = None, x_lazy: float = 0.95,
                                    alpha_teleport: float = 0.99):
-    print(f'testing rw2 lineage probability at memory {memory}')
+    print(f'{datetime.now()}\tCalculating lineage probability at memory {memory}')
     n_states = A.shape[0]
     n_terminal_states = len(terminal_states)
     ts_index_counter = 0
@@ -290,7 +290,7 @@ def _compute_rw2_lineageprobability(A: ndarray, root: int, memory: float = 0.8, 
                                 1.1 * temp_)  # do some scaling to amplify the probabiltiies of those clusters that are not 1 to make the range of values more compact
             prob_[0, loc_1] = 1  # put back probability =1
             print(
-                f'{datetime.now()}\t Cluster or terminal cell fate {terminal_state} is reached {count_reached} times')  # {prob_}
+                f'{datetime.now()}\tCluster or terminal cell fate {terminal_state} is reached {count_reached} times')  # {prob_}
         prob_mat[:, ts_index_counter] = prob_
         ts_index_counter += 1
 
@@ -309,12 +309,11 @@ def _compute_rw2_hittingtimes(A: ndarray, root: int, memory: float = 0.8, num_wa
     # A_csr = csr_matrix(A)
     # print(f'cluster graph A', A)
     # generate ndarray of walks (n_walks x n_steps+1)
-    print('start computing walks with rw2 method')
+    print(f'{datetime.now()}\tstart computing walks with rw2 method')
     walks = _rw2_walks(A=A, root=root, memory=memory, num_walks=num_walks, x_lazy=x_lazy, alpha_teleport=alpha_teleport)
     num_nodes = A.shape[0]
     num_walks = walks.shape[0]
-    walk_length = walks.shape[
-                      1] - 1  # (the first element in the walk is the root, so the walks array has n_steps + 1 element
+    walk_length = walks.shape[                      1] - 1  # (the first element in the walk is the root, so the walks array has n_steps + 1 element
     hitting_array = np.zeros((num_nodes, num_walks))
 
     walk_count = 0
@@ -579,6 +578,12 @@ class VIA:
         (default = 0.9) increasing decay causes more edges to merge
     memory: 1/q * edge weight to a next-node that is not a neighbor of previous node. larger number means more memory and more introspective walk. small number <1 means more exploration
     p_memory: 1/p * edge weight to next node = previous node. large value means more exploration
+    graph_init_pos: matrix (or list of lists) to initialize the viagraph
+    spatial_coords: np.ndarray of size n_cells x 2 (denoting x,y coordinates) of each spot/cell
+    do_spatial_knn: Whether or not to do spatial mode of StaVia for graph augmentation
+    do_spatial_layout: whether to use spatial coords for layout of the clustergraph
+    spatial_knn:int = 15. number of knn's added based on spatial proximity indiciated by spatial_coords
+    spatial_aux:list = [] a list of slice IDs so that only cells/spots on the same slice are considered when building the spatial_knn graph
 
     Attributes
     ------------
@@ -614,7 +619,7 @@ class VIA:
 
     '''
 
-    def __init__(self, data: ndarray, true_label=None, edgepruning_clustering_resolution_local: float = 2, edgepruning_clustering_resolution=0.15,
+    def __init__(self, data: ndarray, true_label=None, edgepruning_clustering_resolution_local: float = 1, edgepruning_clustering_resolution=0.15,
                  labels: ndarray = None,
                  keep_all_local_dist='auto', too_big_factor: float = 0.4, resolution_parameter: float = 1.0,
                  partition_type: str = "ModularityVP", small_pop: int = 10,
@@ -641,7 +646,7 @@ class VIA:
                  embedding_type: str = 'via-mds', do_compute_embedding: bool = False, color_dict: {} = None,
                  user_defined_terminal_cell: list = [], user_defined_terminal_group: list = [],
                  do_gaussian_kernel_edgeweights: bool = False, RW2_mode: bool = False,
-                 working_dir_fp: str = '/home/', memory=5, viagraph_decay=0.9, p_memory=1):
+                 working_dir_fp: str = '/home/', memory=5, viagraph_decay=0.9, p_memory=1, graph_init_pos: np.ndarray=None, spatial_coords:np.ndarray=None, do_spatial_knn:bool=False, do_spatial_layout:bool=False, spatial_knn:int = 15, spatial_aux:list = []):
 
         self.data = data
         self.nsamples, self.ncomp = data.shape
@@ -742,6 +747,12 @@ class VIA:
         self.memory = memory
         self.p_memory = p_memory
         self.viagraph_decay = viagraph_decay
+        self.graph_init_pos = graph_init_pos
+        self.spatial_coords = spatial_coords
+        self.do_spatial_knn = do_spatial_knn
+        self.do_spatial_layout = do_spatial_layout
+        self.spatial_knn = spatial_knn
+        self.spatial_aux = spatial_aux  #list of labels that identify cells from the same tissue slice
 
     def _make_pt_augmented_adjacency_igraph(self, neighbors: ndarray, distances: ndarray, k_reverse: int = 10,
                                            k_seq: int = 0):
@@ -1067,7 +1078,7 @@ class VIA:
             # for j in jobs:
             # j.join()
 
-            print(f"{datetime.now()}\t ended all multiprocesses, will retrieve and reshape")
+            print(f"{datetime.now()}\tEnded all multiprocesses, will retrieve and reshape")
             hitting_array = q[0]
             for qi in q[1:]:
                 hitting_array = np.append(hitting_array, qi, axis=1)  # .get(), axis=1)
@@ -1474,7 +1485,9 @@ class VIA:
                 return result
             else:
                 weights = (np.mean(distances[msk]) ** 2) / (
-                        distances[msk] + distance_factor)  # larger weight is a stronger edge
+                        distances[msk] +np.min(distances[msk]))#distance_factor)
+                # larger weight is a stronger edge #Dec12 replacing distance_factor with np.min(distances)
+                #print('np.min(distances) or distance_factor', np.min(distances[msk]), distance_factor)
             # weights = np.exp(-distances[msk]/stdd[:,None])
             rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
             cols = neighbors[msk]
@@ -1827,7 +1840,7 @@ class VIA:
         subset = df_gene[gene_list].values
         return pd.DataFrame(transition_full_graph.dot(subset), index=df_gene.index, columns=gene_list)
 
-    def run_subPARC(self):
+    def run_subVIA(self):
 
         # Construct graph or obtain from previous run
         if self.is_coarse:
@@ -1835,6 +1848,8 @@ class VIA:
             neighbors, distances = self.knn_struct.knn_query(self.data,
                                                              k=self.knn)  # these n, d will be used as a basis for both the clustergraph and graph which we apply community detection. These two graphs are constructed differently because in the community detection we want to emphasize dissimiliarities,
             # but the in the clustergraph we want to enhance connectivity
+            adjacency_augmented = None
+            adjacency = None
             if (self.time_series == True) and (
                     self.time_series_labels is not None):  # refine the graph for clustering (leiden) using time_series labels if available
                 print(f"{datetime.now()}\tUsing time series information to guide knn graph construction ")
@@ -1849,23 +1864,31 @@ class VIA:
                                                                       time_series_labels=self.time_series_labels,
                                                                       t_diff_step=self.t_diff_step)  # this function has local pruning which removes neighbors that are more than t_dif apart. Since the same type of local pruning wrt t_dif is applied pre-clustergraph, we only need to call this function once in the case of time_series data
 
-                # adjacency_augmented.data.fill(1)
 
-                '''
-                embedding = via_atlas_emb(self.data, adjacency_augmented, n_epochs=100, min_dist=0.5, spread=1, distance_metric = 'euclidean')
-                plt.scatter(embedding[:, 0], embedding[:, 1], c=self.time_series_labels, cmap='viridis', s=2, alpha=0.3)
-                title = 'euc' + 'k_kseq_pc' + str(self.knn) + '_' + str(
-                    self.knn_sequential) + '_' + str(self.data.shape[1])
-                plt.title(title)
-                plt.show()
-                '''
-
-                # adjacency_augmented_clus = self._make_csrmatrix_noselfloop(neighbors, distances,   time_series=self.time_series,  time_series_labels=self.time_series_labels, t_diff_step=0.5)  # this function has loca
-
-                # adjacency =adjacency_augmented_clus
-                # adjacency.data.fill(1)
                 adjacency = self._make_csrmatrix_noselfloop(neighbors, distances)  # not augmented or t_diff'ed
-            else:
+
+            if (self.do_spatial_knn) and (
+                    self.spatial_coords is not None):  # refine the graph for clustering (leiden) using time_series labels if available
+
+                if len(self.spatial_aux) == 0:
+                    print(f"{datetime.now()}\tSince no slice-labels were provided, all cells are assumed to be from the same tissue slice ")
+                    self.spatial_aux =  ['slice1'] * self.nsamples#['slice1' for i in range(self.nsamples)]
+                if adjacency_augmented is None: #we did not augment based on time series data
+                    print(f"{datetime.now()}\tUsing spatial information to guide knn graph construction. Note! If cells are from different slices of tissue, provide a list of tissue-slice IDs ")
+                    #n_augmented, d_augmented = spatial_knn(coords=self.spatial_coords, neighbors=neighbors,                                                           distances=distances,                                                           k_spatial=self.spatial_knn)
+                    n_augmented, d_augmented=                    spatial_knn_new(spatial_coords=self.spatial_coords, spatial_slice_labels=self.spatial_aux,
+                                    neighbors=neighbors,
+                                    distances=distances, k_spatial=self.spatial_knn, distance_metric='l2',
+                                    num_threads=-1, too_big=False)
+                    adjacency_augmented = self._make_csrmatrix_noselfloop(n_augmented, d_augmented)  # this function has local pruning which removes neighbors that are more than t_dif apart. Since the same type of local pruning wrt t_dif is applied pre-clustergraph, we only need to call this function once in the case of time_series data
+                else:
+                    print(f"{datetime.now()}\tUsing spatial information to guide knn graph construction + combining with time-series data")
+                    n_augmented, d_augmented = spatial_knn_new(spatial_coords=self.spatial_coords,  spatial_slice_labels = self.spatial_aux, neighbors=n_augmented,
+                                                           distances=d_augmented,     k_spatial=self.spatial_knn,distance_metric = 'l2', num_threads= -1,                     too_big= False)
+                    adjacency_augmented = self._make_csrmatrix_noselfloop(n_augmented, d_augmented)
+                if adjacency is  None: adjacency = self._make_csrmatrix_noselfloop(neighbors, distances)  # not augmented or t_diff'ed
+
+            if adjacency is None:
                 adjacency = self._make_csrmatrix_noselfloop(neighbors,
                                                             distances)  # , min_max_scale=True) #this function has local pruning based on edge distances
 
@@ -1910,6 +1933,9 @@ class VIA:
                              csr_full_graph)
 
             # when no time-series data is available, in this iteration of weighting the edges we do not locally prune based on edge-weights becasue we intend to use all neighborhood info towards the edges in the clustergraph and ensuring the clustergraph is connected
+            elif (self.do_spatial_knn == True):
+                print(f"{datetime.now()}\tusing spatial coords to augment clustergraph")
+                csr_full_graph = adjacency_augmented.copy()
             else:
                 csr_full_graph = self._make_csrmatrix_noselfloop(neighbors, distances, auto_=False, min_max_scale=False,
                                                                  time_series=self.time_series,
@@ -1966,7 +1992,7 @@ class VIA:
             # partition = leidenalg.find_partition(g_local_global_jac, partition_type=type, weights=weights,                                             n_iterations=self.n_iter_leiden, seed=self.random_seed)
             labels = np.array(partition.membership)
 
-            print(f"{datetime.now()}\tFinished running Leiden algorithm. Found {len(set(labels))} clusters.")
+            print(f"{datetime.now()}\tFinished community detection. Found {len(set(labels))} clusters.")
 
             # Searching for clusters that are too big and split them
             too_big_clusters = [k for k, v in Counter(labels).items() if v > self.too_big_factor * self.nsamples]
@@ -2107,6 +2133,7 @@ class VIA:
             weights_for_layout = list(weights_for_layout)
 
             g_layout = ig.Graph(list(zip(*layout_g_csr.nonzero())), edge_attrs={'weight': weights_for_layout})
+        self.clustergraph_igraph_forlayout = g_layout
         # the layout of the graph is determine by a pruned clustergraph and the directionality of edges will be based on the final markov pseudotimes
         # the edgeweights of the bundle-edges is determined by the distance based metrics and jaccard similarities and not by the pseudotimes
         # for the transition matrix used in the markov pseudotime and differentiation probability computations, the edges will be further biased by the hittings times and markov pseudotimes
@@ -2313,7 +2340,7 @@ class VIA:
             print(f'correlation cluster level via original mcmc pt before scaling, {correlation}')
             '''
 
-            print('try rw2 hitting times setup')
+            #print('try rw2 hitting times setup')
             memory_pt = 2  # 2
             rw2_hittingtimes = _compute_rw2_hittingtimes(A=adjacency_matrix_ai, root=new_root_index, memory=memory_pt,
                                                         x_lazy=self.x_lazy, alpha_teleport=self.alpha_teleport)
@@ -2335,7 +2362,7 @@ class VIA:
 
             # print('no rw2')
             # print('skip scaling of pt')
-            print('do scaling of pt')
+            #print('do scaling of pt')
 
             very_high = np.mean(markov_hitting_times_ai) + 1.5 * np.std(markov_hitting_times_ai)  # 1.5
             very_high = min(very_high, max(markov_hitting_times_ai))
@@ -2426,9 +2453,7 @@ class VIA:
             else:
                 memory = self.memory
                 p_memory = self.p_memory
-                print(f'TESTING rw2_lineage probability at memory {memory}')
-                # prob_linn_rw2 = _compute_rw2_lineageprobability(A=adjacency_matrix2_ai, memory=0.1, root=new_root_index, terminal_states=terminal_clus_ai)
-                # prob_linn_rw2 = _compute_rw2_lineageprobability(A = adjacency_matrix2_ai, memory=1, root = new_root_index, terminal_states = terminal_clus_ai)
+
                 prob_lin_rw2 = _compute_rw2_lineageprobability(A=adjacency_matrix2_ai, memory=memory,
                                                               root=new_root_index,
                                                               terminal_states=terminal_clus_ai, x_lazy=self.x_lazy,
@@ -2541,7 +2566,28 @@ class VIA:
         visual_g = ig.Graph(self.edgelist, edge_attrs={'weight': bias_weights_2_all}).simplify(
             combine_edges='sum')  # used to be commented out
         # random.seed(self.random_seed)
-        layout = visual_g.layout_fruchterman_reingold(weights='weight')  # used to be commented out
+
+
+        if (self.graph_init_pos is not None) & (self.do_spatial_layout):
+            if self.graph_init_pos is None: self.graph_init_pos = self.spatial_coords
+            list_graph_init_pos = []
+            print('using provided spatial coords to initialise viagraph layout. Only use this if all cells are from the same slice')
+            for i in range(len(set(self.labels))):
+                where = np.where(np.array(self.labels) == i)[0]
+                #print('where are the clusters cells',where)
+                x_mean = self.graph_init_pos[where, 0].mean()
+                print('x_mean',x_mean)
+                y_mean = self.graph_init_pos[where, 1].mean()
+                list_graph_init_pos.append([x_mean, y_mean]) #list of lists
+                print('list graph init pos')
+            print(list_graph_init_pos)
+
+            layout = visual_g.layout_fruchterman_reingold(weights='weight', seed=list_graph_init_pos)
+            #layout = visual_g.layout_fruchterman_reingold(weights='weight')
+        else:
+            layout = visual_g.layout_fruchterman_reingold(weights='weight')
+        #layout = visual_g.layout_fruchterman_reingold(weights='weight',  seed=np.matrix(layout))  # used to be commented out
+
         self.graph_node_pos = layout.coords
         self.layout = layout  # reassign
 
@@ -2606,12 +2652,11 @@ class VIA:
 
                             input = row_stoch * temp  # matrix multiplication
                             '''
-                            do_initVia = True  # input = self.data
+                            do_initVia = True  # when calling via_atlas_emb() from within the class, it automatically initializes using the via cluster graph
                             n_epochs = 100  # 100 usually
-                            # input = self.data
-                            # print('not using RW2 components')
+
                             if do_initVia:
-                                self.embedding = via_atlas_emb(X_input=input, graph=self.csr_full_graph,
+                                self.embedding = via_atlas_emb(X_input=self.data, graph=self.csr_full_graph,
                                                                n_epochs=n_epochs,
                                                                spread=1,
                                                                distance_metric=distance_metric, min_dist=min_dist,
@@ -2619,7 +2664,7 @@ class VIA:
                                                                random_state=random_state, init_pos='via',
                                                                cluster_membership=self.labels, layout=layout.coords)
                             else:
-                                self.embedding = via_atlas_emb(X_input=input, graph=self.csr_full_graph,
+                                self.embedding = via_atlas_emb(X_input=self.data, graph=self.csr_full_graph,
                                                                n_epochs=n_epochs,
                                                                spread=1,
                                                                distance_metric=distance_metric, min_dist=min_dist,
@@ -2685,7 +2730,7 @@ class VIA:
                 for rs_i in [self.random_seed]:
                     for k_project_milestones in [3]:  # ,5,10]:
                         for k_mds_i in [25]:  # [5,10,15,25]:
-                            for diffusion_i in [3]:  # [2,5,10]:
+                            for diffusion_i in [2]:  # [2,5,10]:
                                 t_difference = self.t_diff_step
                                 k_seq_i = 2
                                 n_milestones_mds = min(3000, self.data.shape[0])
@@ -2698,7 +2743,7 @@ class VIA:
                                                          viagraph_full=self.csr_full_graph, t_difference=t_difference,
                                                          time_series_labels=self.time_series_labels, saveto='',
                                                          double_diffusion=False)
-                                shape_data = self.data.shape[1]
+
                                 str_date = str(str(datetime.now())[-3:])
                                 # save_str = '/home/user/Trajectory/Datasets/Pijuan_Gastrulation/mds/viamds_singlediffusion_pcs' + str(                                    shape_data) + '_k' + str(self.knn) + '_milestones' + str(                                   n_milestones_mds) + '_kprojectmilestones' + str(                                    k_project_milestones) + 't_step' + str(t_difference) + '_knnmds' + str(                                    k_mds_i) + '_kseqmds' + str(k_seq_i) + '_kseq' + str(                                    self.knn_sequential) + '_nps' + str(self.ncomp) + '_tdiff' + str(self.t_diff_step) + '_randseed' + str(self.random_seed) + '_diffusionop' + str(                                    diffusion_i) + '_RsMds' + str(rs_i) + '_' + str_date
                                 # save_str = '/home/user/Trajectory/Datasets/Zebrafish_Lange2023/via_mds/viamds_singlediffusion_pcs' + str(                                    shape_data) + '_k' + str(self.knn) + '_milestones' + str(                                    n_milestones_mds) + '_kprojectmilestones' + str(                                    k_project_milestones) + 't_step' + str(t_difference) + '_knnmds' + str(                                    k_mds_i) + '_kseqmds' + str(k_seq_i) + '_kseq' + str(                                    self.knn_sequential) + '_nps' + str(self.ncomp) + '_tdiff' + str(                                    self.t_diff_step) + '_randseed' + str(self.random_seed) + '_diffusionop' + str(                                    diffusion_i) + '_RsMds' + str(rs_i) + '_' + str_date
@@ -2755,7 +2800,7 @@ class VIA:
         if self.edgebundle_pruning_twice == False:
             # print('creating bundle with single round of global pruning at a level of', self.edgebundle_pruning)
             print(f"{datetime.now()}\tStarting make edgebundle viagraph...")
-            self.hammerbundle_cluster = make_edgebundle_viagraph(layout, g_layout, decay=self.viagraph_decay)
+            self.hammerbundle_cluster, layout = make_edgebundle_viagraph(layout, g_layout, decay=self.viagraph_decay)
 
         # simplifying structure of edges used on the visual layout
         edgeweights_maxout_2, edgelist_maxout_2, comp_labels_2 = pruning_clustergraph(
@@ -2776,8 +2821,9 @@ class VIA:
                                          np.percentile(weights_for_layout, 90))
             weights_for_layout = list(weights_for_layout)
             graph_for_layout = ig.Graph(list(zip(*layout_g_csr.nonzero())), edge_attrs={'weight': weights_for_layout})
+            self.clustergraph_igraph_forlayout = graph_for_layout
             # edge bundle is based on the visually (double) pruned graph rather than the inital graph used for Velo and Pseudotime
-            self.hammerbundle_cluster = make_edgebundle_viagraph(layout, graph_for_layout)
+            self.hammerbundle_cluster, layout = make_edgebundle_viagraph(layout=layout, graph=graph_for_layout, decay=self.viagraph_decay)
         '''
         else:
             print(f'redoing cluster graph layout based on forward biased edges')
@@ -2791,7 +2837,7 @@ class VIA:
             weights_for_layout = list(weights_for_layout)
             graph_for_layout = ig.Graph(list(zip(*layout_g_csr.nonzero())), edge_attrs={'weight': weights_for_layout})
             # edge bundle is based on the visually (double) pruned graph rather than the inital graph used for Velo and Pseudotime
-            self.hammerbundle_cluster = make_edgebundle_viagraph(layout, graph_for_layout)
+            self.hammerbundle_cluster, layout = make_edgebundle_viagraph(layout, graph_for_layout)
         '''
         temp_csr = csr_matrix((np.array(edgeweights_maxout_2), tuple(zip(*edgelist_maxout_2))), shape=(n_clus, n_clus))
         temp_csr = temp_csr.transpose().todense() + temp_csr.todense()
@@ -2821,7 +2867,7 @@ class VIA:
         scaled_hitting_times = scaled_hitting_times.astype(int)
         pal = ig.drawing.colors.AdvancedGradientPalette(['yellow', 'green', 'blue'], n=1001)
 
-        # making a new "augmented" single-cell graph based on the computed pseudotimes - useful when there are no time-series labels for (optionally) guiding the graph structure
+        # making a new "augmented" single-cell graph based on the computed pseudotimes - potentially useful when there are no time-series labels for (optionally) guiding the graph structure
         use_pt_to_guide_graph = False
         if use_pt_to_guide_graph == True:
             print(f'{datetime.now()}\tMake pt-augmented knn')
@@ -2888,7 +2934,7 @@ class VIA:
 
         self.labels = list(self.labels)
 
-        from statistics import mode
+
         for tsi in self.terminal_clusters:
             loc_i = np.where(np.asarray(self.labels) == tsi)[0]
             val_pt = [self.single_cell_pt_markov[i] for i in loc_i]
@@ -2991,12 +3037,13 @@ class VIA:
 
         self.knn_struct = _construct_knn(self.data, knn=self.knn, distance=self.distance, num_threads=self.num_threads)
         st = time.time()
-        self.run_subPARC()
+        self.run_subVIA()
         run_time = time.time() - st
         print(f'{datetime.now()}\tTime elapsed {round(run_time, 1)} seconds')
         do_accuracy = False
 
         if do_accuracy:
+            print(f'{datetime.now()}\tCalculating accuracy scores for clusters in the StaVia graph. saved to via_object.stats_df as a dataframe')
             targets = list(set(self.true_label))
             targets.sort()
 
@@ -3006,7 +3053,7 @@ class VIA:
             self.stats_df = pd.DataFrame(
                 {'edgepruning_clustering_resolution': [self.edgepruning_clustering_resolution], 'edgepruning_clustering_resolution_local': [self.edgepruning_clustering_resolution_local],
                  'runtime(s)': [run_time]})
-            # self.majority_truth_labels = []
+
             list_roc = []
             if len(targets) > 1:
                 f1_accumulated, f1_acc_noweighting = 0, 0

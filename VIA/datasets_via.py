@@ -67,6 +67,7 @@ def _mouse_gastrulation_sala(foldername="./"):
     if not os.path.isfile(data_path):
         print(f'{datetime.now()}\tStart downloading data... This could take a few minutes')
         data_url = "https://drive.google.com/file/d/1rvH04WAF97nXd0UiHfcVIdIF6sxS3QhL/view"
+        data_url='https://drive.google.com/file/d/1rvH04WAF97nXd0UiHfcVIdIF6sxS3QhL/view?usp=drive_link'
         #wget.download(data_url, data_path)
         print(f'{datetime.now()}\tFinished downloading data. Saved to {data_path}')
     adata = read(data_path, backup_url=data_url, sparse=True, cache=True)
@@ -158,7 +159,6 @@ def toy_disconnected(foldername="./"):
 def cell_cycle_cyto_data(foldername="./"):
     '''
     Load cell cycle imagine based flow-cyto features
-    
     AnnData object with n_obs × n_vars = 2036 × 38
     obs: 'cell_cycle_phase'
     :param foldername (string) Default current directory. path to directory where you want to store the dataset
@@ -350,4 +350,39 @@ def embryoid_body(foldername="./"):
         gene_names.append(i[0][0])
     adata.var_names = gene_names
     adata.obs['time'] = time_labels  # ['Day '+str(i) for i in time_labels]
+    return adata
+
+def moffitt_preoptic(foldername="./"):
+    """Load preoptic hypothalamus mouse data from moffitt et al.,m as AnnData object
+
+    Args:
+        foldername (string): foldername (string): path to directory where you want to store the dataset './' current directory is default
+
+    Returns:
+        AnnData object
+
+    .. image:: https://github.com/ShobiStassen/VIA/blob/master/Figures/Bregma29_tissue.png?raw=true
+       :width="200px"
+    """
+    # read files as pandas objects
+    data_path = foldername + "anndata_moffit.h5ad"
+
+    data_url="https://ndownloader.figshare.com/files/28169379"
+    #data_url = 'https://github.com/ShobiStassen/VIA/blob/2cb4085c4a660f0410c4d8725a4322818387e19d/Datasets/anndata_moffit.h5ad' #same file as in figshare. using github url doesnt work for h5ad
+    adata = sc.read(filename=data_path,backup_url=data_url)
+    #adata = sc.read_h5ad(data_path) #
+    return adata
+
+def zesta(foldername="./"):
+    '''
+
+    :return:
+    '''
+
+    # read files as pandas objects
+    data_path = foldername + "anndata_moffit.h5ad"
+
+    data_url = 'https://figshare.com/s/191076ef460ac933071e'
+    adata = sc.read(filename=data_path, backup_url=data_url)
+
     return adata
