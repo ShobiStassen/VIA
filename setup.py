@@ -9,7 +9,7 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 setuptools.setup(
     name='pyVIA',
-    version='0.1.97', ##Feb 20, 2024
+    version='0.1.98', ##Feb 21, 2024
     packages=['pyVIA',],
     license='MIT',
     author_email = 'shobana.venkat88@gmail.com',

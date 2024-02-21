@@ -3613,69 +3613,6 @@ def plot_piechart_viagraph(via_object, type_data='pt', gene_exp: list = [], cmap
     return f, ax, ax1
 
 
-def spatial_input(X_genes:ndarray, X_coords:ndarray, knn_spatial:int=5, spatial_weight:float=0.3, weight_transformation='inverse'):
-    '''
-
-    :param X_genes:
-    :param X_coords:
-    :param knn_spatial:
-    :param spatial_weight:
-    :param weight_transformation: 'inverse' or 'gaussian'
-    :return:
-    '''
-    # make knn graph on spatial coordinates
-    # Import scikit-learn preprocessing
-    from sklearn.preprocessing import normalize
-
-    print(f'x_coords shape {X_coords.shape}')
-    print(f'x_genes shape {X_genes.shape}')
-    n_samples = X_coords.shape[0]
-    knn_struct = construct_knn_utils(X_coords, knn=knn_spatial)
-    neighbors, distances = knn_struct.knn_query(X_coords, k=knn_spatial)
-    msk = np.full_like(distances, True, dtype=np.bool_)
-
-    # Remove self-loops
-    msk &= (neighbors != np.arange(neighbors.shape[0])[:, np.newaxis])
-    rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
-    cols = neighbors[msk]
-    distances_ones = np.ones_like(distances)
-    weights = distances[msk]
-
-    weights = (np.mean(distances[msk]) ** 2) / (
-            distances[msk] + np.min(weights))  # larger weight is a stronger edge
-    # weights = np.exp(-distances[msk]/stdd[:,None])
-
-    #result = csr_matrix((distances_ones[msk], (rows, cols)), shape=(n_samples, n_samples), dtype=np.float32)
-    result = csr_matrix((weights, (rows, cols)), shape=(n_samples, n_samples), dtype=np.float32)
-    X_knn_genes = result * X_genes
-    #print('x_knn_genes', X_knn_genes)
-    X_knn_genes = normalize(X_knn_genes, norm="l1", axis=1) #divide each value by sum of the row (so each row sums to 1)
-    #print('x_knn_genes after norm', X_knn_genes)
-    X_genes = normalize(X_genes, norm="l1", axis=1)
-    print('shape x_knn_genes', X_knn_genes.shape)
-    #X_knn_genes *=(1/(knn_spatial-1))
-    #row_sums_knn_spatial = X_knn_genes.sum(axis=1)#, keepdims=True)
-    #row_sums_x_genes = X_genes.sum(axis=1)#, keepdims=True)
-    #X_genes = X_genes / row_sums_x_genes[:, np.newaxis]
-    #print('1/knn X_knn_genes_rowsums', row_sums_knn_spatial)
-    #X_knn_genes = X_knn_genes / row_sums_knn_spatial[:, np.newaxis]
-    #print('row sums knn_spatial_genes')
-    #print(X_knn_genes.sum(axis=1))
-    #X_knn_genes*=10000
-
-    print(f'X_knn_genes {X_knn_genes.shape}')
-    X_spatial = spatial_weight * X_knn_genes + (1-spatial_weight) *X_genes
-    #print(f'X_spatial {X_spatial.shape}')
-    #print('self X-genes')
-    #print(X_genes)
-    #print('row sums x_genes')
-    #print(X_genes.sum(axis=1))
-    #print('row sums x_spatial')
-    #print(X_spatial.sum(axis=1))
-    #print('knn genes')
-    #print(X_knn_genes)
-
-    return X_spatial
 def plot_clusters_spatial(spatial_coords, clusters=[], via_labels= [], title_sup='', fontsize_=6,color='green', s:int=5, alpha=0.5, xlim_max=None, ylim_max=None,xlim_min=None, ylim_min=None, reference_labels:list=[], reference_labels2:list = [],equal_axes_lim: bool = True):
     '''
 
@@ -3728,7 +3665,7 @@ def plot_clusters_spatial(spatial_coords, clusters=[], via_labels= [], title_sup
 
                 df = df[df.v0 == cluster_i]
                 df_coords_majref = pd.DataFrame(spatial_coords, columns=['x', 'y'])
-                print('df_coords_majref  shape',df_coords_majref.shape)
+
 
                 majority_reference = ''
                 majority_reference2 = ''
@@ -3755,7 +3692,7 @@ def plot_clusters_spatial(spatial_coords, clusters=[], via_labels= [], title_sup
                     ylim_min = np.min(emb[:, 1]) *1.2
                 #color = cmap_[i_gene]
                 if fig_nrows > 1:
-                    print('shape gray emb', df_coords_majref.shape)
+
                     axs[r, c].scatter(df_coords_majref[:, 0], df_coords_majref[:, 1], c='gray', s=1, alpha=0.2)
                     axs[r, c].scatter(emb[:, 0], emb[:, 1], c=color, s=s, alpha=alpha )
                     if len(reference_labels)>0: axs[r,c].set_title('c:' + str(cluster_i)+'_'+str(majority_reference)+'_'+str(majority_reference2))

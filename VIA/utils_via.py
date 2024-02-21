@@ -392,8 +392,7 @@ def affinity_milestone_knn(data, knn_struct, k: int = 10, time_series_labels: li
     n_cells = neighbor_array.shape[0]
 
     affinity_array = affinity_array[msk]
-    print(f'min affinity {min(affinity_array)}')
-    print(f'max {max(affinity_array)}')
+
     rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbor_array)])[msk]
     cols = neighbor_array[msk]
     result = csr_matrix((affinity_array, (rows, cols)), shape=(n_cells, n_cells), dtype=np.float64)
@@ -596,6 +595,130 @@ def spatial_knn(coords: np.ndarray, neighbors: np.ndarray, distances: np.ndarray
     print(f"{datetime.now()}\tShape augmented neighbors {augmented_nn.shape}")
 
     return augmented_nn, augmented_nn_data
+
+
+def spatial_input_old(X_genes:ndarray, X_coords:ndarray, knn_spatial:int=5, spatial_weight:float=0.3, weight_transformation='inverse'):
+    '''
+
+    :param X_genes:
+    :param X_coords:
+    :param knn_spatial:
+    :param spatial_weight:
+    :param weight_transformation: 'inverse' or 'gaussian'
+    :return:
+    '''
+    # make knn graph on spatial coordinates
+    # Import scikit-learn preprocessing
+    from sklearn.preprocessing import normalize
+
+    print(f'x_coords shape {X_coords.shape}')
+    print(f'x_genes shape {X_genes.shape}')
+    n_samples = X_coords.shape[0]
+    knn_struct = construct_knn_utils(X_coords, knn=knn_spatial)
+    neighbors, distances = knn_struct.knn_query(X_coords, k=knn_spatial)
+    msk = np.full_like(distances, True, dtype=np.bool_)
+
+    # Remove self-loops
+    msk &= (neighbors != np.arange(neighbors.shape[0])[:, np.newaxis])
+    rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(neighbors)])[msk]
+    cols = neighbors[msk]
+    distances_ones = np.ones_like(distances)
+    weights = distances[msk]
+
+    weights = (np.mean(distances[msk]) ** 2) / (
+            distances[msk] + np.min(weights))  # larger weight is a stronger edge
+    # weights = np.exp(-distances[msk]/stdd[:,None])
+
+    #result = csr_matrix((distances_ones[msk], (rows, cols)), shape=(n_samples, n_samples), dtype=np.float32)
+    result = csr_matrix((weights, (rows, cols)), shape=(n_samples, n_samples), dtype=np.float32)
+
+    X_knn_genes = result * X_genes
+
+    X_knn_genes = normalize(X_knn_genes, norm="l1", axis=1) #divide each value by sum of the row (so each row sums to 1)
+
+    X_genes = normalize(X_genes, norm="l1", axis=1)
+
+    X_spatial = spatial_weight * X_knn_genes + (1-spatial_weight) *X_genes
+
+    return X_spatial
+
+def spatial_input(X_genes:ndarray, spatial_coords:ndarray, spatial_slice_labels: list=[],knn_spatial:int=5, spatial_weight:float=0.3, weight_transformation='inverse'):
+    '''
+
+    :param X_genes:
+    :param X_coords:
+    :param knn_spatial:
+    :param spatial_weight:
+    :param weight_transformation: 'inverse' or 'gaussian'
+    :return:
+    '''
+
+    all_new_nn = np.ones((spatial_coords.shape[0], knn_spatial))
+    all_new_nn_data = np.ones((spatial_coords.shape[0], knn_spatial))
+
+    if len(spatial_slice_labels)>0: spatial_slice_labels = np.asarray(spatial_slice_labels)
+    else: spatial_slice_labels=['slice1'] * spatial_coords.shape[0]
+    spatial_slice_labels = np.asarray(spatial_slice_labels)
+
+    slices_set = list(sorted(list(set(spatial_slice_labels))))  # values sorted in ascending order
+    print(f"{datetime.now()}\tThese slices are present: {slices_set}")
+    # make knn graph on spatial coordinates
+    # Import scikit-learn preprocessing
+    from sklearn.preprocessing import normalize
+
+    print(f'x_coords shape {spatial_coords.shape}')
+    print(f'x_genes shape {X_genes.shape}')
+    n_samples = spatial_coords.shape[0]
+    print('nsamples (slices)', n_samples)
+    #knn_struct = construct_knn_utils(spatial_coords, knn=knn_spatial)
+    #neighbors, distances = knn_struct.knn_query(spatial_coords, k=knn_spatial)
+    for slice_i in slices_set:
+
+        tj_loc = np.where(spatial_slice_labels == slice_i)[0]
+
+        tj_data = spatial_coords[tj_loc, :] #the subset of spatial coords that belong to slice_i
+
+
+        tj_knn = construct_knn_utils(tj_data, knn=knn_spatial)
+        ti_query_nn, d_ij = tj_knn.knn_query(tj_data,   k=knn_spatial)
+        #d_ij = d_ij / (            np.mean(d_ij, axis=1)[:, np.newaxis])
+        # normalize the spatial distances, later scale them. Works marginally better without this normalization here. Given the distance scales across tisues should be comparable. we dont need this here.
+
+        for xx_i, xx in enumerate(tj_loc):
+            all_new_nn[xx, 0:knn_spatial] = tj_loc[ti_query_nn[
+                xx_i]]  # need to convert the tj_query_nn indices back to the indices of tj_loc in full data
+            all_new_nn_data[xx, 0:knn_spatial] = d_ij[xx_i]
+
+    #print(f"{datetime.now()}\tShape neighbors {neighbors.shape} and spatial neighbors {all_new_nn.shape}")
+    print(f"{datetime.now()}\tShape spatial neighbors and data shape {all_new_nn.shape} {all_new_nn_data.shape}")
+
+
+    msk = np.full_like(all_new_nn_data, True, dtype=np.bool_)
+
+
+    # Remove self-loops
+    msk &= (all_new_nn != np.arange(all_new_nn.shape[0])[:, np.newaxis])
+    rows = np.array([np.repeat(i, len(x)) for i, x in enumerate(all_new_nn)])[msk]
+    cols = all_new_nn[msk]
+    distances_ones = np.ones_like(all_new_nn_data)
+    weights = all_new_nn_data[msk]
+
+    weights = (np.mean(all_new_nn_data[msk]) ** 2) / (
+            all_new_nn_data[msk] + np.min(weights))  # larger weight is a stronger edge
+
+    result = csr_matrix((weights, (rows, cols)), shape=(n_samples, n_samples), dtype=np.float32)
+
+    X_knn_genes = result * X_genes
+
+    X_knn_genes = normalize(X_knn_genes, norm="l1", axis=1) #divide each value by sum of the row (so each row sums to 1)
+
+    X_genes = normalize(X_genes, norm="l1", axis=1)
+
+    print(f"{datetime.now()}\tSpatial gene smoothing... {all_new_nn.shape}")
+    X_spatial = spatial_weight * X_knn_genes + (1-spatial_weight) *X_genes
+
+    return X_spatial
+
 def spatial_knn_new(spatial_coords: np.ndarray, spatial_slice_labels: list, neighbors: np.ndarray, distances: np.ndarray, k_spatial: int,
                    distance_metric: str = 'l2', num_threads: int = -1,
                    too_big: bool = False) -> np.ndarray:
@@ -832,7 +955,7 @@ def sc_loc_ofsuperCluster_PCAspace(p0, idx):
     return new_superclust_index_ds
 
 
-def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str = 'plasma', scatter_size=None, vmax=99, fontsize: int = 10,
+def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str = 'plasma', scatter_size=None, vmax=99, vmin=1, fontsize: int = 10,
                alpha_factor=0.9, show_legend: bool = True):
     '''
     This is a helper function called by draw_sc_lineage_probability which plots the single-cell lineage probabilities
@@ -849,16 +972,19 @@ def plot_sc_pb(ax, fig, embedding, prob, ti, cmap_name: str = 'plasma', scatter_
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     # prob = np.sqrt(prob)  # scale values to improve visualization of colors
     vmax = np.percentile(prob, vmax)
+
+    vmin = np.percentile(prob,vmin)
+    print('setting vmin to', vmin)
     # vmax=1
     cmap = matplotlib.cm.get_cmap(cmap_name)
     # norm = matplotlib.colors.Normalize(vmin=0, vmax=np.max(prob))
     if scatter_size is None:
-        scatter_size = 7 if embedding.shape[0] > 10000 else 15
+        scatter_size = 3 if embedding.shape[0] > 10000 else 10
 
     # changing the alpha transparency parameter for plotting points
 
     c = cmap(prob).reshape(-1, 4)
-    im = ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=0.01, cmap=cmap_name, edgecolors='none', vmin=0,
+    im = ax.scatter(embedding[:, 0], embedding[:, 1], c=prob, s=0.01, cmap=cmap_name, edgecolors='none', vmin=vmin, #vmin=0
                     vmax=vmax)  # prevent auto-normalization of colors
     # im = ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=0.01,  edgecolors='none')
 
