@@ -186,7 +186,7 @@ def make_edgebundle_milestone(embedding: ndarray = None, sc_graph=None, via_obje
         milestone_labels = kmeans.labels_.flatten().tolist()
         df_ = pd.DataFrame()
         df_['kmeans'] = milestone_labels
-        # df_.to_csv('/home/user/Trajectory/Datasets/Zebrafish_Lange2023/kmeans_milestones'+str(n_milestones)+'.csv')
+        df_.to_csv('/home/user/Trajectory/Datasets/Zebrafish_Lange2023/kmeans_milestones'+str(n_milestones)+'.csv')
         print(f'{datetime.now()}\tEnd milestones with {n_milestones}')
         # plt.scatter(embedding[:, 0], embedding[:, 1], c=milestone_labels, cmap='tab20', s=1, alpha=0.3)
         # plt.show()
