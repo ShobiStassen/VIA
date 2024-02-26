@@ -3811,7 +3811,7 @@ def plot_all_spatial_clusters(spatial_coords, true_label, via_labels, save_to:st
             if mod != 0: fig_nrows += 1
             f.set_size_inches(10, 2 * fig_nrows)
             #f.savefig(                WORK_PATH + 'Viagraphs/Bregma' + str(int(bregma)) + 'Spatknn' + str(spatial_knn) + 'cluster_' + keyi[                                                                                                                0:4] + '.png')
-            f.savefig(save_to+ 'Spatknn' + str(spatial_knn) + 'cluster_' + keyi[0:4] + '.png')
+            f.savefig(save_to + 'cluster_' + keyi[0:4] + '.png')
         else:
             print('No cluster has a majority population of ', keyi)
 
