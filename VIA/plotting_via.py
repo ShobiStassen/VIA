@@ -435,16 +435,6 @@ def plot_scatter(embedding: ndarray, labels: list, cmap='rainbow', s=5, alpha=0.
         ax.set_title(label='scatter plot', color='blue')
     else:
         ax.set_title(label=title, color='blue')
-    if show_legend:
-        legend = ax.legend(fontsize=12, frameon=False)
-        ax.legend(bbox_to_anchor=(1.02, 0.1), loc='upper left', borderaxespad=0)
-        handles = legend.legendHandles
-        for i, handle in enumerate(handles):
-            # handle.set_edgecolor("#6c2167")  # set_edgecolors
-            # handle.set_facecolor(colors[i])
-            # handle.set_hatch(hatches[i])
-            handle.set_alpha(1)
-            handle.set_sizes([40])
     ax.grid(False)
     # Hide axes ticks
     if hide_axes_ticks:
@@ -454,6 +444,15 @@ def plot_scatter(embedding: ndarray, labels: list, cmap='rainbow', s=5, alpha=0.
     # Hide grid lines
     ax.grid(False)
     fig.patch.set_visible(True)
+    if show_legend:
+        ax.legend(fontsize=12, frameon=False)
+        legend = ax.legend(bbox_to_anchor=(1.02, 0.1), loc='upper left', borderaxespad=0)
+        for i, handle in enumerate(legend.legendHandles):
+            # handle.set_edgecolor("#6c2167")  # set_edgecolors
+            # handle.set_facecolor(colors[i])
+            # handle.set_hatch(hatches[i])
+            handle.set_alpha(1)
+            handle.set_sizes([40])
     return fig, ax
 
 
