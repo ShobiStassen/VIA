@@ -86,9 +86,9 @@ via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername= f)
 
 ## Installation
 ### Linux Ubuntu 16.04 and Windows 10 Installation
-We recommend setting up a new conda environment. You can use the examples below, the [Jupyter notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) and/or the [test script](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) to make sure your installation works as expected.
+We recommend setting up a new conda environment and reccomend python version 3.10. Versions 3.8 and 3.9 should also work. You can use the examples below, the [Jupyter notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) and/or the [test script](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) to make sure your installation works as expected.
 ```
-conda create --name ViaEnv python=3.7 
+conda create --name ViaEnv python=3.10 
 pip install pyVIA // tested on linux Ubuntu 16.04 and Windows 10
 ```
 This usually tries to install hnswlib, produces an error and automatically corrects itself by first installing pybind11 followed by hnswlib. To get a smoother installation, consider installing in the following order after creating a new conda environment:
@@ -106,7 +106,7 @@ python3 setup.py install // cd into the directory of the cloned VIA folder conta
 ### MAC installation
 The pie-chart cluster-graph plot does not render correctly for MACs for the time-being. All other outputs are as expected. 
 ```
-conda create --name ViaEnv python=3.7 
+conda create --name ViaEnv python=3.10 
 pip install pybind11
 conda install -c conda-forge hnswlib
 pip install pyVIA
