@@ -82,6 +82,7 @@ StaVia extends the lazy-teleporting walks to higher order random walks with **me
    notebooks/ViaJupyter_Pancreas_RNAvelocity
    notebooks/ViaJupyter_scRNAVelocity_hematopoiesis
    notebooks/scATAC-seq_HumanHematopoiesis
+   notebooks/StaVia MERFISH 2
 
 
    
