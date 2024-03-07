@@ -3,7 +3,7 @@ Installation
 
 **install using pip** ::
   
-  conda create --name ViaEnv python=3.7 
+  conda create --name ViaEnv python=3.10 
   pip install pyVIA // tested on linux Ubuntu 16.04 and Windows 10
 
 This usually tries to install hnswlib, produces an error and automatically corrects itself by first installing pybind11 followed by hnswlib. To get a smoother installation, consider installing in the following order after creating a new conda environment::
@@ -21,7 +21,7 @@ This usually tries to install hnswlib, produces an error and automatically corre
 **MAC installation** 
 The pie-chart cluster-graph plot does not render correctly for MACs for the time-being. All other outputs are as expected.::
 
-  conda create --name ViaEnv python=3.7 
+  conda create --name ViaEnv python=3.10 
   pip install pybind11
   conda install -c conda-forge hnswlib
   pip install pyVIA
