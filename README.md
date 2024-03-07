@@ -64,26 +64,6 @@ Dataset are available in the [Datasets folder](https://github.com/ShobiStassen/V
       
 ------------------------------------------------------
 
-### To run on Windows:
-All examples and tests have been run on Linux and MAC OS. We find there are somtimes small modifications required to run on a Windows OS (see below). Windows requires minor modifications in calling the code due to the way multiprocessing works in Windows compared to Linux:
-```
-#when running from an IDE you need to call the function in the following way to ensure the parallel processing works:
-import os
-import pyVIA.core as via
-f= os.path.join(r'C:\Users\...\Documents'+'\\')
-def main():
-    via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername= f)    
-if __name__ =='__main__':
-    main()
-    
-#when running directly from terminal:
-import os
-import pyVIA.core as via
-f= os.path.join(r'C:\Users\...\Documents'+'\\')
-via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername= f)    
-
-```
-
 ## Installation
 ### Linux Ubuntu 16.04 and Windows 10 Installation
 We recommend setting up a new conda environment and reccomend python version 3.10. Versions 3.8 and 3.9 should also work. You can use the examples below, the [Jupyter notebooks](https://github.com/ShobiStassen/VIA/tree/master/Jupyter%20Notebooks) and/or the [test script](https://github.com/ShobiStassen/VIA/blob/master/test_pyVIA.py) to make sure your installation works as expected.
@@ -119,6 +99,27 @@ Note that on Windows if you do not have Visual C++ (required for hnswlib) you ca
 pip install pybind11, hnswlib, igraph, leidenalg>=0.7.0, umap-learn, numpy>=1.17, scipy, pandas>=0.25, sklearn, termcolor, pygam, phate, matplotlib,scanpy
 pip install pyVIA
 ```
+
+### To run on Windows:
+All examples and tests have been run on Linux and MAC OS. We find there are somtimes small modifications required to run on a Windows OS (see below). Windows requires minor modifications in calling the code due to the way multiprocessing works in Windows compared to Linux:
+```
+#when running from an IDE you need to call the function in the following way to ensure the parallel processing works:
+import os
+import pyVIA.core as via
+f= os.path.join(r'C:\Users\...\Documents'+'\\')
+def main():
+    via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername= f)    
+if __name__ =='__main__':
+    main()
+    
+#when running directly from terminal:
+import os
+import pyVIA.core as via
+f= os.path.join(r'C:\Users\...\Documents'+'\\')
+via.main_Toy(ncomps=10, knn=30,dataset='Toy3', random_seed=2,foldername= f)    
+
+```
+
 ## Parameters and Attributes
 
 ### Parameters
