@@ -1351,7 +1351,7 @@ def plot_sc_lineage_probability(via_object, embedding: ndarray = None, idx: list
 
 
 def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = [],arrow_head:float=0.1,
-                  edgeweight_scale:float=1.5, cmap=None, label_text:bool=True, size_factor_node: float = 1, tune_edges:bool = True,initial_bandwidth=0.05, decay=0.9, edgebundle_pruning=0.5):
+                  edgeweight_scale:float=1.5, cmap=None, label_text:bool=True, size_factor_node: float = 1, tune_edges:bool = False,initial_bandwidth=0.05, decay=0.9, edgebundle_pruning=0.5):
     '''
     cluster level expression of gene/feature intensity
     :param via_object:
@@ -1363,7 +1363,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
     :param cmap:
     :param label_text: bool to add numeric values of the gene exp level
     :param size_factor_node size of graph nodes
-    :param tune_edges: bool (false). if you want to change the number of edges visualized, then set this to True and modify the tuning parameters (initial_bandwidth, decy, edgebundle_pruning)
+    :param tune_edges: bool (false). if you want to change the number of edges visualized, then set this to True and modify the tuning parameters (initial_bandwidth, decay, edgebundle_pruning)
     :param initial_bandwidth: (float = 0.05)  increasing bw increases merging of minor edges.  Only used when tune_edges = True
     :param decay: (decay = 0.9) increasing decay increases merging of minor edges . Only used when tune_edges = True
     :param edgebundle_pruning (float = 0.5). takes on values between 0-1. smaller value means more pruning away edges that can be visualised. Only used when tune_edges = True
@@ -2582,8 +2582,10 @@ def animate_streamplot(via_object, embedding, density_grid=1,
         ax.add_collection(line)
     print('total number of stream lines', count)
 
-    ax.set_xlim(min(X_grid[0]), max(X_grid[0]), ax.set_xticks([]))
-    ax.set_ylim(min(X_grid[1]), max(X_grid[1]), ax.set_yticks([]))
+    ax.set_xlim(min(X_grid[0]), max(X_grid[0]))
+    ax.set_xticks([])
+    ax.set_ylim(min(X_grid[1]), max(X_grid[1]))
+    ax.set_yticks([])
     plt.tight_layout()
 
     # print('colors', colors)
@@ -3216,7 +3218,7 @@ def plot_viagraph_(ax=None, hammer_bundle=None, layout: ndarray = None, CSM: nda
                    velocity_weight: float = None, pt: list = None, alpha_bundle=1, linewidth_bundle=2,
                    edge_color='darkblue', headwidth_bundle=0.1, arrow_frequency=0.05, show_direction=True,
                    ax_text: bool = True, title: str = '', plot_clusters: bool = False, cmap: str = 'viridis',
-                   via_object=None, fontsize: float = 9, dpi: int = 300):
+                   via_object=None, fontsize: float = 9, dpi: int = 300,tune_edges:bool = False,initial_bandwidth=0.05, decay=0.9, edgebundle_pruning=0.5):
     '''
     this plots the edgebundles on the via clustergraph level and also adds the relevant arrow directions based on the TI directionality
 
@@ -3251,7 +3253,11 @@ def plot_viagraph_(ax=None, hammer_bundle=None, layout: ndarray = None, CSM: nda
         if CSM is None: CSM = via_object.CSM
         if velocity_weight is None: velocity_weight = via_object.velo_weight
         if pt is None: pt = via_object.scaled_hitting_times
-
+    if tune_edges:
+        print('make new edgebundle')
+        hammer_bundle, layout = make_edgebundle_viagraph(via_object=via_object, layout=via_object.layout, decay=decay,
+                                                         initial_bandwidth=initial_bandwidth,
+                                                         edgebundle_pruning=edgebundle_pruning)  # hold the layout fixed. only change the edges
     x_ = [l[0] for l in layout]
     y_ = [l[1] for l in layout]
     # min_x, max_x = min(x_), max(x_)
@@ -3403,12 +3409,11 @@ def _slow_sklearn_mds(via_graph: csr_matrix, X_pca: ndarray, t_diff_op: int = 1)
     # X_mds = squareform(pdist(adata_counts.obsm['X_pca'][:, 0:ncomps+20])) #no diffusion makes is less streamlined and compact. more fuzzy
     return X_mds
 
-
-def plot_piechart_viagraph(via_object, type_data='pt', gene_exp: list = [], cmap_piechart: str = 'rainbow', title='',
+def plot_piechart_only_viagraph(via_object, type_data='pt', gene_exp: list = [], cmap_piechart: str = 'rainbow', title='',
                            cmap: str = None, ax_text=True, dpi=150, headwidth_arrow=0.1, alpha_edge=0.4,
                            linewidth_edge=2, edge_color='darkblue', reference_labels=None, show_legend: bool = True,
                            pie_size_scale: float = 0.8, fontsize: float = 8, pt_visual_threshold: int = 99,
-                           highlight_terminal_clusters: bool = True, size_node_notpiechart: float = 1):
+                           highlight_terminal_clusters: bool = True, size_node_notpiechart: float = 1,tune_edges:bool = False,initial_bandwidth=0.05, decay=0.9, edgebundle_pruning=0.5):
     '''
     plot two subplots with a clustergraph level representation of the viagraph showing true-label composition (lhs) and pseudotime/gene expression (rhs)
     Returns matplotlib figure with two axes that plot the clustergraph using edge bundling
@@ -3429,6 +3434,171 @@ def plot_piechart_viagraph(via_object, type_data='pt', gene_exp: list = [], cmap
     :param pt_visual_threshold: int (percentage) default = 95 corresponding to rescaling the visual color scale by clipping outlier cluster pseudotimes
     :param highlight_terminal_clusters:bool = True (red border around terminal clusters)
     :param size_node_notpiechart: scaling factor for node size of the viagraph (not the piechart part)
+    :param initial_bandwidth: (float = 0.05)  increasing bw increases merging of minor edges.  Only used when tune_edges = True
+    :param decay: (decay = 0.9) increasing decay increases merging of minor edges . Only used when tune_edges = True
+    :param edgebundle_pruning (float = 0.5). takes on values between 0-1. smaller value means more pruning away edges that can be visualised. Only used when tune_edges = True
+    :return: f, ax, ax1
+    '''
+
+    f, ax = plt.subplots( dpi=dpi)
+
+    node_pos = via_object.graph_node_pos
+
+    node_pos = np.asarray(node_pos)
+    if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'viridis_r'
+
+    if type_data == 'pt':
+        pt = via_object.markov_hitting_times  # via_object.scaled_hitting_times
+        threshold_high = np.percentile(pt, pt_visual_threshold)
+
+        pt_subset = [x for x in pt if x < threshold_high]  # remove high outliers
+        new_upper_pt = np.percentile(pt_subset, pt_visual_threshold)  # 'true' upper percentile after removing outliers
+
+        pt = [x if x < new_upper_pt else new_upper_pt for x in pt]
+        title_ax1 = "Pseudotime " + title
+
+    if (type_data == 'gene') | (len(gene_exp) > 0):
+        pt = gene_exp
+        title_ax1 = title
+    if reference_labels is None: reference_labels = via_object.true_label
+
+    n_groups = len(set(via_object.labels))
+    n_truegroups = len(set(reference_labels))
+    group_pop = np.zeros([n_groups, 1])
+    if type(reference_labels[0]) == int or type(reference_labels[0]) == float:
+        sorted_col_ = sorted(list(set(reference_labels)))
+
+        group_frac = pd.DataFrame(np.zeros([n_groups, n_truegroups]), columns=sorted_col_)
+    else:
+        sorted_col_ = list(set(reference_labels))
+        sorted_col_.sort()
+
+        group_frac = pd.DataFrame(np.zeros([n_groups, n_truegroups]),
+                                  columns=sorted_col_)  # list(set(reference_labels))
+
+    via_object.cluster_population_dict = {}
+
+    set_labels = list(set(via_object.labels))
+    set_labels.sort()
+
+    for group_i in set_labels:
+        loc_i = np.where(via_object.labels == group_i)[0]
+
+        group_pop[group_i] = len(loc_i)  # np.sum(loc_i) / 1000 + 1
+        via_object.cluster_population_dict[group_i] = len(loc_i)
+        true_label_in_group_i = list(np.asarray(reference_labels)[loc_i])
+        ll_temp = list(set(true_label_in_group_i))
+
+        for ii in ll_temp:
+            group_frac[ii][group_i] = true_label_in_group_i.count(ii)
+
+    line_true = np.linspace(0, 1, n_truegroups)
+    cmap_piechart_ = plt.get_cmap(cmap_piechart)
+    color_true_list = [cmap_piechart_(color) for color in line_true]  # plt.cm.rainbow(color)
+
+    sct = ax.scatter(node_pos[:, 0], node_pos[:, 1],
+                     c='white', edgecolors='face', s=group_pop, cmap=cmap_piechart)
+
+    bboxes = getbb(sct, ax)
+
+    ax = plot_viagraph_(ax, via_object= via_object, pt=pt, headwidth_bundle=headwidth_arrow,
+                        alpha_bundle=alpha_edge, linewidth_bundle=linewidth_edge, edge_color=edge_color,
+                        tune_edges=tune_edges, initial_bandwidth=initial_bandwidth, decay=decay,
+                        edgebundle_pruning=edgebundle_pruning)
+
+    trans = ax.transData.transform
+    bbox = ax.get_position().get_points()
+    ax_x_min = bbox[0, 0]
+    ax_x_max = bbox[1, 0]
+    ax_y_min = bbox[0, 1]
+    ax_y_max = bbox[1, 1]
+    ax_len_x = ax_x_max - ax_x_min
+    ax_len_y = ax_y_max - ax_y_min
+    trans2 = ax.transAxes.inverted().transform
+    pie_axs = []
+    pie_size_ar = ((group_pop - np.min(group_pop)) / (np.max(group_pop) - np.min(group_pop)) + 0.5) / 10  # 10
+
+    for node_i in range(n_groups):
+
+        cluster_i_loc = np.where(np.asarray(via_object.labels) == node_i)[0]
+        majority_true = via_object.func_mode(list(np.asarray(reference_labels)[cluster_i_loc]))
+
+        pie_size = pie_size_ar[node_i][0] * pie_size_scale
+
+        x1, y1 = trans(node_pos[node_i])  # data coordinates
+        xa, ya = trans2((x1, y1))  # axis coordinates
+
+        xa = ax_x_min + (xa - pie_size / 2) * ax_len_x
+        ya = ax_y_min + (ya - pie_size / 2) * ax_len_y
+        # clip, the fruchterman layout sometimes places below figure
+        if ya < 0: ya = 0
+        if xa < 0: xa = 0
+        rect = [xa, ya, pie_size * ax_len_x, pie_size * ax_len_y]
+        frac = np.asarray([ff for ff in group_frac.iloc[node_i].values])
+
+        pie_axs.append(plt.axes(rect, frameon=False))
+        pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
+        pie_axs[node_i].set_xticks([])
+        pie_axs[node_i].set_yticks([])
+        pie_axs[node_i].set_aspect('equal')
+        # pie_axs[node_i].text(0.5, 0.5, graph_node_label[node_i])
+        if ax_text == True:
+            pie_axs[node_i].text(0.5, 0.5, str(majority_true)+'_c'+str(node_i), fontsize=fontsize)
+            #pie_axs[node_i].text(0.5, 0.5, 'c' + str(node_i), fontsize=fontsize)
+
+    patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
+    labels = list(set(reference_labels))
+    labels.sort()
+    if show_legend == True: plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon=False)
+
+    if via_object.time_series == True:
+        ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(via_object.ncomp) + 'knnseq_' + str(
+            via_object.knn_sequential)
+    elif via_object.do_spatial_knn == True:
+        ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(via_object.ncomp) + 'SpatKnn_' + str(
+            via_object.spatial_knn)
+    else:
+        ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(via_object.ncomp)
+    ax.set_title(ti)
+    ax.grid(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+
+    f.patch.set_visible(False)
+
+    ax.axis('off')
+    ax.set_facecolor('white')
+    return f, ax
+
+def plot_piechart_viagraph(via_object, type_data='pt', gene_exp: list = [], cmap_piechart: str = 'rainbow', title='',
+                           cmap: str = None, ax_text=True, dpi=150, headwidth_arrow=0.1, alpha_edge=0.4,
+                           linewidth_edge=2, edge_color='darkblue', reference_labels=None, show_legend: bool = True,
+                           pie_size_scale: float = 0.8, fontsize: float = 8, pt_visual_threshold: int = 99,
+                           highlight_terminal_clusters: bool = True, size_node_notpiechart: float = 1,tune_edges:bool = False,initial_bandwidth=0.05, decay=0.9, edgebundle_pruning=0.5):
+    '''
+    plot two subplots with a clustergraph level representation of the viagraph showing true-label composition (lhs) and pseudotime/gene expression (rhs)
+    Returns matplotlib figure with two axes that plot the clustergraph using edge bundling
+    left axis shows the clustergraph with each node colored by annotated ground truth membership.
+    right axis shows the same clustergraph with each node colored by the pseudotime or gene expression
+
+    :param via_object: is class VIA (the same function also exists as a method of the class and an external plotting function
+    :param type_data: string  default 'pt' for pseudotime colored nodes. or 'gene'
+    :param gene_exp: list of values (or column of dataframe) corresponding to feature or gene expression to be used to color nodes at CLUSTER level
+    :param cmap_piechart: str cmap for piechart categories
+    :param title: string
+    :param cmap: default None. automatically chooses coolwarm for gene expression or viridis_r for pseudotime
+    :param ax_text: Bool default= True. Annotates each node with cluster number and population of membership
+    :param dpi: int default = 150
+    :param headwidth_arrow: default = 0.1. width of arrowhead used to directed edges
+    :param reference_labels: None or list. list of categorical (str) labels for cluster composition of the piecharts (LHS subplot) length = n_samples.
+    :param pie_size_scale: float default=0.8 scaling factor of the piechart nodes
+    :param pt_visual_threshold: int (percentage) default = 95 corresponding to rescaling the visual color scale by clipping outlier cluster pseudotimes
+    :param highlight_terminal_clusters:bool = True (red border around terminal clusters)
+    :param size_node_notpiechart: scaling factor for node size of the viagraph (not the piechart part)
+    :param initial_bandwidth: (float = 0.05)  increasing bw increases merging of minor edges.  Only used when tune_edges = True
+    :param decay: (decay = 0.9) increasing decay increases merging of minor edges . Only used when tune_edges = True
+    :param edgebundle_pruning (float = 0.5). takes on values between 0-1. smaller value means more pruning away edges that can be visualised. Only used when tune_edges = True
     :return: f, ax, ax1
     '''
 
@@ -3493,10 +3663,16 @@ def plot_piechart_viagraph(via_object, type_data='pt', gene_exp: list = [], cmap
                      c='white', edgecolors='face', s=group_pop, cmap=cmap_piechart)
 
     bboxes = getbb(sct, ax)
-
+    print('tune edges', tune_edges)
+    '''
     ax = plot_viagraph_(ax, via_object.hammerbundle_cluster, layout=via_object.graph_node_pos, CSM=via_object.CSM,
                         velocity_weight=via_object.velo_weight, pt=pt, headwidth_bundle=headwidth_arrow,
-                        alpha_bundle=alpha_edge, linewidth_bundle=linewidth_edge, edge_color=edge_color)
+                        alpha_bundle=alpha_edge, linewidth_bundle=linewidth_edge, edge_color=edge_color,tune_edges = tune_edges,initial_bandwidth=initial_bandwidth, decay=decay, edgebundle_pruning=edgebundle_pruning)
+    '''
+    ax = plot_viagraph_(ax, via_object= via_object, pt=pt, headwidth_bundle=headwidth_arrow,
+                        alpha_bundle=alpha_edge, linewidth_bundle=linewidth_edge, edge_color=edge_color,
+                        tune_edges=tune_edges, initial_bandwidth=initial_bandwidth, decay=decay,
+                        edgebundle_pruning=edgebundle_pruning)
 
     trans = ax.transData.transform
     bbox = ax.get_position().get_points()
@@ -3575,10 +3751,16 @@ def plot_piechart_viagraph(via_object, type_data='pt', gene_exp: list = [], cmap
         gp_scaling = 1000 / max(group_pop)
 
         group_pop_scale = group_pop * gp_scaling * 0.5
+        '''
         ax_i = plot_viagraph_(ax_i, via_object.hammerbundle_cluster, layout=via_object.graph_node_pos,
                               CSM=via_object.CSM, velocity_weight=via_object.velo_weight, pt=pt,
                               headwidth_bundle=headwidth_arrow, alpha_bundle=alpha_edge,
-                              linewidth_bundle=linewidth_edge, edge_color=edge_color)
+                              linewidth_bundle=linewidth_edge, edge_color=edge_color,tune_edges=tune_edges,initial_bandwidth=initial_bandwidth, decay=decay, edgebundle_pruning=edgebundle_pruning)
+        '''
+        ax = plot_viagraph_(ax_i, via_object=via_object, pt=pt, headwidth_bundle=headwidth_arrow,
+                            alpha_bundle=alpha_edge, linewidth_bundle=linewidth_edge, edge_color=edge_color,
+                            tune_edges=tune_edges, initial_bandwidth=initial_bandwidth, decay=decay,
+                            edgebundle_pruning=edgebundle_pruning)
 
         im1 = ax_i.scatter(node_pos[:, 0], node_pos[:, 1], s=group_pop_scale * size_node_notpiechart, c=pt, cmap=cmap,
                            edgecolors=c_edge,
@@ -3627,7 +3809,7 @@ def plot_clusters_spatial(spatial_coords, clusters=[], via_labels= [], title_sup
     :param ylim_max: limits of axes
     :param xlim_min: limits of axes
     :param ylim_min: limits of axes
-    :param reference_labels:  optional list of single-cell labels (e.g. time, annotation). Used to selectively provide a grey background to cells not in the cluster being inspected. If you have multipe time points, then set reference_labels to the time_points. All cells in the most prevalent timepoint seen in the cluster of interest will be plotted as a background
+    :param reference_labels:  optional list of single-cell labels (e.g. time, annotation). this will be used in the title of each subplot to note the majority cell (ref2) type for each cluster
     :param reference_labels2: optional list of single-cell labels (e.g. time, annotation). this will be used in the title of each subplot to note the majority cell (ref2) type for each cluster
     :return: fig, axs
     '''
@@ -3658,7 +3840,7 @@ def plot_clusters_spatial(spatial_coords, clusters=[], via_labels= [], title_sup
                 df['v0'] = via_labels
                 if len(reference_labels)>0:
                     df['reference'] = reference_labels
-                if len(reference_labels) > 0:
+                if len(reference_labels2) > 0:
                     df['reference2'] = reference_labels2
 
 
@@ -3772,7 +3954,7 @@ def make_dict_of_clusters_for_each_celltype(via_labels:list = [], true_label:lis
     class_to_cluster_dict = collect_dictionary(majority_cluster_population_dict)
     print('list of clusters for each majority', class_to_cluster_dict)
     return class_to_cluster_dict
-def plot_all_spatial_clusters(spatial_coords, true_label, via_labels, save_to:str = '', color_dict:dict = {}, cmap:str = 'rainbow', alpha = 0.4, s=5, verbose:bool=False):
+def plot_all_spatial_clusters(spatial_coords, true_label, via_labels, save_to:str = '', color_dict:dict = {}, cmap:str = 'rainbow', alpha = 0.4, s=5, verbose:bool=False, reference_labels:list=[],reference_labels2:list=[]):
     '''
     :param spatial_coords: ndarray of x,y coords of tissue location of cells (ncells x2)
     :param true_label: categorial labels (list of length n_cells)
@@ -3780,6 +3962,8 @@ def plot_all_spatial_clusters(spatial_coords, true_label, via_labels, save_to:st
     :param save_to:
     :param color_dict: optional dict with keys corresponding to true_label type. e.g. {true_label_celltype1: 'green',true_label_celltype2: 'red'}
     :param cmap: string default = rainbow
+    :param reference_labels:  optional list of single-cell labels (e.g. time, annotation). Used to selectively provide a grey background to cells not in the cluster being inspected. If you have multipe time points, then set reference_labels to the time_points. All cells in the most prevalent timepoint seen in the cluster of interest will be plotted as a background
+    :param reference_labels2: optional list of single-cell labels (e.g. time, annotation). this will be used in the title of each subplot to note the majority cell (ref2) type for each cluster
     :return: list lists of [[fig1, axs_set1], [fig2, axs_set2],...]
     '''
     clusters_for_each_celltype_dict=make_dict_of_clusters_for_each_celltype(via_labels, true_label)
@@ -3802,8 +3986,8 @@ def plot_all_spatial_clusters(spatial_coords, true_label, via_labels, save_to:st
 
             clusters_list = clusters_for_each_celltype_dict[keyi]
             f, axs = plot_clusters_spatial(spatial_coords, clusters=clusters_list, via_labels=via_labels,
-                                               title_sup=keyi, color=color, s=10,
-                                               alpha=0.5)
+                                               title_sup=keyi, color=color, s=s,
+                                               alpha=alpha, reference_labels2=reference_labels2, reference_labels=reference_labels)
             list_of_figs.append([f, axs])
             fig_nrows, mod = divmod(len(clusters_list), 4)
             if mod == 0: fig_nrows = fig_nrows
