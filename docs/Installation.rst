@@ -1,6 +1,6 @@
 Installation
 =============
-
+Note that python versions 3.9 and 3.10 are recommended. Python versions 3.7 and below will not work with more recent versions of StaVia/pyVIA
 **install using pip** ::
   
   conda create --name ViaEnv python=3.10 
