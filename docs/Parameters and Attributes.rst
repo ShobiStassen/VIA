@@ -69,7 +69,7 @@ Parameters and Attributes
      - (optional, default = 10) Via *attempts* to merge Clusters with a population < 10 cells with larger clusters.
  
    * - edgebundle_pruning
-     - (optional), default = None. This is automatically set to be the same as cluster_graph_pruning_std
+     - (optional, default = None) This is automatically set to be the same as cluster_graph_pruning_std
 
    * - edgebundle_pruning_twice
      - (optional, default = False) If the visualized cluster graph edges seem too busy, they can be further condensed by a second iteration of edge bundling by setting this to True.
@@ -92,6 +92,60 @@ Parameters and Attributes
    * - via_coarse
      - (optional, default = None) If a second fine-grained iteration of VIA is run using the terminal states, roots and single-cell graph obtained in the first coarse-pass of VIA, then via_coarse = v0 (the VIA object from first iteration)
 
+   * - memory
+     - (default = 2) higher q means more memory, more retrospective/inwards randomwalk. memory = 2 means run using the non-memory Via 1.0 mode
+
+   * - viagraph_decay
+     - (default = 0.9) increasing decay causes more edges to merge
+
+
+**Temporal Input Parameters**
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. list-table:: 
+   :widths: 25 25 
+   :header-rows: 1
+
+   * - Input parameter
+     - Description
+     
+   * - t_diff_step
+     - (optional, default = 1) Number of permitted temporal intervals between connected nodes. If time data is labeled as [0,25,50,75,100,..] then t_diff_step=1 corresponds to '25' and only edges within t_diff_steps are retained
+
+   * - time_series
+     - (optional, default False) if the data has time-series labels then set to True
+
+   * - time_series_labels
+     - (optional, default None) list of integer values of temporal annoataions corresponding to e.g. hours (post fert), days, or sequential ordering
+
+   * - knn_sequential
+     - (optional, default = 10) Number of knn in the adjacent time-point for time-series data (t_i and t_i+1)
+
+   * - knn_sequential_reverse
+     - (optional, default = 0) Number of knn enforced from current to previous time point
+
+
+**Spatial Input Parameters**
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. list-table:: 
+   :widths: 25 25 
+   :header-rows: 1
+
+   * - do_spatial_knn
+     - (optional, default = False) Whether or not to do spatial mode of StaVia for graph augmentation
+
+   * - do_spatial_layout
+     - (optional, default = 0.9) whether to use spatial coords for layout of the clustergraph
+
+   * - spatial_coords
+     - (optional, default = False) np.ndarray of size n_cells x 2 (denoting x,y coordinates) of each spot/cell
+     
+   * - spatial_knn
+     - (optional, default = 15) number of knn's added based on spatial proximity indiciated by spatial_coords
+
+   * - spatial_aux
+     - (optional, default = []) a list of slice IDs so that only cells/spots on the same slice are considered when building the spatial_knn graph
 
 
 **Attributes**
