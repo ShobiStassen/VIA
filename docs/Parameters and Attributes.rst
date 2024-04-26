@@ -26,10 +26,10 @@ Parameters and Attributes
    * - root_user
      - root_user should be provided as a list containing roots corresponding to index (row number in cell matrix) of root cell. For most trajectories this is of the form [53] where 53 is the index of a sensible root cell, for multiple disconnected trajectories an arbitrary list of cells can be provided [1,506,1100], otherwise VIA arbitratily chooses cells. If the root cells of disconnected trajectories are known in advance, then the cells should be annotated with similar syntax to that of Example Dataset in Disconnected Toy Example 1b.
 
-   * - dist_std_local
+   * - edgepruning_clustering_resolution_local
      - (optional, default = 1) local pruning threshold for PARC clustering stage: the number of standard deviations above the mean minkowski distance between neighbors of a given node. the higher the parameter, the more edges are retained
    
-   * - jac_std_global
+   * - edgepruning_clustering_resolution
      - (optional, default = 0.15) global level  graph pruning for PARC clustering stage. This threshold can also be set as the number of standard deviations below the network's mean-jaccard-weighted edges. 0.1-1 provide reasonable pruning. higher value means less pruning. e.g. a value of 0.15 means all edges that are above mean(edgeweight)-0.15*std(edge-weights) are retained. We find both 0.15 and 'median' to yield good results resulting in pruning away ~ 50-60% edges
 
    * - too_big_factor
@@ -56,7 +56,7 @@ Parameters and Attributes
    * - preserve_disconnected_after_pruning
      - (optional, default = False) Cluster-graph pruning can occasionally cause fragmentation that can be repaired (by setting to True) by retaining select edges.
  
-   * - cluster_graph_pruning_std
+   * - cluster_graph_pruning
      - (optional, default =0.15) Often set to the same value as the PARC clustering level of jac_std_global. To retain more connectivity in the clustergraph underlying the trajectory computations, increase the value
  
    * - visual_cluster_graph_pruning
@@ -148,7 +148,7 @@ Parameters and Attributes
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/pt_knn_vs_big.png?raw=true" width="600px" align="center" </a>
 
 
-**jac_std_cluster & cluster_graph_pruning_std effects**
+**edgepruning_clustering_resolution & cluster_graph_pruning effects**
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. raw:: html
 
