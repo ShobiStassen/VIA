@@ -446,7 +446,7 @@ def plot_scatter(embedding: ndarray, labels: list, cmap='rainbow', s=5, alpha=0.
     fig.patch.set_visible(True)
     if show_legend:
         ax.legend(fontsize=12, frameon=False)
-        legend = ax.legend(bbox_to_anchor=(1.02, 0.1), loc='upper left', borderaxespad=0)
+        legend = ax.legend(bbox_to_anchor=(0, 0, 1.2, 1), loc='lower right', borderaxespad=0)
         for i, handle in enumerate(legend.legendHandles):
             # handle.set_edgecolor("#6c2167")  # set_edgecolors
             # handle.set_facecolor(colors[i])
