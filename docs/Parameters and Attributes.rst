@@ -24,46 +24,31 @@ Parameters and Attributes
      - (optional, default = 30) number of K-Nearest Neighbors for HNSWlib KNN graph
 
    * - root_user
-     - root_user should be provided as a list containing roots corresponding to index (row number in cell matrix) of root cell. For most trajectories this is of the form [53] where 53 is the index of a sensible root cell, for multiple disconnected trajectories an arbitrary list of cells can be provided [1,506,1100], otherwise VIA arbitratily chooses cells. If the root cells of disconnected trajectories are known in advance, then the cells should be annotated with similar syntax to that of Example Dataset in Disconnected Toy Example 1b.
-
-   * - edgepruning_clustering_resolution_local
-     - (optional, default = 1) local pruning threshold for PARC clustering stage: the number of standard deviations above the mean minkowski distance between neighbors of a given node. the higher the parameter, the more edges are retained
+     - root_user should be provided as a list containing roots corresponding to index (row number in cell matrix) of root cell. For most trajectories this is of the form [53] where 53 is the index of a sensible root cell, for multiple disconnected trajectories an arbitrary list of cells can be provided [1,506,1100], otherwise VIA arbitratily chooses cells. If the root cells of disconnected trajectories are known in advance, then the cells should be annotated with similar syntax to that of Example Dataset in Disconnected Toy Example 1b
    
    * - edgepruning_clustering_resolution
-     - (optional, default = 0.15) global level  graph pruning for PARC clustering stage. This threshold can also be set as the number of standard deviations below the network's mean-jaccard-weighted edges. 0.1-1 provide reasonable pruning. higher value means less pruning. e.g. a value of 0.15 means all edges that are above mean(edgeweight)-0.15*std(edge-weights) are retained. We find both 0.15 and 'median' to yield good results resulting in pruning away ~ 50-60% edges
+     - (optional, default = 0.15) global level  graph pruning for PARC clustering stage. Key tuning parameter. This threshold can also be set as the number of standard deviations below the network's mean-jaccard-weighted edges. 0.1-1 provide reasonable pruning. higher value means less pruning. e.g. a value of 0.15 means all edges that are above mean(edgeweight)-0.15*std(edge-weights) are retained. We find both 0.15 and 'median' to yield good results resulting in pruning away ~ 50-60% edges
 
-   * - too_big_factor
-     - (optional, default = 0.4) if a cluster exceeds this share of the entire cell population, then the PARC will be run on the large cluster
-
-   * - x_lazy
-     - (optional, default = 0.95) 1-x = probability of staying in same node (lazy). Values between 0.9-0.99 are reasonable
-
-   * - alpha_teleport
-     - (optional, default = 0.99) 1-alpha is probability of jumping. Values between 0.95-0.99 are reasonable unless prior knowledge of teleportation 
-
-   * - distance
-     -  (optional, default = 'l2' euclidean) 'ip','cosine'
- 
-   * - random_seed
-     - (optional, default = 42) The random seed to pass to Leiden
-
-   * - pseudotime_threshold_TS
-     - (optional, default = 30) Percentile threshold for potential node to qualify as Terminal State
+   * - edgepruning_clustering_resolution_local
+     - (optional, default = 1) Rarely needs to be tuned. local pruning threshold for PARC clustering stage: the number of standard deviations above the mean minkowski distance between neighbors of a given node. the higher the parameter, the more edges are retained
  
    * - resolution_parameter
      - (optional, default = 1) Uses ModuliartyVP and RBConfigurationVertexPartition 
  
    * - preserve_disconnected_after_pruning
-     - (optional, default = False) Cluster-graph pruning can occasionally cause fragmentation that can be repaired (by setting to True) by retaining select edges.
+     - (optional, default = False) Cluster-graph pruning can occasionally cause fragmentation that can be repaired. However, if disconnected trajectories are believed to exist, then set this to True.
  
    * - cluster_graph_pruning
      - (optional, default =0.15) Often set to the same value as the PARC clustering level of jac_std_global. To retain more connectivity in the clustergraph underlying the trajectory computations, increase the value
+
+   * - memory
+     - (default = 5, reasonable ranges are 2-50) higher value means more memory, more retrospective/inwards randomwalk. memory = 1 runs the non-memory Via 1.0 mode. 
+
+   * - user_defined_terminal_cell
+     - (optional, default list = []) list of cell indices corresponding to terminal fate cells.
  
-   * - visual_cluster_graph_pruning
-     - (optional, default = 0.15) This only comes into play if the user deliberately chooses not to use the default edge-bundling method of visualizating edges (draw_piechart_graph()) and instead calls draw_piechart_graph_nobundle(). It is often set to the same value as the PARC clustering level of jac_std_global. This does not impact computation of terminal states, pseudotime or lineage likelihoods. It controls the number of edges plotted for visual effect
- 
-   * - num_sim_branch_probability
-     - (optional), default = 500. Number of MCMCs run per terminal state. This can be safely reduced to 100 when computational resources are limited
+   * - user_defined_terminal_group: ,
+     - (optional, default = list = []) list of group level labels corresponding to labels found in true_label, that represent cell fates. 
  
    * - small_pop
      - (optional, default = 10) Via *attempts* to merge Clusters with a population < 10 cells with larger clusters.
@@ -86,17 +71,26 @@ Parameters and Attributes
    * - pca_loadings
      - (optional, default = None) The loadings of the pcs used to project the cells when adjusting the gene-space using velocity: *adata.varm['PCs']*
 
-   * - is_coarse
-     - (optional, default = True) If running VIA in two steps, for the second fine-grained, set to "False'
+   * - too_big_factor
+     - (optional, default = 0.4) if a cluster exceeds this share of the entire cell population, then PARC will be run on the large cluster to increase granularity. 
+
+   * - x_lazy
+     - (optional, default = 0.95) 1-x = probability of staying in same node (lazy). Values between 0.9-0.99 are reasonable
+
+   * - alpha_teleport
+     - (optional, default = 0.99) 1-alpha is probability of jumping. Values between 0.95-0.99 are reasonable unless prior knowledge of teleportation 
+
+   * - distance
+     -  (optional, default = 'l2' euclidean) 'ip','cosine'
  
-   * - via_coarse
-     - (optional, default = None) If a second fine-grained iteration of VIA is run using the terminal states, roots and single-cell graph obtained in the first coarse-pass of VIA, then via_coarse = v0 (the VIA object from first iteration)
+   * - random_seed
+     - (optional, default = 42) The random seed to pass to Leiden
 
-   * - memory
-     - (default = 2) higher q means more memory, more retrospective/inwards randomwalk. memory = 2 means run using the non-memory Via 1.0 mode
-
-   * - viagraph_decay
-     - (default = 0.9) increasing decay causes more edges to merge
+   * - pseudotime_threshold_TS
+     - (optional, default = 30) Percentile threshold for potential node to qualify as Terminal State
+    
+   * - num_sim_branch_probability
+     - (optional), default = 500. Number of MCMCs run per terminal state. This can be safely reduced to 100 when computational resources are limited
 
 
 **Temporal Input Parameters**
