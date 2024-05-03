@@ -50,9 +50,6 @@ Parameters and Attributes
    * - user_defined_terminal_group: ,
      - (optional, default = list = []) list of group level labels corresponding to labels found in true_label, that represent cell fates. 
  
-   * - small_pop
-     - (optional, default = 10) Via *attempts* to merge Clusters with a population < 10 cells with larger clusters.
- 
    * - edgebundle_pruning
      - (optional, default = None) This is automatically set to be the same as cluster_graph_pruning_std
 
@@ -67,9 +64,6 @@ Parameters and Attributes
 
    * - velo_weight
      - (optional, default = 0.5) #float between 0,1. the weight assigned to directionality and connectivity derived from scRNA-velocity 
-
-   * - pca_loadings
-     - (optional, default = None) The loadings of the pcs used to project the cells when adjusting the gene-space using velocity: *adata.varm['PCs']*
 
    * - too_big_factor
      - (optional, default = 0.4) if a cluster exceeds this share of the entire cell population, then PARC will be run on the large cluster to increase granularity. 
@@ -91,7 +85,9 @@ Parameters and Attributes
     
    * - num_sim_branch_probability
      - (optional), default = 500. Number of MCMCs run per terminal state. This can be safely reduced to 100 when computational resources are limited
-
+   
+   * - small_pop
+     - (optional, default = 10) Via *attempts* to merge Clusters with a population < 10 cells with larger clusters.
 
 **Temporal Input Parameters**
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
