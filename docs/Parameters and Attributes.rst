@@ -47,7 +47,7 @@ Parameters and Attributes
    * - user_defined_terminal_cell
      - (optional, default list = []) list of cell indices corresponding to terminal fate cells.
  
-   * - user_defined_terminal_group: ,
+   * - user_defined_terminal_group
      - (optional, default = list = []) list of group level labels corresponding to labels found in true_label, that represent cell fates. 
  
    * - edgebundle_pruning
@@ -57,10 +57,10 @@ Parameters and Attributes
      - (optional, default = False) If the visualized cluster graph edges seem too busy, they can be further condensed by a second iteration of edge bundling by setting this to True.
  
    * - gene_matrix
-     - (optional, default = None) Only required when using RNA velocity to guide direction. Gene matrix not numpy array: *adata.X.todense()*
+     - (optional matrix, not a numpy array, default = None) Only required when using RNA velocity to guide direction. Gene matrix not numpy array: *adata.X.todense()*
  
    * - velocity_matrix
-     - (optional, default = None). Only required when using RNA velocity to guide direction. Matrix from scVelo with RNA velocities from: *adata.layers['velocity']*
+     - (optional matrix, default = None). Only required when using RNA velocity to guide direction. Matrix from scVelo with RNA velocities from: *adata.layers['velocity']*
 
    * - velo_weight
      - (optional, default = 0.5) #float between 0,1. the weight assigned to directionality and connectivity derived from scRNA-velocity 
