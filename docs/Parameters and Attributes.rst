@@ -211,4 +211,13 @@ Parameters and Attributes
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/pt_jac_vs_cluster.png?raw=true" width="600px" align="center" </a>
+
+**Impact of Temporal and Spatial parameters on the StaVia Graph and Embeddings**
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/FigS0A%20modified.png?raw=true" width="600px" align="center" </a>
+
+
+
   
