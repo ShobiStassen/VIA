@@ -192,7 +192,7 @@ Parameters and Attributes
 **Parameter Effects on VIA cluster-level trajectory graph**
 ------------------------------------------------------------------------------------------
 **knn & too_big_factor effects colored by cell type and pseudotime**
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/knn_vs_big.png?raw=true" width="600px" align="center" </a>
@@ -203,7 +203,7 @@ Parameters and Attributes
 
 
 **edgepruning_clustering_resolution & cluster_graph_pruning effects**
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/jac_vs_cluster.png?raw=true" width="600px" align="center" </a>
@@ -213,13 +213,13 @@ Parameters and Attributes
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/pt_jac_vs_cluster.png?raw=true" width="600px" align="center" </a>
 
 **Impact of Temporal and Spatial parameters on the StaVia Graph and Embeddings**
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/FigS0A%20modified.png?raw=true" width="600px" align="center" </a>
 
 **Visualization parameters for the Atlas View**
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. raw:: html
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Fig.S0B.png?raw=true" width="600px" align="center" </a>
