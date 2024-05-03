@@ -218,6 +218,12 @@ Parameters and Attributes
 
   <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/FigS0A%20modified.png?raw=true" width="600px" align="center" </a>
 
+**Visualization parameters for the Atlas View**
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. raw:: html
+
+  <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/Fig.S0B.png?raw=true" width="600px" align="center" </a>
+
 
 
   
