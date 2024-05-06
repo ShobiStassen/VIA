@@ -1,7 +1,7 @@
-Via2.0 Atlas views for Spatial Omics data
+StaVia Atlas views for Spatial Omics data
 ===========================================
 
-**Via 2.0** offers sophisticated visualization tools aimed to capture connectivity and cellular resolution simultaneously. In light of rapidly emerging spatial omics datasets and atlases, we show that the Atlas view uniquely captures spatial and transcriptomic information.
+**StaVia (Via 2.0)** offers sophisticated visualization tools aimed to capture connectivity and cellular resolution simultaneously. In light of rapidly emerging spatial omics datasets and atlases, we show that the Atlas view uniquely captures spatial and transcriptomic information.
 
 
 **Atlas view of Preoptic cell classes of Merfish data (Moffitt 2018- 75K cells) compared to UMAP of the same**
