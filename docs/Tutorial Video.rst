@@ -31,12 +31,13 @@ Main sections covered in usage tutorial
 * Gene trends: along pseudotime
 * Lineage probabilistic pathways
 
+
 StaVia for Spatial MERFISH data
 ---------------------------------
 
 .. raw:: html
 
-    <iframe width="560" height="315" src="https://www.youtube.com/watch?v=9PCexIYXNeM" title="YouTube video player" frameborder="1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    <iframe width="560" height="315" src="https://youtu.be/9PCexIYXNeM?si=uips06SxlUEffETL" title="YouTube video player" frameborder="1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 Main sections 
 ---------------
