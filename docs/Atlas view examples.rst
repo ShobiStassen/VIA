@@ -1,4 +1,4 @@
-Via2.0 Atlas views
+StaVia Atlas views
 ===================
 
 **Via 2.0** offers sophisticated visualization tools aimed to capture connectivity and cellular resolution simultaneously. We present several examples of single-cell atlases to show that the Atlas view uniquely illustrates developmental data. The Atlas Views of the Mouse Pup data are millions of cells large.
