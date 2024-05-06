@@ -1,7 +1,7 @@
-Via 2.0 Atlas Animations
+StaVia Atlas Animations
 ===================
 
-**Via 2.0** Animations to view the developmental progression of cell connectivity and differentiation flow
+**StaVia (Via 2.0)** Animations to view the developmental progression of cell connectivity and differentiation flow
 
 **Atlas view of Ascidian Protovert (Cao 2019) colored by stage**
 
