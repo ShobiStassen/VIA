@@ -5,7 +5,7 @@ StaVia - Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases
 
 **StaVia (Via 2.0)** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal and spatial studies** enabled by:
 
-#. **Graph augmentation using metadata for (temporal) studies:** Using sequential metadata (temporal labels, hierarchical information, spatial distances) to guide the cartography
+#. **Graph augmentation using metadata for (temporal) studies:** Using sequential metadata (temporal labels, hierarchical information) and spatial tissue coordinates (from Spatial omics data) to guide the cartography
 #. **Higher Order Random Walks:** Leveraging higher order random walks with **memory** to highlight key end-to-end differentiation pathways along the atlas 
 #. **Atlas View:** StaVia offers a unique visualization of the predicted trajectory by intuitively merging the cell-cell graph connectivity with the high-resolution of single-cell embeddings.
 
