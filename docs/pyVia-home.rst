@@ -29,6 +29,8 @@ StaVia extends the lazy-teleporting walks to higher order random walks with **me
 
 - Combining temporal information with scRNA velocity `temporal study <https://pyvia.readthedocs.io/en/latest/Via2.0%20Cartographic%20Mouse%20Gastrualation.html>`_
 - Constructing the Atlas View `visualization  <https://pyvia.readthedocs.io/en/latest/Zebrahub_tutorial_visualization.html>`_ H5ad anndata objects are provided on the `github page <https://github.com/ShobiStassen/VIA>`_
+- Using spatial information of cells' location on tissues to guide the TI. See tutorials for `MERFISH <https://pyvia.readthedocs.io/en/latest/notebooks/StaVia%20MERFISH%202.html>`_ and Stereoseq data. 
+- Datasets used in tutorials can be found on the `github-data <https://github.com/ShobiStassen/VIA/tree/master/Datasets>`_ page
 
 **StaVia Atlas View plots hi-res edge graph for Mouse Gastrulation (Pijuan Sala)**
 
