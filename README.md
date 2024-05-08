@@ -50,14 +50,14 @@ Refer to the Jupiter Notebooks to plot these fine-grained vector fields of the s
 Please visit our **[readthedocs](https://pyvia.readthedocs.io/en/latest/)** for the latest tutorials and **[videos](https://pyvia.readthedocs.io/en/latest/Tutorial%20Video.html)** on usage and installation
 notebook       | details         | dataset  | reference 
 ---------------| ---------------| ---------| ----------
-[*Multifurcation: Starter Tutorial*](https://pyvia.readthedocs.io/en/latest/ViaJupyter_Toy_Multifurcating.html) | 4-leaf simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | [DynToy](https://github.com/dynverse/dyntoy)
-[*Disconnected*](https://pyvia.readthedocs.io/en/latest/ViaJupyter_Toy_Disconnected.html) | disconnected simulation | [Disconnected](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | [DynToy](https://github.com/dynverse/dyntoy)
-[*Zebrafish Gastrulation*](https://pyvia.readthedocs.io/en/latest/Zebrahub%20TI%20tutorial.html) | Time series of 120,000 cells | [Zebrahub](https://drive.google.com/drive/folders/1cr_mq94qZDoJLNDkAMukHYDGa4kkrMat?usp=drive_link)| Lange et al. (2023)
-[*Mouse Gastrulation*](https://pyvia.readthedocs.io/en/latest/Via2.0%20Cartographic%20Mouse%20Gastrualation.html) | Time series of 90,000 cells | [Mouse data](https://drive.google.com/drive/folders/1EaYoQadm-s6gDJb_YUeeyxZ6LOITLqVK?usp=sharing)| Sala et al. (2019)
-[*scRNA-seq Hematopoiesis*](https://pyvia.readthedocs.io/en/latest/ViaJupyter_scRNA_Hematopoiesis.html) | Human hematopoiesis (5780 cells) | [CD34 scRNA-seq](https://drive.google.com/file/d/1ZSZbMeTQQPfPBGcnfUNDNL4om98UiNcO/view?usp=sharing) | Setty et al. (2019)
-[*FACED image-based*](https://pyvia.readthedocs.io/en/latest/Imaging%20Cytometry%20%28cell%20cycle%29.html) | 2036 MCF7 cells in cell cycle | [MCF7 FACED](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | in-house data
-[*scATAC-seq Hematopoiesis*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/scATAC-seq_HumanHematopoiesis.ipynb) | Human hematopoiesis | [scATAC-seq](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | Buenrostro et al. (2018)
-[*Human Embryoid*](https://github.com/ShobiStassen/VIA/blob/master/Jupyter%20Notebooks/ViaJupyter_EmbryoidBody.ipynb) | 16,825 ESCs | [EB scRNA-seq](https://drive.google.com/file/d/1yz3zR1KAmghjYB_nLLUZoIlKN9Ew4RHf/view?usp=sharing) and [embedding](https://github.com/ShobiStassen/VIA/tree/master/Datasets)| Moon et al. (2019)
+[*Multifurcation: Starter Tutorial*](https://pyvia.readthedocs.io/en/latest/notebooks/ViaJupyter_Toy_Multifurcating.html) | 4-leaf simulation | [4-leaf](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | [DynToy](https://github.com/dynverse/dyntoy)
+[*Disconnected*](https://pyvia.readthedocs.io/en/latest/notebooks/ViaJupyter_Toy_Disconnected.html) | disconnected simulation | [Disconnected](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | [DynToy](https://github.com/dynverse/dyntoy)
+[*Zebrafish Gastrulation*](https://pyvia.readthedocs.io/en/latest/notebooks/Zebrahub%20TI%20tutorial.html) | Time series of 120,000 cells | [Zebrahub](https://drive.google.com/drive/folders/1cr_mq94qZDoJLNDkAMukHYDGa4kkrMat?usp=drive_link)| Lange et al. (2023)
+[*Mouse Gastrulation*](https://pyvia.readthedocs.io/en/latest/notebooks/Via2.0%20Cartographic%20Mouse%20Gastrualation.html) | Time series of 90,000 cells | [Mouse data](https://drive.google.com/drive/folders/1EaYoQadm-s6gDJb_YUeeyxZ6LOITLqVK?usp=sharing)| Sala et al. (2019)
+[*scRNA-seq Hematopoiesis*](https://pyvia.readthedocs.io/en/latest/notebooks/ViaJupyter_scRNAVelocity_hematopoiesis.html) | Human hematopoiesis (5780 cells) | [CD34 scRNA-seq](https://drive.google.com/file/d/1ZSZbMeTQQPfPBGcnfUNDNL4om98UiNcO/view?usp=sharing) | Setty et al. (2019)
+[*FACED image-based*](https://pyvia.readthedocs.io/en/latest/notebooks/Imaging%20Cytometry%20%28cell%20cycle%29.html) | 2036 MCF7 cells in cell cycle | [MCF7 FACED](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | in-house data
+[*scATAC-seq Hematopoiesis*](https://pyvia.readthedocs.io/en/latest/notebooks/scATAC-seq_HumanHematopoiesis.html) | Human hematopoiesis | [scATAC-seq](https://github.com/ShobiStassen/VIA/tree/master/Datasets) | Buenrostro et al. (2018)
+
 ## Datasets
 Dataset are available in the [Datasets folder](https://github.com/ShobiStassen/VIA/tree/master/Datasets) (smaller files) with larger datasets [here](https://drive.google.com/drive/folders/1WQSZeNixUAB1Sm0Xf68ZnSLQXyep936l?usp=sharing).  
 
