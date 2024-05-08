@@ -14,7 +14,7 @@ StaVia Installation with Mac OS and Windows
 * Via can also be run on Linux, setup is similar. with hnswlib potentially needed to be installed using pip or conda forge prior to pip install via 
 
 
-StaVia Implementaion and Basic Usage
+StaVia Implementation and Basic Usage
 ---------------------------------
 
 .. raw:: html
@@ -37,7 +37,7 @@ StaVia for Spatial MERFISH data
 
 .. raw:: html
 
-    <iframe width="560" height="315" src="https://youtu.be/9PCexIYXNeM?si=c5kxkjvVNjTxCq1x" title="YouTube video player" frameborder="1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    <iframe width="1280" height="720" src="https://www.youtube.com/embed/9PCexIYXNeM" title="StaVia Basic Tutorial" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 Main sections 
 ---------------
