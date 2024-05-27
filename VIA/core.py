@@ -463,6 +463,8 @@ class VIA:
     keep_all_local_dist: bool, str
         default value of 'auto' means that for smaller datasets local-pruning is done prior to clustering, but for large datasets local pruning is set to False for speed.
         can also set to be bool of True or False
+    do_clustergraph_edgecontrol:bool=True
+        limits the max number of edges per cluster in the clustergraph to 30 edges. Applied after any pruning of edges and serves as a final sense-check that the number of edges per cluster doesnt become intractable
     too_big_factor: float
         (optional, default=0.4). Forces clusters > 0.4*n_cells to be re-clustered
     resolution_parameter: float
@@ -611,8 +613,8 @@ class VIA:
     csr_array_locally_pruned: csr matrix
     ig_full_graph:
     full_neighbor_array:
-    user_defined_terminal_cell:list=[]
-    user_defined_terminal_group:list=[]
+    user_defined_terminal_cell:list=[] list of cell indices corresponding to terminal fate cells
+    user_defined_terminal_group:list=[] list of group level labels corresponding to labels found in true_label, that represent cell fates
     n_milestones: int = None Number of milestones in the via-mds computation (anything more than 10,000 can be computationally heavy and time consuming) Typically auto-determined within the via-mds function
     embedding: ndarray
         [n_cells x 2] provided by user or autocomputed with via-mds or via-umap
@@ -621,7 +623,7 @@ class VIA:
 
     def __init__(self, data: ndarray, true_label=None, edgepruning_clustering_resolution_local: float = 1, edgepruning_clustering_resolution=0.15,
                  labels: ndarray = None,
-                 keep_all_local_dist='auto', too_big_factor: float = 0.4, resolution_parameter: float = 1.0,
+                 keep_all_local_dist='auto', do_clustergraph_edgecontrol:bool=True,too_big_factor: float = 0.4, resolution_parameter: float = 1.0,
                  partition_type: str = "ModularityVP", small_pop: int = 10,
                  jac_weighted_edges: bool = True, knn: int = 30, n_iter_leiden: int = 5, random_seed: int = 42,
                  num_threads=-1, distance='l2', time_smallpop=15,
@@ -662,6 +664,9 @@ class VIA:
             root_user = []
             dataset = ''
         self.root_user = root_user
+        if root_user is None:  dataset = ''
+        elif (type(root_user[0]) == str): dataset = 'group'
+        else: dataset = ''
         self.dataset = dataset
         self.knn_struct = None
         if isinstance(labels, list):
@@ -683,6 +688,7 @@ class VIA:
         self.edgepruning_clustering_resolution_local = edgepruning_clustering_resolution_local
         self.edgepruning_clustering_resolution = edgepruning_clustering_resolution  ##0.15 is also a recommended value performing empirically similar to 'median'
         self.keep_all_local_dist = keep_all_local_dist
+        self.do_clustergraph_edgecontrol = do_clustergraph_edgecontrol
         self.too_big_factor = too_big_factor  ##if a cluster exceeds this share of the entire cell population, then the PARC will be run on the large cluster. at 0.4 it does not come into play
         self.resolution_parameter = resolution_parameter
         self.partition_type = partition_type
@@ -797,10 +803,11 @@ class VIA:
                 clus_ = self.labels[i]
                 if clus_ not in terminal_cluster_list:
                     terminal_cluster_list.append(clus_)
+                    dict_user_defined_terminal_clusters[user_defined_terminal_cell] = clus_
                 else:
                     print(f'{i} is a repeated terminal cluster')
-                    terminal_cluster_list.append(clus_)
-                    dict_user_defined_terminal_clusters[user_defined_terminal_cell] = clus_
+                    #terminal_cluster_list.append(clus_)
+
         else:
 
             for user_terminal_group in user_defined_terminal_group:
@@ -2088,7 +2095,7 @@ class VIA:
         edgeweights_pruned_clustergraph, edges_pruned_clustergraph, comp_labels = pruning_clustergraph(graph,
                                                                                                        global_pruning_std=self.cluster_graph_pruning,
                                                                                                        preserve_disconnected=self.preserve_disconnected,
-                                                                                                       preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning)
+                                                                                                       preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning, do_max_outgoing=self.do_clustergraph_edgecontrol)
 
         self.connected_comp_labels = comp_labels
         # ig.graph() creates an undirected graph,in which case get_spare_from_igraph will be symmetric for each edge (u,v) and edge (v,u) is created
@@ -2116,7 +2123,7 @@ class VIA:
             edgeweights_layout, edges_layout, comp_labels_layout = pruning_clustergraph(graph,
                                                                                         global_pruning_std=self.edgebundle_pruning,
                                                                                         preserve_disconnected=self.preserve_disconnected,
-                                                                                        preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning)
+                                                                                        preserve_disconnected_after_pruning=self.preserve_disconnected_after_pruning,do_max_outgoing=self.do_clustergraph_edgecontrol)
 
             # layout = locallytrimmed_g.layout_fruchterman_reingold(weights='weight') #uses non-clipped weights but this can skew layout due to one or two outlier edges
             layout_g = ig.Graph(edges_layout, edge_attrs={
@@ -2239,7 +2246,7 @@ class VIA:
 
 
             elif (self.dataset in ['toy', 'faced', 'mESC', 'iPSC', 'group']) and (
-                    self.root_user is not None):  # ((self.dataset == 'toy') | (self.dataset == 'faced')):
+                    self.root_user is not None):
                 root_user_ = None
                 for ri in self.root_user:
                     print(f"{datetime.now()}\tgroup root method")
@@ -2802,7 +2809,7 @@ class VIA:
             print(f"{datetime.now()}\tStarting make edgebundle viagraph...")
             self.hammerbundle_cluster, layout = make_edgebundle_viagraph(layout, g_layout, decay=self.viagraph_decay)
 
-        # simplifying structure of edges used on the visual layout
+        # simplifying structure of edges used on the visual layout (Used when doing edgebundling_pruning_twice AND differention flows)
         edgeweights_maxout_2, edgelist_maxout_2, comp_labels_2 = pruning_clustergraph(
             final_transition_matrix_all_components,
             global_pruning_std=self.visual_cluster_graph_pruning,

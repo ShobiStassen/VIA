@@ -157,6 +157,7 @@ def make_edgebundle_milestone(embedding: ndarray = None, sc_graph=None, via_obje
     :param milestone_labels: default list=[]. Usually autocomputed. but can provide as single-cell level labels (clusters, groups, which function as milestone groupings of the single cells)
     :param sc_labels_numeric: default is None which automatically chooses via_object's pseudotime or time_series_labels (when available). otherwise set to a list of numerical values representing some sequential/chronological information
     :param terminal_cluster_list: default list [] and automatically uses all terminal clusters. otherwise set to any of the terminal cluster numbers within a list
+    :param global_visual_pruning: prune the edges of the visualized StaVia clustergraph before edgebundling. default =0.5. Can take values (float) 0-3 (standard deviations), smaller number means fewer edges retained
     :return: dictionary containing keys: hb_dict['hammerbundle'] = hb hammerbundle class with hb.x and hb.y containing the coords
                 hb_dict['milestone_embedding'] dataframe with 'x' and 'y' columns for each milestone and hb_dict['edges'] dataframe with columns ['source','target'] milestone for each each and ['cluster_pop'], hb_dict['sc_milestone_labels'] is a list of milestone label for each single cell
 
@@ -212,7 +213,7 @@ def make_edgebundle_milestone(embedding: ndarray = None, sc_graph=None, via_obje
     print(f'{datetime.now()}\tRecompute weights')
     vertex_milestone_graph = recompute_weights(vertex_milestone_graph, Counter(milestone_labels))
     print(f'{datetime.now()}\tpruning milestone graph based on recomputed weights')
-    # was at 0.1 global_pruning for 2000+ milestones
+
     edgeweights_pruned_milestoneclustergraph, edges_pruned_milestoneclustergraph, comp_labels = pruning_clustergraph(
         vertex_milestone_graph,
         global_pruning_std=global_visual_pruning,
@@ -446,6 +447,7 @@ def plot_scatter(embedding: ndarray, labels: list, cmap='rainbow', s=5, alpha=0.
     fig.patch.set_visible(True)
     if show_legend:
         ax.legend(fontsize=12, frameon=False)
+        #legend = ax.legend(bbox_to_anchor=(1.02, 0.1), loc='upper left', borderaxespad=0)
         legend = ax.legend(bbox_to_anchor=(0, 0, 1.2, 1), loc='lower right', borderaxespad=0)
         for i, handle in enumerate(legend.legendHandles):
             # handle.set_edgecolor("#6c2167")  # set_edgecolors
@@ -1244,7 +1246,7 @@ def plot_sc_lineage_probability(via_object, embedding: ndarray = None, idx: list
             majority_cluster_population_dict[labels_i] = majority_composition
         print('f End getting majority comp')
         '''
-        for fst_i in via_object.terminal_clusters:
+        for fst_i in marker_lineages:#via_object.terminal_clusters:
             path_orange = G_orange.get_shortest_paths(via_object.root[ii], to=fst_i)[0]
             if len(path_orange) > 0:
                 print(
@@ -1330,9 +1332,15 @@ def plot_sc_lineage_probability(via_object, embedding: ndarray = None, idx: list
                         revised_cluster_path.append(clus)
                         revised_sc_path.append(path[enum_i])
                     else:
+                        '''
                         if num_instances_clus > 1:  # typically intermediate stages spend a few transitions at the sc level within a cluster
                             if clus not in revised_cluster_path: revised_cluster_path.append(clus)  # cluster
                             revised_sc_path.append(path[enum_i])  # index of single cell
+                        '''
+                        if  num_instances_clus >= 1:  # typically intermediate stages spend a few transitions at the sc level within a cluster
+                            if clus not in revised_cluster_path: revised_cluster_path.append(clus)  # cluster
+                            revised_sc_path.append(path[enum_i])  # index of single cell
+
                 print(
                     f"{datetime.now()}\tRevised Cluster level path on sc-knnGraph from Root Cluster {via_object.root[p1_cc[ti - 1]]} to Terminal Cluster {ts_current} along path: {revised_cluster_path}")
                 ti += 1
@@ -1459,7 +1467,7 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
                     lineage_pathway: list = [], dpi: int = 300, fontsize_title: int = 6, fontsize_labels: int = 6,
                     global_visual_pruning=0.5, use_sc_labels_sequential_for_direction: bool = False, sc_scatter_size=3,
                     sc_scatter_alpha: float = 0.4, add_sc_embedding: bool = True, size_milestones: int = 5,
-                    colorbar_legend='pseudotime'):
+                    colorbar_legend='pseudotime',scale_arrow_headwidth:bool = False):
     '''
 
     Edges can be colored by time-series numeric labels, pseudotime, lineage pathway probabilities,  or gene expression. If not specificed then time-series is chosen if available, otherwise falls back to pseudotime. to use gene expression the sc_labels_expression is provided as a list.
@@ -1814,26 +1822,30 @@ def plot_atlas_view(hammerbundle_dict=None, via_object=None, alpha_bundle_factor
                                 if dist_ < arrow_frequency * delta_y: do_arrow = False
 
                         if (do_arrow == True) & (seg_p.shape[0] > 3):
+                            if scale_arrow_headwidth:
+                                headwidth_bundle_ = headwidth_bundle*min(seg_weight,1)
+                                print('doing scale arrow headwidth:', headwidth_bundle_)
+                            else: headwidth_bundle_ = headwidth_bundle
                             if fig_nrows == 1:
                                 if fig_ncols == 1:
                                     ax.arrow(seg_p[mid_point, 0], seg_p[mid_point, 1],
                                              seg_p[mid_point + (direction * step), 0] - seg_p[mid_point, 0],
                                              seg_p[mid_point + (direction * step), 1] - seg_p[mid_point, 1],
-                                             lw=0, length_includes_head=False, head_width=headwidth_bundle, color=rgba,
+                                             lw=0, length_includes_head=False, head_width=headwidth_bundle_, color=rgba,
                                              shape='full', alpha=headwidth_alpha, zorder=5)
 
                                 else:
                                     ax[c].arrow(seg_p[mid_point, 0], seg_p[mid_point, 1],
                                                 seg_p[mid_point + (direction * step), 0] - seg_p[mid_point, 0],
                                                 seg_p[mid_point + (direction * step), 1] - seg_p[mid_point, 1],
-                                                lw=0, length_includes_head=False, head_width=headwidth_bundle,
+                                                lw=0, length_includes_head=False, head_width=headwidth_bundle_,
                                                 color=rgba, shape='full', alpha=headwidth_alpha, zorder=5)
 
                             else:
                                 ax[r, c].arrow(seg_p[mid_point, 0], seg_p[mid_point, 1],
                                                seg_p[mid_point + (direction * step), 0] - seg_p[mid_point, 0],
                                                seg_p[mid_point + (direction * step), 1] - seg_p[mid_point, 1],
-                                               lw=0, length_includes_head=False, head_width=headwidth_bundle,
+                                               lw=0, length_includes_head=False, head_width=headwidth_bundle_,
                                                color=rgba, shape='full', alpha=headwidth_alpha, zorder=5)
                             arrow_coords.append([seg_p[mid_point, 0], seg_p[mid_point, 1]])
 
@@ -2894,6 +2906,8 @@ def get_gene_expression(via_object, gene_exp: pd.DataFrame, cmap: str = 'jet', d
                                                                                                                weights=weights)
                             xval = np.linspace(min(sc_pt), max_val_pt, 100 * 2)
                             yg = geneGAM.predict(X=xval)
+                            A_under_curve = np.trapz(yg, x=xval)
+                            print(f'Area under curve {gene_i} for branch {majority_true} is {A_under_curve}')
 
                         else:
                             print(
@@ -3413,9 +3427,9 @@ def plot_piechart_only_viagraph(via_object, type_data='pt', gene_exp: list = [],
                            cmap: str = None, ax_text=True, dpi=150, headwidth_arrow=0.1, alpha_edge=0.4,
                            linewidth_edge=2, edge_color='darkblue', reference_labels=None, show_legend: bool = True,
                            pie_size_scale: float = 0.8, fontsize: float = 8, pt_visual_threshold: int = 99,
-                           highlight_terminal_clusters: bool = True, size_node_notpiechart: float = 1,tune_edges:bool = False,initial_bandwidth=0.05, decay=0.9, edgebundle_pruning=0.5):
+                           highlight_terminal_clusters: bool = True, tune_edges:bool = False,initial_bandwidth=0.05, decay=0.9, edgebundle_pruning=0.5):
     '''
-    plot two subplots with a clustergraph level representation of the viagraph showing true-label composition (lhs) and pseudotime/gene expression (rhs)
+    plot clustergraph level representation of the viagraph showing true-label composition (lhs) and pseudotime/gene expression (rhs)
     Returns matplotlib figure with two axes that plot the clustergraph using edge bundling
     left axis shows the clustergraph with each node colored by annotated ground truth membership.
     right axis shows the same clustergraph with each node colored by the pseudotime or gene expression
@@ -3720,7 +3734,12 @@ def plot_piechart_viagraph(via_object, type_data='pt', gene_exp: list = [], cmap
     if show_legend == True: plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon=False)
 
     if via_object.time_series == True:
-        ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(via_object.ncomp) + 'knnseq_' + str(
+        ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(via_object.ncomp) + 'Temporalknn_' + str(
+            via_object.knn_sequential)
+        if via_object.do_spatial_knn == True:
+            ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(
+                via_object.ncomp) + 'SpatKnn_' + str(
+                via_object.spatial_knn) + 'Temporalknn_' + str(
             via_object.knn_sequential)
     elif via_object.do_spatial_knn == True:
         ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(via_object.ncomp) + 'SpatKnn_' + str(

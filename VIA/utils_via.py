@@ -263,6 +263,7 @@ def pruning_clustergraph(adjacency, global_pruning_std=1, max_outgoing=30, prese
         f"{datetime.now()}\t{round(trimmed_n, 1)}% links trimmed from local pruning relative to start")
     if global_pruning_std < 0.5:
         print(f"{datetime.now()}\t{round(trimmed_n_glob, 1)}% links trimmed from global pruning relative to start")
+        if do_max_outgoing: print(f'initial links {initial_links_n} and final_links_n {final_links_n}')
 
     return weights, edges, comp_labels
 
@@ -1338,7 +1339,7 @@ def stationary_probability_(A_velo):
     sorted_pi = np.argsort(pi)
     velo_root_top10 = sorted_pi[0:10]
     print(
-        f"{datetime.now()}\tTop 5 candidates for root: {np.round(sorted_pi[0:10], 2)} with stationary prob (%) {np.round(pi[sorted_pi[0:10]] * 100, 3)}")
+        f"{datetime.now()}\tTop 10 candidates for root: {np.round(sorted_pi[0:10], 2)} with stationary prob (%) {np.round(pi[sorted_pi[0:10]] * 100, 3)}")
     print(f"{datetime.now()}\tTop 5 candidates for terminal: {np.flip(sorted_pi)[0:5]}")
 
     return pi, velo_root_top10
