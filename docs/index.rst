@@ -64,7 +64,7 @@ StaVia extends the lazy-teleporting walks to higher order random walks with **me
 
 .. toctree::
    :maxdepth: 1
-   :caption: Via 2.0 Cartography
+   :caption: StaVia for time-series
    :hidden:
 
    notebooks/Via2.0 Cartographic Mouse Gastrualation
@@ -73,22 +73,37 @@ StaVia extends the lazy-teleporting walks to higher order random walks with **me
 
 .. toctree::
    :maxdepth: 1
-   :caption: Tutorials Via
+   :caption: StaVia for spatial-temporal
+   :hidden:
+
+   notebooks/StaVia MERFISH 2
+   notebooks/Zesta_jp_tutorial
+
+.. toctree::
+   :maxdepth: 1
+   :caption: scRNA, velocity and scATAC seq Tutorials
+   :hidden:
+
+   notebooks/ViaJupyter_scRNA_Hematopoiesis
+   notebooks/ViaJupyter_Pancreas_RNAvelocity
+   notebooks/ViaJupyter_scRNAVelocity_hematopoiesis
+   notebooks/scATAC-seq_HumanHematopoiesis
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Cytometry
+   :hidden:
+   
+   notebooks/Imaging Cytometry (cell cycle)
+   notebooks/mESC_timeseries
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Basic Tutorials for Toy Data
    :hidden:
 
    notebooks/ViaJupyter_Toy_Multifurcating
    notebooks/ViaJupyter_Toy_Disconnected
-   notebooks/ViaJupyter_scRNA_Hematopoiesis
-   notebooks/Imaging Cytometry (cell cycle)
-   notebooks/mESC_timeseries
-   notebooks/ViaJupyter_Pancreas_RNAvelocity
-   notebooks/ViaJupyter_scRNAVelocity_hematopoiesis
-   notebooks/scATAC-seq_HumanHematopoiesis
-   notebooks/StaVia MERFISH 2
-   notebooks/Zesta_jp_tutorial
-
-
-   
 
 .. |DOI| image:: https://zenodo.org/badge/212254929.svg
     :target: https://zenodo.org/badge/latestdoi/212254929
