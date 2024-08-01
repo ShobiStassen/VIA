@@ -2821,8 +2821,8 @@ def via_streamplot(via_object, embedding: ndarray = None, density_grid: float = 
 
 
 def get_gene_expression(via_object, gene_exp: pd.DataFrame, cmap: str = 'jet', dpi: int = 150, marker_genes: list = [],
-                        linewidth: float = 2.0, n_splines: int = 10, spline_order: int = 4, fontsize_: int = 8,
-                        marker_lineages=[], optional_title_text: str = '', cmap_dict: dict = None):
+                        linewidth: float = 2.0, n_splines: int = 10, spline_order: int = 4, fontsize_: int = 8, 
+                        marker_lineages=[], optional_title_text: str = '', cmap_dict: dict = None, driver_genes:bool=False, conf_int: float = 0.95):
     '''
     :param via_object: via object
     :param gene_exp: dataframe where columns are features (gene) and rows are single cells
@@ -2834,9 +2834,21 @@ def get_gene_expression(via_object, gene_exp: pd.DataFrame, cmap: str = 'jet', d
     :param spline_order: default:4 n_splines must be > spline_order.
     :param marker_lineages: Default is to use all lineage pathways. other provide a list of lineage number (terminal cluster number).
     :param cmap_dict: {lineage number: 'color'}
+    :param driver_genes: Set True to compute and plot top 5 driver genes expressions of each terminal cell fates.
+    :param conf_int: Confidence interval of gene expressions. Also used for identifying driver genes if driver_genes = True.
     :return: fig, axs
     '''
     sc_bp_original = via_object.single_cell_bp
+
+    if driver_genes:
+        driver_dict = compute_driver_genes(via_object, gene_exp, conf_int=conf_int)
+        cell_fates = marker_lineages if marker_lineages is not None else list(driver_dict.keys())
+        marker_genes = []
+        for i in cell_fates:
+            df_driver = driver_dict[i]
+            df_driver = df_driver[df_driver['pvals']<0.05]
+            df_driver.sort_values(str(i)+'ci_low',ascending=False)
+            marker_genes.append(df_driver.head(5).index.tolist())
 
     if len(marker_lineages) == 0:
         marker_lineages = via_object.terminal_clusters
@@ -2906,6 +2918,7 @@ def get_gene_expression(via_object, gene_exp: pd.DataFrame, cmap: str = 'jet', d
                                                                                                                weights=weights)
                             xval = np.linspace(min(sc_pt), max_val_pt, 100 * 2)
                             yg = geneGAM.predict(X=xval)
+                            x_conf_int = geneGAM.confidence_intervals(xval, width=conf_int)
                             A_under_curve = np.trapz(yg, x=xval)
                             print(f'Area under curve {gene_i} for branch {majority_true} is {A_under_curve}')
 
@@ -2921,6 +2934,7 @@ def get_gene_expression(via_object, gene_exp: pd.DataFrame, cmap: str = 'jet', d
                         if fig_nrows > 1:
                             axs[r, c].plot(xval, yg, color=color_, linewidth=linewidth, zorder=3,
                                            label=f"Lineage:{majority_true} {via_object.terminal_clusters[i_terminal]}")
+                            axs[r, c].fill_between(xval, x_conf_int[:,0], x_conf_int[:,1], color=color_, alpha=0.2)
                             axs[r, c].set_title(gene_i + optional_title_text, fontsize=fontsize_)
                             # Set tick font size
                             for label in (axs[r, c].get_xticklabels() + axs[r, c].get_yticklabels()):
@@ -2935,6 +2949,7 @@ def get_gene_expression(via_object, gene_exp: pd.DataFrame, cmap: str = 'jet', d
                         else:
                             axs[c].plot(xval, yg, color=color_, linewidth=linewidth, zorder=3,
                                         label=f"Lineage:{majority_true} {via_object.terminal_clusters[i_terminal]}")
+                            axs[c].fill_between(xval, x_conf_int[:,0], x_conf_int[:,1], color=color_, alpha=0.2)
                             axs[c].set_title(gene_i + optional_title_text, fontsize=fontsize_)
                             # Set tick font size
                             for label in (axs[c].get_xticklabels() + axs[c].get_yticklabels()):

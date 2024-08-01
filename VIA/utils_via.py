@@ -33,6 +33,8 @@ import graphtools
 from scipy.spatial.distance import pdist, squareform
 from scipy.stats import spearmanr
 from collections import defaultdict
+from tqdm.auto import tqdm
+
 def collect_dictionary(obj):
     #obj is the dict to be inverted
   inv_obj = defaultdict(list)
@@ -55,6 +57,54 @@ def func_mode(ll):
     # If multiple items are maximal, the function returns the first one encountered.
     return max(set(ll), key=ll.count)
 
+def compute_driver_genes(via_object, gene_exp:pd.DataFrame, conf_int:float=0.95):
+    '''
+    Compute driver genes of each terminal cell fates using Pearson correlation and Fisher's transformation.
+    https://en.wikipedia.org/wiki/Pearson_correlation_coefficient#Using_the_Fisher_transformation
+    :param via_object: via object
+    :param gene_exp: dataframe where columns are features (gene) and rows are single cells
+    :param conf_int: default: 0.95 Confidence interval of correlation 
+    :return: dictionary of pandas.DataFrames with correlation, confidence intervals, and p-values for each terminal cell fates. Access with terminal cluster number.
+    :rtype: dict
+    '''
+    
+    cell_fates = via_object.terminal_clusters
+    cf_corr = [str(i)+"_corr" for i in cell_fates]
+    print(f"Computing driver genes of {cell_fates} terminal cell fates")
+    
+    df_bp = pd.DataFrame(via_object.single_cell_bp, index=gene_exp.index, columns=cf_corr)
+    corr_l = ['']*gene_exp.shape[1]
+    print(f'Computing Pearson correlation coefficients')
+    for i in tqdm(range(gene_exp.shape[1])):
+        gene = gene_exp.columns[i]
+        df = gene_exp[[gene]]
+        df = df.join(df_bp)
+        corr = df.corr(method='pearson')[cf_corr].iloc[:-len(cell_fates)]
+        corr_l[i] = corr
+    df_corr = pd.concat(corr_l)
+    
+    # Remove invalid correlations outside (0,1)
+    df_corr[df_corr < 0] = np.nan
+    df_corr[df_corr > 1] = np.nan
+    corr_dict = {}
+    for i, cf in zip(via_object.terminal_clusters, cf_corr):
+        corr_dict[i] = df_corr[[cf]].dropna()
+    
+    n = gene_exp.shape[1]  # genes x cells
+    ci = conf_int + (1 - conf_int) / 2.0
+    res_dict = {}
+    for i in corr_dict:
+        corr = corr_dict[i].copy()
+        mean, se = np.arctanh(corr), 1.0 / np.sqrt(n - 3)
+        z_score = (np.arctanh(corr) - np.arctanh(0)) * np.sqrt(n - 3)
+        
+        z = normal.ppf(ci)
+        corr['ci_low'] = np.tanh(mean - z * se)
+        corr['ci_high'] = np.tanh(mean + z * se)
+        corr['pvals'] = 2 * normal.cdf(-np.abs(z_score))
+        res_dict[i] = corr
+        print(f'{len(corr)} valid genes in terminal fate {i}')
+    return res_dict
 
 def get_gene_trend(via_object, marker_lineages: list = [], df_gene_exp=None, n_splines: int = 10,
                    spline_order: int = 4):
