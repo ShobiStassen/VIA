@@ -83,8 +83,8 @@ def compute_driver_genes(via_object, gene_exp:pd.DataFrame, conf_int:float=0.95)
         corr_l[i] = corr
     df_corr = pd.concat(corr_l)
     
-    # Remove invalid correlations outside (0,1)
-    df_corr[df_corr < 0] = np.nan
+    # Remove invalid correlations outside (-1,1)
+    df_corr[df_corr < -1] = np.nan
     df_corr[df_corr > 1] = np.nan
     corr_dict = {}
     for i, cf in zip(via_object.terminal_clusters, cf_corr):
