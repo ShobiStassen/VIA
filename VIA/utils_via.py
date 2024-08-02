@@ -32,6 +32,7 @@ from matplotlib.animation import FuncAnimation, writers
 import graphtools
 from scipy.spatial.distance import pdist, squareform
 from scipy.stats import spearmanr
+from scipy.stats import pearsonr
 from collections import defaultdict
 from tqdm.auto import tqdm
 
@@ -57,54 +58,71 @@ def func_mode(ll):
     # If multiple items are maximal, the function returns the first one encountered.
     return max(set(ll), key=ll.count)
 
-def compute_driver_genes(via_object, gene_exp:pd.DataFrame, conf_int:float=0.95):
+def compute_driver_genes(via_object, gene_exp:pd.DataFrame, lineage:int, clusters:list=None, conf_int:float=0.95, q = 0.05):
     '''
-    Compute driver genes of each terminal cell fates using Pearson correlation and Fisher's transformation.
-    https://en.wikipedia.org/wiki/Pearson_correlation_coefficient#Using_the_Fisher_transformation
+    Compute driver genes of each terminal cell fates using Pearson correlation.
     :param via_object: via object
-    :param gene_exp: dataframe where columns are features (gene) and rows are single cells
+    :param gene_exp: Dataframe where columns are features (gene) and rows are single cells
+    :param lineage: Terminal cluster number to compute lineage driver 
     :param conf_int: default: 0.95 Confidence interval of correlation 
-    :return: dictionary of pandas.DataFrames with correlation, confidence intervals, and p-values for each terminal cell fates. Access with terminal cluster number.
-    :rtype: dict
+    :param q: Quantile threshold to select cells based on lineage probility. Used when clusters is not given. 
+    :return: DataFrame with correlation, confidence intervals, and p-values for each terminal cell fates.
+    :rtype: pandas.DataFrame
     '''
     
-    cell_fates = via_object.terminal_clusters
-    cf_corr = [str(i)+"_corr" for i in cell_fates]
-    print(f"Computing driver genes of {cell_fates} terminal cell fates")
+    if lineage not in via_object.terminal_clusters:
+        raise KeyError(f"Lineage {lineage} not in terminal clusters {via_object.terminal_clusters}.")
     
-    df_bp = pd.DataFrame(via_object.single_cell_bp, index=gene_exp.index, columns=cf_corr)
-    corr_l = ['']*gene_exp.shape[1]
-    print(f'Computing Pearson correlation coefficients')
-    for i in tqdm(range(gene_exp.shape[1])):
-        gene = gene_exp.columns[i]
-        df = gene_exp[[gene]]
-        df = df.join(df_bp)
-        corr = df.corr(method='pearson')[cf_corr].iloc[:-len(cell_fates)]
-        corr_l[i] = corr
-    df_corr = pd.concat(corr_l)
+    df_bp = pd.DataFrame(via_object.single_cell_bp, index=gene_exp.index, columns=via_object.terminal_clusters)[lineage]
+    
+    cell_mask = []
+    if clusters is None or clusters == []:
+        # Cell mask based on lineage probability inspired by palantir
+        eps=1e-2
+        fate_probs = via_object.single_cell_bp[:,via_object.terminal_clusters.index(lineage)]
+        pseudotime = via_object.single_cell_pt_markov
+        idx = np.argsort(pseudotime)
+        sorted_fate_probs = fate_probs[idx]
+        prob_thresholds = np.empty_like(fate_probs)
+        n = fate_probs.shape[0]
+        pseudotime_resolution = min(len(set(pseudotime)), n)
+        pseudotime_resolution = min(n, n)
+        step = n // pseudotime_resolution
+        nsteps = n // step
+        for i in range(nsteps):
+            l, r = i * step, (i + 1) * step
+            mprob = np.quantile(sorted_fate_probs[:r], 1 - q, axis=0)
+            prob_thresholds[l:r] = mprob[None]
+        mprob = np.quantile(sorted_fate_probs, 1 - q, axis=0)
+        prob_thresholds[r:] = mprob[None]
+        prob_thresholds = np.maximum.accumulate(prob_thresholds, axis=0)
+        cell_mask = np.empty_like(fate_probs).astype(bool)
+        cell_mask[idx] = prob_thresholds - eps < sorted_fate_probs
+    else:
+        # Cell mask based on given cluster list
+        cell_mask = [True if i in clusters else False for i in via_object.labels]
+
+    # Select cells in given lineage
+    print(f'Selected {sum(cell_mask)} cells for lineage {lineage}')
+    print(f'Cells from clusters {list(sorted(set(np.array(via_object.labels)[cell_mask])))}')
+    df_bp = df_bp[cell_mask]
+    gene_exp = gene_exp[cell_mask]
+
+    # Compute pearson correlation
+    print(f"Computing driver genes")
+    corr = ['']*gene_exp.shape[1]
+    for i, gene in enumerate(tqdm(gene_exp.columns)):
+        res = pearsonr(gene_exp[gene].values, df_bp.values)
+        conf = res.confidence_interval(conf_int)
+        corr[i] = pd.Series([res.statistic, res.pvalue, conf.low, conf.high], name=gene, 
+                            index=['corr', 'pvalue', 'ci_low', 'ci_high'])
+    df_corr = pd.concat(corr, axis=1).T
     
     # Remove invalid correlations outside (-1,1)
-    df_corr[df_corr < -1] = np.nan
-    df_corr[df_corr > 1] = np.nan
-    corr_dict = {}
-    for i, cf in zip(via_object.terminal_clusters, cf_corr):
-        corr_dict[i] = df_corr[[cf]].dropna()
-    
-    n = gene_exp.shape[1]  # genes x cells
-    ci = conf_int + (1 - conf_int) / 2.0
-    res_dict = {}
-    for i in corr_dict:
-        corr = corr_dict[i].copy()
-        mean, se = np.arctanh(corr), 1.0 / np.sqrt(n - 3)
-        z_score = (np.arctanh(corr) - np.arctanh(0)) * np.sqrt(n - 3)
-        
-        z = normal.ppf(ci)
-        corr['ci_low'] = np.tanh(mean - z * se)
-        corr['ci_high'] = np.tanh(mean + z * se)
-        corr['pvals'] = 2 * normal.cdf(-np.abs(z_score))
-        res_dict[i] = corr
-        print(f'{len(corr)} valid genes in terminal fate {i}')
-    return res_dict
+    df_corr['corr'][df_corr['corr'] < -1] = np.nan
+    df_corr['corr'][df_corr['corr'] > 1] = np.nan
+    df_corr = df_corr.dropna()
+    return df_corr
 
 def get_gene_trend(via_object, marker_lineages: list = [], df_gene_exp=None, n_splines: int = 10,
                    spline_order: int = 4):
