@@ -2821,8 +2821,8 @@ def via_streamplot(via_object, embedding: ndarray = None, density_grid: float = 
 
 
 def get_gene_expression(via_object, gene_exp: pd.DataFrame, cmap: str = 'jet', dpi: int = 150, marker_genes: list = [],
-                        linewidth: float = 2.0, n_splines: int = 10, spline_order: int = 4, fontsize_: int = 8,
-                        marker_lineages=[], optional_title_text: str = '', cmap_dict: dict = None):
+                        linewidth: float = 2.0, n_splines: int = 10, spline_order: int = 4, fontsize_: int = 8, 
+                        marker_lineages=[], optional_title_text: str = '', cmap_dict: dict = None, conf_int:float=0.95, driver_genes:bool=False, driver_lineage:int=None):
     '''
     :param via_object: via object
     :param gene_exp: dataframe where columns are features (gene) and rows are single cells
@@ -2834,9 +2834,21 @@ def get_gene_expression(via_object, gene_exp: pd.DataFrame, cmap: str = 'jet', d
     :param spline_order: default:4 n_splines must be > spline_order.
     :param marker_lineages: Default is to use all lineage pathways. other provide a list of lineage number (terminal cluster number).
     :param cmap_dict: {lineage number: 'color'}
+    :param conf_int: Confidence interval of gene expressions. Also used for identifying driver genes if driver_genes = True.
+    :param driver_genes: Set True to compute and plot top 3 upregulated & downregulated driver genes expressions given terminal cell fates.
+    :param driver_lineage: Provide lineage used to compute driver genes if driver_genes=True.
     :return: fig, axs
     '''
     sc_bp_original = via_object.single_cell_bp
+
+    if driver_genes:
+        if driver_lineage is None: 
+            raise KeyError(f'Please provide a lineage from {via_object.terminal_clusters} for driver genes computation')
+        df_driver = compute_driver_genes(via_object, gene_exp, lineage=driver_lineage, conf_int=conf_int)
+        df_driver = df_driver[df_driver['pvalue']<0.05]
+        df_driver = df_driver.sort_values('corr', ascending=False)
+        marker_genes = df_driver.head(3).index.tolist()+df_driver.tail(3).index.tolist()
+        print(marker_genes)
 
     if len(marker_lineages) == 0:
         marker_lineages = via_object.terminal_clusters
@@ -2906,6 +2918,7 @@ def get_gene_expression(via_object, gene_exp: pd.DataFrame, cmap: str = 'jet', d
                                                                                                                weights=weights)
                             xval = np.linspace(min(sc_pt), max_val_pt, 100 * 2)
                             yg = geneGAM.predict(X=xval)
+                            x_conf_int = geneGAM.confidence_intervals(xval, width=conf_int)
                             A_under_curve = np.trapz(yg, x=xval)
                             print(f'Area under curve {gene_i} for branch {majority_true} is {A_under_curve}')
 
@@ -2921,6 +2934,7 @@ def get_gene_expression(via_object, gene_exp: pd.DataFrame, cmap: str = 'jet', d
                         if fig_nrows > 1:
                             axs[r, c].plot(xval, yg, color=color_, linewidth=linewidth, zorder=3,
                                            label=f"Lineage:{majority_true} {via_object.terminal_clusters[i_terminal]}")
+                            axs[r, c].fill_between(xval, x_conf_int[:,0], x_conf_int[:,1], color=color_, alpha=0.2)
                             axs[r, c].set_title(gene_i + optional_title_text, fontsize=fontsize_)
                             # Set tick font size
                             for label in (axs[r, c].get_xticklabels() + axs[r, c].get_yticklabels()):
@@ -2935,6 +2949,7 @@ def get_gene_expression(via_object, gene_exp: pd.DataFrame, cmap: str = 'jet', d
                         else:
                             axs[c].plot(xval, yg, color=color_, linewidth=linewidth, zorder=3,
                                         label=f"Lineage:{majority_true} {via_object.terminal_clusters[i_terminal]}")
+                            axs[c].fill_between(xval, x_conf_int[:,0], x_conf_int[:,1], color=color_, alpha=0.2)
                             axs[c].set_title(gene_i + optional_title_text, fontsize=fontsize_)
                             # Set tick font size
                             for label in (axs[c].get_xticklabels() + axs[c].get_yticklabels()):
