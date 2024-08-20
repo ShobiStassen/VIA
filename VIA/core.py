@@ -575,11 +575,11 @@ class VIA:
     do_gaussian_kernel_edgeweights: bool
         (default = False) Type of edgeweighting on the graph edges
     memory: float
-        (default = 2) higher q means more memory, more retrospective/inwards randomwalk. memory = 2 means run using the non-memory Via 1.0 mode
+        (default = 5) higher value means more memory and a more retrospective/inwards randomwalk. memory = 0 means run using the non-memory Via 1.0 mode
     viagraph_decay: float
         (default = 0.9) increasing decay causes more edges to merge
-    memory: 1/q * edge weight to a next-node that is not a neighbor of previous node. larger number means more memory and more introspective walk. small number <1 means more exploration
-    p_memory: 1/p * edge weight to next node = previous node. large value means more exploration
+   
+    p_memory: 1/p * edge weight to de-emphasize returning to previous node. i.e. when next node = previous node. large value of p_memory value means more exploration
     graph_init_pos: matrix (or list of lists) to initialize the viagraph
     spatial_coords: np.ndarray of size n_cells x 2 (denoting x,y coordinates) of each spot/cell
     do_spatial_knn: Whether or not to do spatial mode of StaVia for graph augmentation
