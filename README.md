@@ -16,7 +16,7 @@
 
 StaVia extends the lazy-teleporting walks to higher order random walks with **memory** to allow better lineage detection, pathway recovery and preservation of global features in terms of computation and visualization. The cartographic approach combining high edge and spatial resolution produces informative and esthetically pleasing visualizations caled the **Atlas View**. 
 
-If you find our work useful, please consider citing our **[preprint](https://www.biorxiv.org/content/10.1101/2024.01.29.577871v1)** and **[paper](https://www.nature.com/articles/s41467-021-25773-3)** [![DOI](https://zenodo.org/badge/212254929.svg)](https://zenodo.org/badge/latestdoi/212254929). 
+If you find our work useful, please consider citing our **[StaVia](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03347-y)** and **[Via 1.0 paper](https://www.nature.com/articles/s41467-021-25773-3)** [![DOI](https://zenodo.org/badge/212254929.svg)](https://zenodo.org/badge/latestdoi/212254929). 
 
 
 ## Tutorials for Cartographic TI and Visualization using StaVi
