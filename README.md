@@ -2,7 +2,7 @@
 =============================================================================================================================
 
 
-**StaVia (Via 2.0)** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal and spatial studies** enabled by. In addition to the full functionality of earlier versions, StaVia now offers (check out our [**paper**]([https://www.biorxiv.org/content/10.1101/2024.01.29.577871v1](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03347-y)) for details)
+**StaVia (Via 2.0)** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal and spatial studies** enabled by. In addition to the full functionality of earlier versions, StaVia now offers (check out our [**paper**](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03347-y) for details)
 
 1. **Integration of metadata (e.g time-series labels, spatial coordinates):** Using sequential metadata (temporal labels from longitudinal studies, hierarchical information from phylogenetic trees, spatial distances relevant to spatial omics data) to guide the cartography.  Integrating RNA-velocity where applicable. 
 2. **Higher Order Random Walks:** Leveraging higher order random walks with **memory** to highlight key end-to-end differentiation pathways along the atlas 
