@@ -9,10 +9,11 @@
 3. **Atlas View:** Via 2.0 offers a unique **visualization** of the predicted trajectory by intuitively merging the cell-cell graph connectivity with the high-resolution of single-cell embeddings. Visit the [**Gallery**](https://pyvia.readthedocs.io/en/latest/Atlas%20view%20examples.html) to see examples. 
 4. **Generalizable and data modality agnostic** StaVia still offers all the functionality of Via 1.0 across single-cell data modalities (scRNA-seq, imaging and flow cyometry, scATAC-seq) for types of topologies  (disconnected, cyclic, tree) to infer pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. 
 
-<p align="center">
-     <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/rtd_fig1.png?raw=true" width="750px" align="center", class="only-light" >
+<p>
+  <a href=“https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03347-y” title=“Redirect to article”>
+    <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/rtd_fig1.png?raw=true" width="750px" align="center", class="only-light" >
+  </a>
 </p>
-
 
 StaVia extends the lazy-teleporting walks to higher order random walks with **memory** to allow better lineage detection, pathway recovery and preservation of global features in terms of computation and visualization. The cartographic approach combining high edge and spatial resolution produces informative and esthetically pleasing visualizations caled the **Atlas View**. 
 
