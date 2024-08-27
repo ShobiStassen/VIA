@@ -2,12 +2,12 @@
 =============================================================================================================================
 
 
-**StaVia (Via 2.0)** is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal and spatial studies** enabled by. In addition to the full functionality of earlier versions, StaVia now offers (check out our [**paper**](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03347-y) for details)
+[**StaVia (Via 2.0)**](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03347-y) is our new single-cell trajectory inference method that explores **single-cell atlas-scale** data and **temporal and spatial studies** enabled by. In addition to the full functionality of earlier versions, StaVia now offers (check out our [**paper**](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03347-y) for details)
 
 1. **Integration of metadata (e.g time-series labels, spatial coordinates):** Using sequential metadata (temporal labels from longitudinal studies, hierarchical information from phylogenetic trees, spatial distances relevant to spatial omics data) to guide the cartography.  Integrating RNA-velocity where applicable. 
 2. **Higher Order Random Walks:** Leveraging higher order random walks with **memory** to highlight key end-to-end differentiation pathways along the atlas 
 3. **Atlas View:** Via 2.0 offers a unique **visualization** of the predicted trajectory by intuitively merging the cell-cell graph connectivity with the high-resolution of single-cell embeddings. Visit the [**Gallery**](https://pyvia.readthedocs.io/en/latest/Atlas%20view%20examples.html) to see examples. 
-4. **Generalizable and data modality agnostic** Via 2.0 still offers all the functionality of Via 1.0 across single-cell data modalities (scRNA-seq, imaging and flow cyometry, scATAC-seq) for types of topologies  (disconnected, cyclic, tree) to infer pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. 
+4. **Generalizable and data modality agnostic** StaVia still offers all the functionality of Via 1.0 across single-cell data modalities (scRNA-seq, imaging and flow cyometry, scATAC-seq) for types of topologies  (disconnected, cyclic, tree) to infer pseudotimes, automated terminal state prediction and automated plotting of temporal gene dynamics along lineages. 
 
 <p align="center">
      <img src="https://github.com/ShobiStassen/VIA/blob/master/Figures/rtd_fig1.png?raw=true" width="750px" align="center", class="only-light" >
