@@ -1,6 +1,6 @@
 |DOI|
 
-`StaVia <https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03347-y>`_ - Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases
+`StaVia - Multi-Omic Single-Cell Cartography for Spatial and Temporal Atlases <https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03347-y>`_ 
 =============================================================================
 
 **StaVia (Via 2.0)** is our new single-cell trajectory inference method (`new paper released <https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03347-y>`_) that explores **single-cell atlas-scale** data and **temporal and spatial studies** enabled by:
