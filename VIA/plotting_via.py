@@ -1358,7 +1358,7 @@ def plot_sc_lineage_probability(via_object, embedding: ndarray = None, idx: list
     return fig, axs
 
 
-def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = [],arrow_head:float=0.1,
+def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = [],arrow_head:float=0.1, n_col:int = None, n_row:int = None,
                   edgeweight_scale:float=1.5, cmap=None, label_text:bool=True, size_factor_node: float = 1, tune_edges:bool = False,initial_bandwidth=0.05, decay=0.9, edgebundle_pruning=0.5):
     '''
     cluster level expression of gene/feature intensity
@@ -1375,6 +1375,8 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
     :param initial_bandwidth: (float = 0.05)  increasing bw increases merging of minor edges.  Only used when tune_edges = True
     :param decay: (decay = 0.9) increasing decay increases merging of minor edges . Only used when tune_edges = True
     :param edgebundle_pruning (float = 0.5). takes on values between 0-1. smaller value means more pruning away edges that can be visualised. Only used when tune_edges = True
+    :param n_col: Number of columns to plot (if None, compute n_col if n_row is given, else 4)
+    :param n_row: Number of rows to plot (if None, compute n_row if n_col is given)
     :return: fig, axs
     '''
     '''
@@ -1396,7 +1398,17 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
     else:
         hammer_bundle = via_object.hammerbundle_cluster
         layout = via_object.layout#graph_node_pos
-    fig, axs = plt.subplots(1, n_genes)
+    if n_col is None and n_row is None :
+        fig, axs = plt.subplots(int(np.ceil(len(gene_list)/4)), 4)
+    if n_col is None:
+        fig, axs = plt.subplots(n_row, int(np.ceil(len(gene_list)/n_row)))
+    elif n_row is None:
+        fig, axs = plt.subplots(int(np.ceil(len(gene_list)/n_col)), n_col)
+    elif n_col*n_row != n_genes:
+        raise ValueError('n_col and n_row does not match number of genes in gene_list')
+    else:
+        fig, axes = plt.subplots(n_row, n_col)
+        axs = axes.flatten()
 
     if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'viridis_r'
 
@@ -3578,7 +3590,7 @@ def plot_piechart_only_viagraph(via_object, type_data='pt', gene_exp: list = [],
     patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
     labels = list(set(reference_labels))
     labels.sort()
-    if show_legend == True: plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon=False)
+    if show_legend == True: ax.legend(patches, labels, loc='best', fontsize=6, frameon=False)
 
     if via_object.time_series == True:
         ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(via_object.ncomp) + 'knnseq_' + str(
@@ -3746,7 +3758,7 @@ def plot_piechart_viagraph(via_object, type_data='pt', gene_exp: list = [], cmap
     patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
     labels = list(set(reference_labels))
     labels.sort()
-    if show_legend == True: plt.legend(patches, labels, loc=(-5, -5), fontsize=6, frameon=False)
+    if show_legend == True: ax.legend(patches, labels, loc='best', fontsize=6, frameon=False)
 
     if via_object.time_series == True:
         ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(via_object.ncomp) + 'Temporalknn_' + str(
@@ -3791,7 +3803,7 @@ def plot_piechart_viagraph(via_object, type_data='pt', gene_exp: list = [], cmap
                               headwidth_bundle=headwidth_arrow, alpha_bundle=alpha_edge,
                               linewidth_bundle=linewidth_edge, edge_color=edge_color,tune_edges=tune_edges,initial_bandwidth=initial_bandwidth, decay=decay, edgebundle_pruning=edgebundle_pruning)
         '''
-        ax = plot_viagraph_(ax_i, via_object=via_object, pt=pt, headwidth_bundle=headwidth_arrow,
+        ax_i = plot_viagraph_(ax_i, via_object=via_object, pt=pt, headwidth_bundle=headwidth_arrow,
                             alpha_bundle=alpha_edge, linewidth_bundle=linewidth_edge, edge_color=edge_color,
                             tune_edges=tune_edges, initial_bandwidth=initial_bandwidth, decay=decay,
                             edgebundle_pruning=edgebundle_pruning)
