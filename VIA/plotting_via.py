@@ -1469,7 +1469,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
         ax_i.set_yticks([])
         ax_i.axis('off')
     fig.patch.set_visible(False)
-    fig.set_size_inches(5*n_row,5*n_col)
+    fig.set_size_inches(5*n_col,5*n_row)
     return fig, axs
 
 
