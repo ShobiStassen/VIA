@@ -1400,7 +1400,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
         layout = via_object.layout#graph_node_pos
     if n_col is None and n_row is None :
         fig, axs = plt.subplots(int(np.ceil(len(gene_list)/4)), 4)
-    if n_col is None:
+    elif n_col is None:
         fig, axs = plt.subplots(n_row, int(np.ceil(len(gene_list)/n_row)))
     elif n_row is None:
         fig, axs = plt.subplots(int(np.ceil(len(gene_list)/n_col)), n_col)
