@@ -1405,11 +1405,12 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
         n_col = int(np.ceil(len(gene_list)/n_row))
     elif n_row is None:
         n_row = int(np.ceil(len(gene_list)/n_col))
-    elif n_col*n_row < n_genes:
+    
+    if n_col*n_row < n_genes:
         raise ValueError('n_col and n_row does not match number of genes in gene_list')
-    else:
-        fig, axes = plt.subplots(n_row, n_col)
-        axs = axes.flatten()
+
+    fig, axes = plt.subplots(n_row, n_col)
+    axs = axes.flatten()
 
     if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'viridis_r'
 
