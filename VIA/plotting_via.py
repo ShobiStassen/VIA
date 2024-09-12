@@ -1399,15 +1399,13 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
         hammer_bundle = via_object.hammerbundle_cluster
         layout = via_object.layout#graph_node_pos
     if n_col is None and n_row is None :
-        fig, axes = plt.subplots(int(np.ceil(len(gene_list)/4)), 4)
-        axs = axes.flatten()
+        n_col = 4
+        n_row = int(np.ceil(len(gene_list)/n_col))
     elif n_col is None:
-        fig, axes = plt.subplots(n_row, int(np.ceil(len(gene_list)/n_row)))
-        axs = axes.flatten()
+        n_col = int(np.ceil(len(gene_list)/n_row))
     elif n_row is None:
-        fig, axes = plt.subplots(int(np.ceil(len(gene_list)/n_col)), n_col)
-        axs = axes.flatten()
-    elif n_col*n_row != n_genes:
+        n_row = int(np.ceil(len(gene_list)/n_col))
+    elif n_col*n_row < n_genes:
         raise ValueError('n_col and n_row does not match number of genes in gene_list')
     else:
         fig, axes = plt.subplots(n_row, n_col)
@@ -1470,6 +1468,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
         ax_i.set_yticks([])
         ax_i.axis('off')
     fig.patch.set_visible(False)
+    fig.set_size_inches(5*n_row,5*n_col)
     return fig, axs
 
 
