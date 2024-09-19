@@ -369,34 +369,24 @@ def plot_scatter(embedding: ndarray, labels: list, cmap='rainbow', s=5, alpha=0.
     :return: matplotlib pyplot fig, ax
     '''
     fig, ax = plt.subplots()
-    if (isinstance(labels[0], str)) == True:
+    if isinstance(labels[0], str):
         categorical = True
     else:
         categorical = False
     ax.set_facecolor('white')
+    if categorical and color_dict is None:
+        color_dict = {}
+        set_labels = list(set(labels))
+        set_labels.sort(reverse=color_labels_reverse)#True) #used to be True until Feb 2024
+        palette = cm.get_cmap(cmap, len(set_labels))
+        cmap_ = palette(range(len(set_labels)))
+        for value, color in zip(set_labels,cmap_):
+            color_dict[value] = color
     if color_dict is not None:
         #:param color_dict: {'true_label_group_1': #COLOR,'true_label_group_2': #COLOR2,....} where the dictionary keys correspond to the provided labels
         for key in color_dict:
             loc_key = np.where(np.asarray(labels) == key)[0]
             ax.scatter(embedding[loc_key, 0], embedding[loc_key, 1], color=color_dict[key], label=key, s=s,
-                       alpha=alpha, edgecolors=edgecolors)
-            x_mean = embedding[loc_key, 0].mean()
-            y_mean = embedding[loc_key, 1].mean()
-            if text_labels == True: ax.text(x_mean, y_mean, key, style='italic', fontsize=10, color="black")
-
-    elif categorical == True:
-        color_dict = {}
-        set_labels = list(set(labels))
-        set_labels.sort(reverse=color_labels_reverse)#True) #used to be True until Feb 2024
-        for index, value in enumerate(set_labels):
-            color_dict[value] = index
-        palette = cm.get_cmap(cmap, len(color_dict.keys()))
-        cmap_ = palette(range(len(color_dict.keys())))
-
-        for key in color_dict:
-            loc_key = np.where(np.asarray(labels) == key)[0]
-
-            ax.scatter(embedding[loc_key, 0], embedding[loc_key, 1], color=cmap_[color_dict[key]], label=key, s=s,
                        alpha=alpha, edgecolors=edgecolors)
             x_mean = embedding[loc_key, 0].mean()
             y_mean = embedding[loc_key, 1].mean()
@@ -445,16 +435,19 @@ def plot_scatter(embedding: ndarray, labels: list, cmap='rainbow', s=5, alpha=0.
     # Hide grid lines
     ax.grid(False)
     fig.patch.set_visible(True)
-    if show_legend:
-        ax.legend(fontsize=12, frameon=False)
-        #legend = ax.legend(bbox_to_anchor=(1.02, 0.1), loc='upper left', borderaxespad=0)
-        legend = ax.legend(bbox_to_anchor=(0, 0, 1.2, 1), loc='lower right', borderaxespad=0)
-        for i, handle in enumerate(legend.legendHandles):
-            # handle.set_edgecolor("#6c2167")  # set_edgecolors
-            # handle.set_facecolor(colors[i])
-            # handle.set_hatch(hatches[i])
-            handle.set_alpha(1)
-            handle.set_sizes([40])
+    if show_legend and categorical:
+        leg_handles = []
+        for label in color_dict:
+            lh = ax.scatter([], [], c=color_dict[label], label=label)
+            leg_handles.append(lh)
+        ax.legend(
+            handles=leg_handles, 
+            fontsize=12, 
+            frameon=False, 
+            bbox_to_anchor=(1, 0.5),
+            loc='center left', 
+            ncol=(1 if len(color_dict) <= 14 else 2 if len(color_dict) <= 30 else 3)
+            )
     return fig, ax
 
 
@@ -3293,7 +3286,7 @@ def plot_viagraph_(ax=None, hammer_bundle=None, layout: ndarray = None, CSM: nda
         fig.patch.set_visible(False)
         return_fig_ax = True
     if (plot_clusters == True) and (via_object is None):
-        print('Warning: please provide a via object in order to plot the clusters on the graph')
+        print('Warning: please provide a via object in order to `plot` the clusters on the graph')
     if via_object is not None:
         if hammer_bundle is None: hammer_bundle = via_object.hammerbundle_cluster
         if layout is None: layout = via_object.graph_node_pos
