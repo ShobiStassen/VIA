@@ -3757,7 +3757,7 @@ def plot_piechart_viagraph(via_object, type_data='pt', gene_exp: list = [], cmap
     patches, texts = pie_axs[node_i].pie(frac, wedgeprops={'linewidth': 0.0}, colors=color_true_list)
     labels = list(set(reference_labels))
     labels.sort()
-    if show_legend == True: ax.legend(patches, labels, loc='best', fontsize=12, frameon=False)
+    if show_legend == True: ax.legend(patches, labels, loc='best', fontsize=6, frameon=False)
 
     if via_object.time_series == True:
         ti = 'Cluster Composition. K=' + str(via_object.knn) + '. ncomp = ' + str(via_object.ncomp) + 'Temporalknn_' + str(
