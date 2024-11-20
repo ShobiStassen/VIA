@@ -2594,11 +2594,15 @@ class VIA:
 
             layout = visual_g.layout_fruchterman_reingold(weights='weight', seed=list_graph_init_pos)
             #layout = visual_g.layout_fruchterman_reingold(weights='weight')
+            layout_3 = visual_g.layout_fruchterman_reingold(weights='weight', seed=list_graph_init_pos, dim=3)
         else:
             layout = visual_g.layout_fruchterman_reingold(weights='weight')
+            layout_3 = visual_g.layout_fruchterman_reingold(weights='weight', dim=3)
         #layout = visual_g.layout_fruchterman_reingold(weights='weight',  seed=np.matrix(layout))  # used to be commented out
 
         self.graph_node_pos = layout.coords
+        self.graph_node_pos_3 = layout_3.coords
+        self.layout_3 = layout_3
         self.layout = layout  # reassign
 
         if (self.embedding is None) & (self.do_compute_embedding == True):
