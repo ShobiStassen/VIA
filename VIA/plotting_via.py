@@ -337,15 +337,20 @@ def plot_gene_trend_heatmaps(via_object, df_gene_exp: pd.DataFrame, marker_linea
                 StandardScaler().fit_transform(df_trends.T).T,
                 index=df_trends.index,
                 columns=df_trends.columns)
+        
+        df_trends = df_trends.loc[df_trends.idxmax(axis=1).sort_values().index]
 
         ax.set_title('Lineage: ' + str(branch) + '-' + str(dict_trends[branch]['name']), fontsize=int(fontsize * 1.3))
         # sns.set(size=fontsize)  # set fontsize 2
-        b = sns.heatmap(df_trends, yticklabels=True, xticklabels=False, cmap=cmap)
-        b.tick_params(labelsize=fontsize, labelrotation=ytick_labelrotation)
-        b.figure.axes[-1].tick_params(labelsize=fontsize)
+        pt_ticks = np.round(df_trends.columns,2).to_list()
+        x_ticks = [pt for i, pt in enumerate(pt_ticks) if i%20==0]
+        x_ticks.append(pt_ticks[-1])# = pt_ticks[-1]
+        ax = sns.heatmap(df_trends, yticklabels=True, xticklabels=False, cmap=cmap, ax=ax)
+        ax.set_xticks([i for i in range(200) if i%20==0]+[199], x_ticks)
+        ax.tick_params(labelsize=fontsize, labelrotation=ytick_labelrotation, grid_linewidth=0)
         ax_list.append(ax)
-    b.set_xlabel("pseudotime", fontsize=int(fontsize * 1.3))
-    return fig, ax_list
+    ax.set_xlabel("pseudotime", fontsize=int(fontsize * 1.3))
+    return fig, ax_list, dict_trends
 
 
 def plot_scatter(embedding: ndarray, labels: list, cmap='rainbow', s=5, alpha=0.3, edgecolors='None', title: str = '',
@@ -1491,6 +1496,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
     n_genes = len(gene_list)
     pt = via_object.markov_hitting_times
     if n_genes == 0:
+        type_data = 'pseudotime'
         gene_list=['pseudotime']
         df_genes = pd.DataFrame()
         df_genes['pseudotime'] = via_object.single_cell_pt_markov
@@ -1501,8 +1507,8 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
     else:
         hammer_bundle = via_object.hammerbundle_cluster
         layout = via_object.layout#graph_node_pos
-    if n_col is None and n_row is None :
-        n_col = 4
+    if n_col is None and n_row is None:
+        n_col = 4 if n_genes>4 else n_genes
         n_row = int(np.ceil(n_genes/n_col))
     elif n_col is None:
         n_col = int(np.ceil(n_genes/n_row))
@@ -1513,7 +1519,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
         raise ValueError('n_col and n_row does not match number of genes in gene_list')
 
     fig, axes = plt.subplots(n_row, n_col)
-    axs = axes.flatten()
+    axs = axes.flatten() if n_genes>1 else [axes]
 
     if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'viridis_r'
 
@@ -1535,9 +1541,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
         via_object.cluster_population_dict[group_i] = len(loc_i)
 
     for i in range(n_genes):
-        if n_genes ==1:
-            ax_i = axs
-        else: ax_i = axs[i]
+        ax_i = axs[i]
         gene_i = gene_list[i]
 
         c_edge, l_width = [], []
