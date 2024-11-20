@@ -280,9 +280,8 @@ def pruning_clustergraph(adjacency, global_pruning_std=1, max_outgoing=30, prese
                     for i in range(len(locxy[0])):
                         if comp_labels[locxy[0][i]] != comp_labels[locxy[1][i]]:
                             x, y = locxy[0][i], locxy[1][i]
-
-                    cluster_graph_csr[x, y] = adjacency[x, y]
-                    cluster_graph_csr[y, x] = adjacency[y, x]
+                            cluster_graph_csr[x, y] = adjacency[x, y]
+                            cluster_graph_csr[y, x] = adjacency[y, x]
 
                     n_comp_, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False,
                                                                 return_labels=True)

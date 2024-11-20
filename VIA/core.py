@@ -2486,7 +2486,10 @@ class VIA:
                 df_graph.at[ii, 'markov_pt'] = markov_hitting_times_ai[ei]
 
             locallytrimmed_g.vs["label"] = df_graph['graph_node_label'].values
-            hitting_times = df_graph['pt'].values
+
+        df_graph['pt'] = df_graph['pt'].fillna(0)  # added oct2024
+        df_graph['markov_pt'] = df_graph['markov_pt'].fillna(0)  # added oct2024
+        hitting_times = df_graph['pt'].values # decreased indentation by 1 level oct2024
 
         self.cluster_adjacency = adjacency_matrix2_ai
         self.hitting_times = hitting_times  # not markov chain simulated
