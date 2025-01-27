@@ -31,8 +31,7 @@ from matplotlib.animation import FuncAnimation, writers
 
 import graphtools
 from scipy.spatial.distance import pdist, squareform
-from scipy.stats import spearmanr
-from scipy.stats import pearsonr
+from scipy.stats import spearmanr, pearsonr
 from collections import defaultdict
 from tqdm.auto import tqdm
 
@@ -58,11 +57,12 @@ def func_mode(ll):
     # If multiple items are maximal, the function returns the first one encountered.
     return max(set(ll), key=ll.count)
 
-def compute_driver_genes(via_object, gene_exp:pd.DataFrame, lineage:int, clusters:list=None, conf_int:float=0.95, q = 0.05):
+def compute_driver_genes(via_object, gene_exp:pd.DataFrame, lineage:int=None, method='pearson', clusters:list=[], graphpath = True, pt_cutoff:float=1.0, conf_int:float=0.95, q = 0.05):
     '''
-    Compute driver genes of each terminal cell fates using Pearson correlation.
+    Compute driver genes of each terminal cell fates using Pearson correlation of pseudotime and gene expressions.
     :param via_object: via object
     :param gene_exp: Dataframe where columns are features (gene) and rows are single cells
+    :param method: Method to use for correlation analysis from either `'pearson'` or `'spearman'`.
     :param lineage: Terminal cluster number to compute lineage driver 
     :param conf_int: default: 0.95 Confidence interval of correlation 
     :param q: Quantile threshold to select cells based on lineage probility. Used when clusters is not given. 
@@ -71,16 +71,39 @@ def compute_driver_genes(via_object, gene_exp:pd.DataFrame, lineage:int, cluster
     '''
     
     if lineage not in via_object.terminal_clusters:
-        raise KeyError(f"Lineage {lineage} not in terminal clusters {via_object.terminal_clusters}.")
+        raise KeyError(f"Please select a valid lineage from the terminal clusters {via_object.terminal_clusters}.")
+    if method not in ['pearson','spearman']:
+        raise KeyError(f"method must be either \'pearson\' or \'spearman\'.")
     
-    df_bp = pd.DataFrame(via_object.single_cell_bp, index=gene_exp.index, columns=via_object.terminal_clusters)[lineage]
-    
-    cell_mask = []
-    if clusters is None or clusters == []:
+    df = pd.DataFrame(via_object.single_cell_bp, columns=via_object.terminal_clusters)
+    df['pt'] = via_object.single_cell_pt_markov.copy()
+    df['parc'] = via_object.labels.copy()
+
+    # Subset cells by graph component that contains the target terminal cluster
+    graph_comps, graph_comps_labels = connected_components(via_object.csr_full_graph, directed=False)
+    g_comp = 0
+    if graph_comps > 1:
+        g_comp = graph_comps_labels[via_object.labels.index(lineage)]
+        df = df[graph_comps_labels == g_comp]
+        gene_exp = gene_exp[graph_comps_labels == g_comp]
+    root = via_object.root[g_comp]
+
+    fate_probs = df[lineage]
+    pseudotime = df['pt']
+    if len(clusters) > 0:
+        # Cell mask by clusters chosen by user
+        cell_mask = [i in clusters for i in df['parc']]
+    elif graphpath:
+        # Cell mask based on via graph shortest path from root to terminal cluster
+        num_cluster = len(set(via_object.labels))
+        G_orange = ig.Graph(n=num_cluster, edges=via_object.edgelist_maxout,
+                            edge_attrs={'weight': via_object.edgeweights_maxout})
+        path_orange = G_orange.get_shortest_paths(root, to=lineage)[0]
+        cell_mask = np.empty_like(fate_probs).astype(bool)
+        cell_mask = [i in path_orange for i in df['parc']]
+    else:
         # Cell mask based on lineage probability inspired by palantir
         eps=1e-2
-        fate_probs = via_object.single_cell_bp[:,via_object.terminal_clusters.index(lineage)]
-        pseudotime = via_object.single_cell_pt_markov
         idx = np.argsort(pseudotime)
         sorted_fate_probs = fate_probs[idx]
         prob_thresholds = np.empty_like(fate_probs)
@@ -98,25 +121,34 @@ def compute_driver_genes(via_object, gene_exp:pd.DataFrame, lineage:int, cluster
         prob_thresholds = np.maximum.accumulate(prob_thresholds, axis=0)
         cell_mask = np.empty_like(fate_probs).astype(bool)
         cell_mask[idx] = prob_thresholds - eps < sorted_fate_probs
-    else:
-        # Cell mask based on given cluster list
-        cell_mask = [True if i in clusters else False for i in via_object.labels]
 
     # Select cells in given lineage
-    print(f'Selected {sum(cell_mask)} cells for lineage {lineage}')
-    print(f'Cells from clusters {list(sorted(set(np.array(via_object.labels)[cell_mask])))}')
-    df_bp = df_bp[cell_mask]
+    print(f'Selected {sum(cell_mask)} cells for lineage {lineage} from {len(df)} cells in connected graph component')
+    print(f'Cells are from clusters: {list(sorted(set(np.array(via_object.labels)[cell_mask])))}')
     gene_exp = gene_exp[cell_mask]
+    df = df[cell_mask]
+    fate_probs = df[lineage]
+    pseudotime = df['pt']
+    # Set pt above pt_cutoff to 0
+    pseudotime[pseudotime>pt_cutoff] = 0
 
     # Compute pearson correlation
     print(f"Computing driver genes")
-    corr = ['']*gene_exp.shape[1]
+    result = {'corr':['']*gene_exp.shape[1], 'pvalue':['']*gene_exp.shape[1]}
+    if method == 'pearson':
+            result['ci_low'] = ['']*gene_exp.shape[1]
+            result['ci_high'] = ['']*gene_exp.shape[1]
     for i, gene in enumerate(tqdm(gene_exp.columns)):
-        res = pearsonr(gene_exp[gene].values, df_bp.values)
-        conf = res.confidence_interval(conf_int)
-        corr[i] = pd.Series([res.statistic, res.pvalue, conf.low, conf.high], name=gene, 
-                            index=['corr', 'pvalue', 'ci_low', 'ci_high'])
-    df_corr = pd.concat(corr, axis=1).T
+        if method == 'pearson':
+            res = pearsonr(gene_exp[gene].values, pseudotime.values)
+            conf = res.confidence_interval(conf_int)
+            result['ci_low'][i] = conf.low
+            result['ci_high'][i] = conf.high
+        elif method == 'spearman':
+            res = spearmanr(gene_exp[gene].values, pseudotime.values)
+        result['corr'][i] = res.statistic
+        result['pvalue'][i] = res.pvalue
+    df_corr = pd.DataFrame(result, index=gene_exp.columns)
     
     # Remove invalid correlations outside (-1,1)
     df_corr['corr'][df_corr['corr'] < -1] = np.nan
@@ -167,6 +199,7 @@ def get_gene_trend(via_object, marker_lineages: list = [], df_gene_exp=None, n_s
                     xval = np.linspace(min(sc_pt), max_val_pt, 100 * 2)
                     yg = geneGAM.predict(X=xval)
                     df_trends[str(gene_i)] = yg
+                df_trends.index = xval
 
             else:
                 print(
@@ -280,9 +313,8 @@ def pruning_clustergraph(adjacency, global_pruning_std=1, max_outgoing=30, prese
                     for i in range(len(locxy[0])):
                         if comp_labels[locxy[0][i]] != comp_labels[locxy[1][i]]:
                             x, y = locxy[0][i], locxy[1][i]
-
-                    cluster_graph_csr[x, y] = adjacency[x, y]
-                    cluster_graph_csr[y, x] = adjacency[y, x]
+                            cluster_graph_csr[x, y] = adjacency[x, y]
+                            cluster_graph_csr[y, x] = adjacency[y, x]
 
                     n_comp_, comp_labels = connected_components(csgraph=cluster_graph_csr, directed=False,
                                                                 return_labels=True)

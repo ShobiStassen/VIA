@@ -337,15 +337,20 @@ def plot_gene_trend_heatmaps(via_object, df_gene_exp: pd.DataFrame, marker_linea
                 StandardScaler().fit_transform(df_trends.T).T,
                 index=df_trends.index,
                 columns=df_trends.columns)
+        
+        df_trends = df_trends.loc[df_trends.idxmax(axis=1).sort_values().index]
 
         ax.set_title('Lineage: ' + str(branch) + '-' + str(dict_trends[branch]['name']), fontsize=int(fontsize * 1.3))
         # sns.set(size=fontsize)  # set fontsize 2
-        b = sns.heatmap(df_trends, yticklabels=True, xticklabels=False, cmap=cmap)
-        b.tick_params(labelsize=fontsize, labelrotation=ytick_labelrotation)
-        b.figure.axes[-1].tick_params(labelsize=fontsize)
+        pt_ticks = np.round(df_trends.columns,2).to_list()
+        x_ticks = [pt for i, pt in enumerate(pt_ticks) if i%20==0]
+        x_ticks.append(pt_ticks[-1])# = pt_ticks[-1]
+        ax = sns.heatmap(df_trends, yticklabels=True, xticklabels=False, cmap=cmap, ax=ax)
+        ax.set_xticks([i for i in range(200) if i%20==0]+[199], x_ticks)
+        ax.tick_params(labelsize=fontsize, labelrotation=ytick_labelrotation, grid_linewidth=0)
         ax_list.append(ax)
-    b.set_xlabel("pseudotime", fontsize=int(fontsize * 1.3))
-    return fig, ax_list
+    ax.set_xlabel("pseudotime", fontsize=int(fontsize * 1.3))
+    return fig, ax_list, dict_trends
 
 
 def plot_scatter(embedding: ndarray, labels: list, cmap='rainbow', s=5, alpha=0.3, edgecolors='None', title: str = '',
@@ -450,6 +455,110 @@ def plot_scatter(embedding: ndarray, labels: list, cmap='rainbow', s=5, alpha=0.
             )
     return fig, ax
 
+def scatter3d(adata, basis:str, color:str, cmap:str=None, 
+              filename:str=None, frac:float=1.0, random_seed=42,
+              show_interactive:bool=True, s:float=10, alpha:float=0.3, elev:float=30, azim:float=-60):
+    '''
+    Plot 3-dimensional scatter plot on separate windows (if `show == True`). Save the figure by giving a `string` to `filename`.
+    :param adata: Anndata object
+    :param basis: str, Basis in adata.obsm that stores the embedding with 3 or more components
+    :param color: str, Column name in adata.obs used to color the scatter markers
+    :param cmap: str, Default: 'husl', Color map to be used. Given from matplotlib or seaborn color palettes
+    :param filename: str, Provide a name of the plot to be saved to the folder Figures in the current directory
+    :param frac: float, Default:1.0, Subsample the data by a given fraction
+    :param random_seed: int, Seed to set the singleton RandomState instance of numpy.
+    :param show_interactive: bool, Default:True, Plot and show the given 3d scatter plot in a separate interactive window. (For running on notebook)
+    :param s: float, Default:10.0, scatter marker size
+    :param alpha: float, Default:0.3, scatter marker alpha value
+    :param elev: float, Default:30, The elevation angle in degrees rotates the camera above and below the x-y plane, with a positive angle corresponding to a location above the plane.
+    :param azim: float, Default:-60, The azimuthal angle in degrees rotates the camera about the z axis, with a positive angle corresponding to a right-handed rotation. In other words, a positive azimuth rotates the camera about the origin from its location along the +x axis towards the +y axis.
+    '''
+    from mpl_toolkits.mplot3d import Axes3D
+    from matplotlib.colors import ListedColormap
+    
+    np.random.seed(random_seed)
+    orig_backend = matplotlib.get_backend()
+    if show_interactive:
+        matplotlib.use('tkagg')
+    if frac < 1:
+        index = np.random.choice(range(len(adata)), size=int(len(adata)*frac), replace=False)
+        adata = adata[index]
+    color_vector = adata.obs_vector(color)
+    categorical = isinstance(color_vector[0], str)
+    if cmap is None:
+        cmap = 'rainbow' if categorical else 'viridis'
+    
+    # axes instance
+    fig = plt.figure(figsize=(6,6))
+    ax = Axes3D(fig, auto_add_to_figure=False)
+    fig.add_axes(ax)
+
+    # get colormap from seaborn
+    if categorical:
+        colormap = matplotlib.cm.get_cmap(cmap)(np.linspace(0,1,len(color_vector.unique())))
+        colormap = ListedColormap(colormap)
+    else:
+        colormap = matplotlib.cm.get_cmap(cmap)
+
+    if basis in adata.obsm: emb = adata.obsm[basis]
+    elif 'X_'+basis in adata.obsm: emb = adata.obsm['X_'+basis]
+    else: raise ValueError(f'{basis} not in Anndata.obsm. Select from {adata.obsm.keys()}')
+    if not basis.startswith('X_'): basis = 'X_'+basis
+    if emb.shape[1] < 3: raise Exception(f"Embedding {basis} has shape {emb.shape} but expected {(emb.shape[0],3)} or more dimensions.")
+    
+    # plot
+    if categorical:
+        color_unique = list(set(color_vector))
+        if any([not i.isnumeric() for i in color_unique]):
+            color_unique.sort()
+        else:
+            color_unique.sort(key=int)
+        lh_list = []
+        for i, c in enumerate(color_unique):
+            emb_sub = emb[np.where(color_vector==c)[0], :]
+            scatter = ax.scatter(
+                    emb_sub[:,0], 
+                    emb_sub[:,1],
+                    emb_sub[:,2],
+                    s=s,
+                    c=colormap(i), 
+                    label=c,
+                    edgecolors='none',
+                    alpha=alpha
+                    )
+            lh = ax.scatter([], [], [], c=colormap(i), label=c)
+            lh_list.append(lh)
+        plt.legend(handles=lh_list, bbox_to_anchor=(1.1, 1), loc=2, ncol=np.ceil(len(color_unique)/15))
+    else:
+        scatter = ax.scatter(
+            emb[:,0],
+            emb[:,1],
+            emb[:,2], 
+            s=s,
+            c=color_vector, 
+            cmap=colormap,
+            edgecolors='none',
+            alpha=alpha
+            )
+        cbar = plt.colorbar(scatter, pad=0.1, shrink=0.9, location='right')
+        cbar.solids.set(alpha=1)
+    ax.set_xlabel(f'{basis[2:]}1')
+    ax.set_ylabel(f'{basis[2:]}2')
+    ax.set_zlabel(f'{basis[2:]}3')
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.set_zticklabels([])
+    ax.tick_params(color='white')
+    ax.view_init(elev=elev, azim=azim)
+    ax.view_init
+
+    # save
+    if filename is not None:
+        if not filename.endswith('.png'): filename=filename+'.png'
+        plt.savefig(filename, bbox_inches='tight')
+        
+    plt.show(block=True)
+    matplotlib.use(orig_backend)
 
 def _make_knn_embeddedspace(embedding):
     # knn struct built in the embedded space to be used for drawing the lineage trajectories onto the 2D plot
@@ -732,26 +841,32 @@ def via_atlas_emb(via_object=None, X_input: ndarray = None, graph: csr_matrix = 
     from umap.umap_ import find_ab_params, simplicial_set_embedding
     # graph is a csr matrix
     # weight all edges as 1 in order to prevent umap from pruning weaker edges away
-    layout_array = np.zeros(shape=(n_cells, 2))
+    layout_array = np.zeros(shape=(n_cells, n_components))
 
-    if (init_pos == 'via') and (via_object is None):
-        # list of lists [[x,y], [x1,y1], []]
-        if (layout is None) or (cluster_membership is None):
-            print('please provide via object or values for arguments: layout and cluster_membership')
+    if init_pos == 'via':
+        if n_components == 3:
+            if via_object is not None:
+                layout = via_object.graph_node_pos_3
+                cluster_membership = via_object.labels
+            elif (layout is None) or (cluster_membership is None):
+                print('please provide via object or values for arguments: layout and cluster_membership')
+            for i in range(n_cells):
+                layout_array[i, 0] = layout[cluster_membership[i]][0]
+                layout_array[i, 1] = layout[cluster_membership[i]][1]
+                layout_array[i, 2] = layout[cluster_membership[i]][2]
+            init_pos = layout_array
+            print(f'{datetime.now()}\tusing via cluster graph to initialize embedding')
         else:
+            if via_object is not None:
+                layout = via_object.graph_node_pos
+                cluster_membership = via_object.labels
+            elif (layout is None) or (cluster_membership is None):
+                print('please provide via object or values for arguments: layout and cluster_membership')
             for i in range(n_cells):
                 layout_array[i, 0] = layout[cluster_membership[i]][0]
                 layout_array[i, 1] = layout[cluster_membership[i]][1]
             init_pos = layout_array
             print(f'{datetime.now()}\tusing via cluster graph to initialize embedding')
-    elif (init_pos == 'via') and (via_object is not None):
-        layout = via_object.graph_node_pos
-        cluster_membership = via_object.labels
-        for i in range(n_cells):
-            layout_array[i, 0] = layout[cluster_membership[i]][0]
-            layout_array[i, 1] = layout[cluster_membership[i]][1]
-        init_pos = layout_array
-        print(f'{datetime.now()}\tusing via cluster graph to initialize embedding')
     elif init_pos == 'spatial':
         init_pos = layout
     a, b = find_ab_params(spread, min_dist)
@@ -1381,6 +1496,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
     n_genes = len(gene_list)
     pt = via_object.markov_hitting_times
     if n_genes == 0:
+        type_data = 'pseudotime'
         gene_list=['pseudotime']
         df_genes = pd.DataFrame()
         df_genes['pseudotime'] = via_object.single_cell_pt_markov
@@ -1391,8 +1507,8 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
     else:
         hammer_bundle = via_object.hammerbundle_cluster
         layout = via_object.layout#graph_node_pos
-    if n_col is None and n_row is None :
-        n_col = 4
+    if n_col is None and n_row is None:
+        n_col = 4 if n_genes>4 else n_genes
         n_row = int(np.ceil(n_genes/n_col))
     elif n_col is None:
         n_col = int(np.ceil(n_genes/n_row))
@@ -1403,7 +1519,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
         raise ValueError('n_col and n_row does not match number of genes in gene_list')
 
     fig, axes = plt.subplots(n_row, n_col)
-    axs = axes.flatten()
+    axs = axes.flatten() if n_genes>1 else [axes]
 
     if cmap is None: cmap = 'coolwarm' if type_data == 'gene' else 'viridis_r'
 
@@ -1425,9 +1541,7 @@ def plot_viagraph(via_object, type_data='gene', df_genes=None, gene_list:list = 
         via_object.cluster_population_dict[group_i] = len(loc_i)
 
     for i in range(n_genes):
-        if n_genes ==1:
-            ax_i = axs
-        else: ax_i = axs[i]
+        ax_i = axs[i]
         gene_i = gene_list[i]
 
         c_edge, l_width = [], []
